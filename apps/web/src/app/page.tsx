@@ -271,7 +271,7 @@ export default function HomePage() {
           <span className="brand-descriptor">
             SEARCH
             <br />
-            PROOF ENGINE
+            INTELLIGENCE
           </span>
         </Link>
         <nav className="main-nav" aria-label="Main navigation">
@@ -303,8 +303,8 @@ export default function HomePage() {
             should <em>prove itself.</em>
           </h1>
           <p className="hero-description">
-            Find the signal. Approve the exact change. Verify what happened on the page. Keep the
-            evidence—and the way back.
+            Audit technical SEO, connect first-party search performance, turn evidence into a
+            decision queue, and measure AI-answer visibility without inventing a score.
           </p>
           <AuditEntry
             apiConfigured={auditServiceAvailable}
@@ -312,13 +312,13 @@ export default function HomePage() {
           />
           <div className="hero-assurance">
             <span>
-              <i>✓</i> Human-approved
+              <i>✓</i> Observed facts
             </span>
             <span>
-              <i>✓</i> Evidence-linked
+              <i>✓</i> First-party measurements
             </span>
             <span>
-              <i>✓</i> Reversible by design
+              <i>✓</i> Human-approved changes
             </span>
           </div>
         </div>
@@ -337,11 +337,11 @@ export default function HomePage() {
           <i />
           <span>SEARCH CONSOLE</span>
           <i />
-          <span>IMAGE DISCOVERY</span>
+          <span>DECISION CENTER</span>
           <i />
-          <span>VIDEO + STRUCTURED DATA</span>
+          <span>AI ANSWER VISIBILITY</span>
           <i />
-          <span>MEASURED CHANGE</span>
+          <span>VERIFIED CHANGE</span>
         </div>
       </div>
 
@@ -363,7 +363,7 @@ export default function HomePage() {
         </div>
         <span className="footer-note">
           {auditServiceAvailable
-            ? "Built for careful changes. In active development."
+            ? "Evidence-first search operations. No synthetic scores."
             : previewAuditEnabled
               ? "Preview audit · real public page fetch · one page · not persisted."
               : "The public audit service is not connected in this environment."}
