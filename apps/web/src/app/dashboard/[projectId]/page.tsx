@@ -80,6 +80,12 @@ export default async function ProjectOverviewPage({
               Actions
             </Link>
             <Link
+              href={`/dashboard/${projectId}/decision-center`}
+              className="text-slate-700 hover:text-ink-950"
+            >
+              Decision Center
+            </Link>
+            <Link
               href={`/dashboard/${projectId}/autofix`}
               className="text-slate-700 hover:text-ink-950"
             >
@@ -90,6 +96,12 @@ export default async function ProjectOverviewPage({
               className="text-slate-700 hover:text-ink-950"
             >
               Search Performance
+            </Link>
+            <Link
+              href={`/dashboard/${projectId}/ai-visibility`}
+              className="text-slate-700 hover:text-ink-950"
+            >
+              AI Visibility
             </Link>
             <Link
               href={`/dashboard/${projectId}/crawls`}
