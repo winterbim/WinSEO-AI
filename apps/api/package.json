@@ -1,0 +1,37 @@
+{
+  "name": "@serpvera/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./audit": "./src/audit/domain-audit.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import ./src/test-env.ts --experimental-strip-types --test --test-concurrency=1 src/*.test.ts src/**/*.test.ts",
+    "demo:autofix": "node --experimental-strip-types src/autofix/demo.ts",
+    "demo:autofix:e2e": "pnpm --filter @serpvera/db db:migrate && node --import ./src/test-env.ts --experimental-strip-types --test src/autofix-postgres-routes.integration.test.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@serpvera/authz": "workspace:*",
+    "@serpvera/config": "workspace:*",
+    "@serpvera/contracts": "workspace:*",
+    "@serpvera/crawler": "workspace:*",
+    "@serpvera/db": "workspace:*",
+    "@serpvera/telemetry": "workspace:*",
+    "fastify": "^5.12.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "light-my-request": "^6.6.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

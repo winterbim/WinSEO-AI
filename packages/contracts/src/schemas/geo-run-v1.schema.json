@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://serpvera.dev/schemas/geo-run-v1.schema.json",
+  "title": "GEO Run",
+  "description": "A single AI search engine observation. Ported from NEXUS Search Intelligence v0.1.0.",
+  "type": "object",
+  "required": ["id", "engine", "surface", "locale", "prompt_text", "timestamp"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "project_id": { "type": "string", "format": "uuid" },
+    "prompt_set_id": { "type": "string", "format": "uuid" },
+    "prompt_variant_id": { "type": "string", "format": "uuid" },
+    "canonical_prompt": { "type": "string" },
+    "prompt_text": { "type": "string", "minLength": 1 },
+    "paraphrase_version": { "type": "integer" },
+    "intent": { "type": "string" },
+    "funnel_stage": { "type": "string" },
+    "persona": { "type": "string" },
+    "engine": { "type": "string", "description": "e.g. chatgpt, gemini, perplexity, google-ai-mode" },
+    "surface": { "type": "string", "description": "e.g. web, app, api" },
+    "locale": { "type": "string", "pattern": "^[a-z]{2}(-[A-Z]{2})?$" },
+    "language": { "type": "string" },
+    "engine_label": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "capture_method": { "type": "string", "enum": ["browser_manual", "api_authorized", "structured_export"] },
+    "answer": {
+      "type": "object",
+      "properties": {
+        "text_object_key": { "type": "string" },
+        "answer_hash": { "type": "string" },
+        "brand_mentioned": { "type": "boolean" },
+        "mention_positions": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "domain": { "type": "string" },
+          "order_index": { "type": "integer" },
+          "source_class": {
+            "type": "string",
+            "enum": ["owned", "competitor", "earned_media", "forum", "institution", "other"]
+          },
+          "is_client_owned": { "type": "boolean" }
+        },
+        "required": ["url", "domain", "order_index"]
+      }
+    },
+    "citation_absorption": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "citation_url": { "type": "string" },
+          "absorbed": { "type": "boolean" },
+          "method": { "type": "string", "enum": ["manual_review", "llm_assessment"] },
+          "support_score": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "completed", "failed", "not_measured"]
+    }
+  }
+}

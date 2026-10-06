@@ -1,0 +1,105 @@
+// ─── Public-scan rate limiter (P-GAP-06) ───
+//
+// Blueprint §19.1: rate limits per tenant AND global. This is the global/IP
+// layer for the ANONYMOUS public scan endpoint — the only unauthenticated
+// write path in the product, and the one that triggers outbound crawls.
+//
+// The production DB store uses the PostgreSQL-backed atomic counter in
+// packages/db/src/rate-limit.ts. This in-process implementation is only the
+// explicit memory-store adapter for tests and local fixtures.
+// - Fixed window, keyed by client IP. PostgreSQL shares quota across API
+//   instances; memory mode is deliberately process-local.
+// - The counter increments ONLY when a scan would actually be created
+//   (post-validation). Requests rejected by input validation or the SSRF guard
+//   cost nothing downstream and do not consume quota.
+// - Loopback addresses are exempt: they are the local operator/dev, cannot be
+//   spoofed from outside, and exempting them keeps local proofs repeatable.
+// - Bounded memory: entries older than the window are evicted on access and a
+//   hard cap drops the coldest entries when the map grows too large.
+
+export interface RateLimitDecision {
+  allowed: boolean;
+  remaining: number;
+  retryAfterSeconds: number;
+}
+
+interface WindowEntry {
+  count: number;
+  windowStart: number;
+}
+
+const WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_TRACKED_IPS = 10_000; // hard memory cap
+
+export function isLoopback(ip: string): boolean {
+  return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "::ffff:127.0.0.1" ||
+    ip.startsWith("127.")
+  );
+}
+
+export interface RateLimiter {
+  /** Record an attempt from `ip`. Returns whether the scan may proceed. */
+  hit(ip: string): RateLimitDecision;
+  /** Current remaining quota without consuming (for headers). */
+  peek(ip: string): number;
+  /** Test helper: drop all state. */
+  reset(): void;
+}
+
+export function createRateLimiter(limitPerWindow: number, now: () => number = Date.now): RateLimiter {
+  const windows = new Map<string, WindowEntry>();
+
+  function current(ip: string): WindowEntry {
+    const t = now();
+    const existing = windows.get(ip);
+    if (existing && t - existing.windowStart < WINDOW_MS) return existing;
+    const fresh: WindowEntry = { count: 0, windowStart: t };
+    windows.set(ip, fresh);
+
+    // Bound memory: drop expired entries, then oldest if still over cap.
+    if (windows.size > MAX_TRACKED_IPS) {
+      for (const [key, entry] of windows) {
+        if (t - entry.windowStart >= WINDOW_MS) windows.delete(key);
+      }
+      while (windows.size > MAX_TRACKED_IPS) {
+        const oldest = windows.keys().next();
+        if (oldest.done) break;
+        windows.delete(oldest.value);
+      }
+    }
+    return fresh;
+  }
+
+  return {
+    hit(ip) {
+      if (isLoopback(ip)) {
+        return { allowed: true, remaining: limitPerWindow, retryAfterSeconds: 0 };
+      }
+      const entry = current(ip);
+      if (entry.count >= limitPerWindow) {
+        const retryAfterSeconds = Math.max(
+          1,
+          Math.ceil((entry.windowStart + WINDOW_MS - now()) / 1000),
+        );
+        return { allowed: false, remaining: 0, retryAfterSeconds };
+      }
+      entry.count += 1;
+      return {
+        allowed: true,
+        remaining: limitPerWindow - entry.count,
+        retryAfterSeconds: 0,
+      };
+    },
+    peek(ip) {
+      if (isLoopback(ip)) return limitPerWindow;
+      const entry = current(ip);
+      return Math.max(0, limitPerWindow - entry.count);
+    },
+    reset() {
+      windows.clear();
+    },
+  };
+}
