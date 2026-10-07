@@ -341,3 +341,89 @@ Sources utilisées pour le benchmark : documentation officielle de Google et de 
 **Retour arrière :** pas de code modifié. Si les artefacts d'origine sont restaurés ou les gates rejoués, réévaluer `PROOF-REPLAY-001` sur une nouvelle capture; ne pas effacer le constat courant.
 
 **Preuve :** vérification WinCreator ciblée de l'attestation AI-VIS : `VERIFY OK`; vérification du ledger complet : `VERIFY FAILED — 35 problem(s)`; `ledger_check.py PROOF_LEDGER.md` et `ledger_check.py --catches SKEPTIC_CATCHES.md` passent séparément.
+
+## D-035 — Déduire les groupes de pages de preuves observées, sans prétendre connaître le CMS
+
+**Décision :** le crawler peut regrouper les URL par motif de chemin et empreinte de structure DOM sémantique. Les résultats sont appelés « groupes de structure observés », comportent le support et quelques URL échantillons, et n'affirment pas qu'il s'agit de templates WordPress/Shopify réels. Aucun texte HTML brut n'est copié dans le champ de groupe.
+
+**Raison :** l'audit de plusieurs pages n'aide pas à prioriser par gabarit tant que les observations ne sont pas agrégées; le chemin et le DOM sont des éléments observables, mais ne révèlent pas à eux seuls la source CMS ou le composant qui les génère.
+
+**Risque :** des templates différents peuvent partager la même structure simplifiée ou un template peut varier à cause de contenus conditionnels. Les échantillons et l'empreinte rendent la limite inspectable; les groupes ne déclenchent aucune publication automatique.
+
+**Retour arrière :** retirer le regroupement et ses surfaces de lecture; la colonne JSONB nullable ajoutée par migration forward-only peut rester inutilisée. Ne jamais modifier une migration appliquée.
+
+**Preuve attendue :** fixture de 200 URL et cinq structures connues, métriques précisions/rappel de règles calculées contre les défauts injectés, persistance RLS, affichage de la couverture, gate complet et revue sceptique. La réussite n'accepte pas à elle seule M3 : rendu JS échantillonné, budget publié et reprise durable restent des gates séparées.
+
+## D-036 — Limiter les inférences du regroupement aux signaux de structure observés
+
+**Décision :** ignorer les commentaires et les contenus HTML raw-text lors de la signature; préserver la hiérarchie des éléments sémantiques; inférer un segment de slug textuel seulement quand au moins trois frères partagent un préfixe explicite avant un suffixe distinct. Les routes textuelles ordinaires restent distinctes. Les URL d'échantillon sont dédupliquées après suppression de la query et du fragment. Le crawl garde uniquement le hash DOM par page au lieu de retenir tout le HTML jusqu'à la fin.
+
+**Raison :** la revue indépendante a montré des faux changements causés par des chaînes ressemblant à des balises dans `script`, `style`, `textarea`, `iframe` et les commentaires; elle a aussi montré qu'une signature plate perdait la profondeur des sections, que trois routes statiques pouvaient devenir un faux `:slug`, et que les variantes query pouvaient dupliquer l'échantillon affiché.
+
+**Risque :** le tokeniseur reste une approximation du parseur HTML du navigateur; des structures équivalentes exprimées dans un HTML mal formé peuvent rester séparées, et des routes à préfixe partagé peuvent encore être des pages statiques. Le regroupement reste descriptif, n'est pas une identité CMS et n'est pas autorisé à déclencher une écriture.
+
+**Retour arrière :** désactiver l'agrégation de groupe dans le résultat du crawl et l'interface; garder la colonne JSONB nullable. Les preuves par page restent disponibles. Ne pas modifier les migrations appliquées.
+
+**Preuve :** tests adversariaux pour les raw-text/commentaires, la hiérarchie imbriquée, les chemins `/docs/new|archive|search`, la suppression des paramètres d'URL et la déduplication d'échantillons; gate complet après revue sceptique. L'évaluation 200 URL mesure uniquement le détecteur titre injecté et ne valide pas encore la précision générale du regroupement.
+
+## D-037 — Utiliser le parseur HTML5 maintenu pour les empreintes de structure
+
+**Décision :** remplacer le tokeniseur lexical ad hoc par `parse5` 8.0.1, parseur HTML5 conforme à la construction DOM du navigateur; parcourir les éléments HTML sémantiques retenus et les fragments `<template>`, conserver les répétitions par classes de cardinalité, et ne jamais inclure texte ou attributs. Une page XHTML ne passe pas dans le parseur HTML : son empreinte est indisponible. Si l'entrée dépasse 128 KiB ou le parcours 30 000 nœuds, l'empreinte est indisponible et l'URL reste singleton. Seuls les identifiants numériques/UUID/date et suffixes numériques explicites sont généralisés; aucun suffixe textuel n'est deviné.
+
+**Raison :** le reviewer a reproduit la fermeture `--!>` d'un commentaire, le contenu CDATA SVG, les fermetures implicites de `<li>`, la syntaxe de fermeture ignorée sur les éléments non void, les frères sémantiques répétés et des collisions de routes textuelles. Un scanner maison aurait dû reconstituer une partie importante de l'algorithme WHATWG.
+
+**Risque :** un nouvel import d'exécution augmente légèrement le graphe de dépendances; le parseur construit un arbre temporaire. Réponse HTTP bornée à 5 MiB, plafond d'entrée, plafond de nœuds, parcours itératif et fallback singleton bornent le coût. Les IDs d'URL seule utilisent seulement l'URL d'exemple assainie et l'index du run, jamais l'URL brute avec query. Le regroupement reste grossier (2 et 3 frères identiques partagent la classe `2-4`).
+
+**Retour arrière :** revenir à la dépendance et à l'empreinte antérieures, supprimer les groupes stockés via une migration forward-only si leur schéma change, et laisser les preuves par page intactes. Ne jamais éditer une migration déjà appliquée.
+
+**Sources consultées le 2026-10-07 :** [dépôt parse5](https://github.com/inikulin/parse5), [API `parse`](https://parse5.js.org/functions/parse5.parse.html), [métadonnées officielles du paquet 8.0.1](https://raw.githubusercontent.com/inikulin/parse5/refs/heads/master/packages/parse5/package.json).
+
+**Preuve attendue :** fixtures `--!>`, CDATA, li implicites, balise non-void avec slash, cardinalité, routes statiques, PII de chemin, IDs URL-only sans secret et dépassement des budgets; fixture 200 pages, XHTML non fingerprinté, build/typecheck, gate complet uncached et verdict sceptique indépendant. Le coût RSS de parse5 en production n'est pas mesuré; l'entrée bornée à 128 KiB borne la taille mais ne constitue pas une mesure de production.
+
+## D-038 — Corriger une description de colonne sans réécrire la migration appliquée
+
+**Décision :** conserver le texte exact de la migration 0028 déjà appliquée localement, même si son commentaire source décrit mal le stockage des corps HTML; ajouter la migration forward-only 0029 avec une description PostgreSQL explicite indiquant que `template_groups` ne contient pas de corps de page. Le test d'intégrité vérifie cette description.
+
+**Raison :** le parcours de crawl persiste des URL, hashes et métadonnées, pas les réponses HTML. La revue a relevé une phrase documentaire fausse. La mission interdit de réécrire une migration déjà appliquée; une migration suivante corrige donc la description visible par l'exploitation.
+
+**Risque :** le commentaire source historique de 0028 demeure inexact, même si le commentaire de colonne effectif est corrigé par 0029. Les développeurs doivent lire l'historique comme immuable et la définition SQL actuelle comme autoritaire.
+
+**Retour arrière :** migration 0030 peut retirer le commentaire de colonne si nécessaire; aucune donnée n'est modifiée.
+
+**Preuve attendue :** vérifier dans PostgreSQL la présence de 0028/0029 et `col_description(crawl_runs.template_groups)` exacte; tests de schéma PostgreSQL; gate complet.
+
+## D-039 — Empêcher les identifiants d'URL de contaminer les échantillons et empreintes
+
+**Décision :** après la seconde revue sceptique, supprimer l'inférence à partir de préfixes de slugs textuels; seuls les IDs explicites et suffixes numériques sont généralisés. Les exemples masquent email, dates, IDs numériques/UUID, suffixes numériques et tous les segments après un chemin sensible. Les groupes sans empreinte sont individuels et leur ID dérive de l'exemple assaini et de la position dans le crawl, jamais de l'URL brute avec query. Les contenus de `<template>` sont intégrés à l'empreinte. Les réponses `application/xhtml+xml` gardent des groupes URL seuls, car le parseur HTML5 ne reproduit pas les règles XML.
+
+**Raison :** la revue a prouvé qu'un hash stable de l'URL brute permet de tester des secrets à faible entropie, qu'un slug partagé dans `/articles` peut encore être statique, que des numéros/UUID étaient visibles, que le parseur HTML ne correspond pas au mode XML, et que le contenu `template` était ignoré.
+
+**Risque :** les motifs de données textuels ne sont plus groupés même s'ils sont dynamiques; les exemples de pages numériques peuvent se réduire à un même chemin `:private`, donc l'échantillon explique moins la route d'origine. Les groupes restent des formes observées, pas des templates établis. Les compteurs enfants `2` et `3` partagent volontairement la même classe.
+
+**Retour arrière :** désactiver les groupes URL seuls, ou revenir à l'inférence précédente uniquement avec une nouvelle preuve sceptique. Les anciens JSON de groupes restent compatibles avec les champs; le lecteur refuse désormais les nouvelles méthodes inattendues.
+
+**Preuve attendue :** fixture emails/IDs/UUID/share codes, attaques par candidat sur les hash IDs, routes `/articles/api-*`, XML XHTML, contenu `template`, groupement 200 pages, tests DB/API et revue sceptique indépendante.
+
+## D-040 — Ne jamais publier une valeur de chemin inconnue ni inférer un gabarit sur deux suffixes
+
+**Décision :** remplacer D-039 pour le comportement courant des routes. Les motifs affichés ne conservent que des segments d’une allowlist de noms de routes génériques; tout segment inconnu est rendu `:private` tant dans `routePattern` que dans `sampleUrls`. Les routes textuelles inconnues restent singleton, même si leur valeur masquée et leur signature HTML sont égales. Les exemples peuvent remplacer une forme connue d’ID par un marqueur générique (`story-001` devient `story-:id`) pour ne pas la divulguer; ce marqueur n’autorise pas de fusion. Une route dynamique ne rejoint un groupe de structure que si trois frères distincts ou plus démontrent la forme sous un parent de collection reconnu; un préfixe de suffixe n’est conservé que s’il vient de la même allowlist générique. Un groupe dont le hash est disponible mais qui reste séparé utilise `SEMANTIC_DOM_PRIVACY_SINGLETON_V1`. L’incertitude conserve des singletons. L’API vérifie les motifs, l’accord du motif avec les échantillons et refuse les résumés hérités non conformes.
+
+**Raison :** la revue sceptique a reproduit l’exposition `jane-doe-:id`, un numéro de téléphone partiel, un token court sous `/t/`, ainsi que la fusion des routes statiques `/guide/step-1` et `/guide/step-2`. Le hachage d’une valeur brute ne serait pas une solution : les IDs de groupe non secrets peuvent être attaqués par essais de candidats. La décision précédente autorisait donc trop d’information de chemin à entrer dans l’API et la clé du groupe.
+
+**Risque :** les routes métier personnalisées sont moins lisibles et les pages slug textuelles ne sont pas regroupées avant qu’une règle indépendante et testée ne prouve leur forme. L’allowlist de collections limite les motifs reconnus; elle ne garantit pas une identité CMS ni un gabarit réellement partagé.
+
+**Retour arrière :** retirer la fusion de route et afficher seulement le hash de structure, ou rétablir une allowlist après revue indépendante. Ne jamais republier des valeurs de chemin inconnues. Les données de groupe sont facultatives et peuvent être ignorées; aucune migration appliquée ne sera modifiée.
+
+**Preuve attendue :** tests adversariaux de PII/tokens dans motifs et échantillons, tests de singletons pour deux routes statiques numériques, trois IDs distincts exigés sous collection reconnue, fixture 200 pages avec cinq routes de collection, gate complet uncached et nouvelle revue sceptique.
+
+## D-041 — Versionner les identifiants sans empreinte et isoler le regroupement des preuves
+
+**Décision :** ne plus accepter les résumés `URL_PATTERN_ONLY_FINGERPRINT_UNAVAILABLE_V1` persistés. Le nouveau format `URL_PATTERN_ONLY_PRIVACY_SINGLETON_V2` n’est valable que pour un singleton expurgé. Une route ID telle que `/orders/:id` reste affichable comme singleton avec son empreinte HTML, mais ne peut pas être regroupée sans trois frères sous une collection explicitement reconnue. Les URL échantillons sont obligatoires et doivent correspondre exactement au motif expurgé. Un unique parseur partagé valide les groupes aussi bien lors des écritures et lectures PostgreSQL que dans l’adaptateur mémoire. Les quatre champs `templateId`, `templateRoutePattern`, `templateDomSignatureHash` et `templateGroupingMethod` ne sont plus ajoutés aux preuves générales; les anciennes Evidence sont filtrées à la lecture dans le store PostgreSQL, l’adaptateur mémoire et Action Center. L’historique de crawl est l’unique surface exposant les groupes.
+
+**Raison :** la revue indépendante a montré qu’un identifiant V1 de 16 caractères permettait de tester une URL complète hors ligne même si son échantillon n’avait plus la query; elle a aussi démontré le rejet à la lecture d’un singleton `/orders/:id` généré correctement. L’inspection du chemin Evidence a ensuite trouvé que les mêmes identifiants pouvaient être réexposés depuis des lignes historiques via le tiroir d’évidence.
+
+**Risque :** les anciens runs qui contiennent des groupes V1 ou des résumés invalides seront marqués indisponibles plutôt que publiés; les anciennes Evidence restent stockées mais les clés de regroupement ne sont pas retournées. Les parcours et comparaisons de groupes entre runs demeurent hors de portée de cette décision.
+
+**Retour arrière :** ne pas réactiver V1. Si l’historique V1 doit être récupéré, recalculer les groupes depuis les observations brutes avec le générateur courant puis sauvegarder un nouveau résumé versionné; ne jamais réutiliser l’ancien ID.
+
+**Preuve attendue :** test qui calcule réellement l’ancien hash depuis une URL `?token=...` et confirme son rejet, test API du singleton `/orders/:id`, tests de filtrage des quatre clés dans Evidence et Action Center, gate complète uncached, revue sceptique fraîche.

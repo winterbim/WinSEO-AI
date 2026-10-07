@@ -12,6 +12,7 @@ export {
 export type { DbConfig } from "./client.ts";
 
 export { setTenant, clearTenant } from "./tenant.ts";
+export { publicEvidenceMetadata } from "./evidence-metadata.ts";
 
 export {
   createUser,

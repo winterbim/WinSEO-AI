@@ -5,6 +5,7 @@ import {
   createHttpFetcher,
   normalizeUrl,
   parseRobotsTxt,
+  semanticDomSignature,
   type FetchResult,
   type NormalizedUrl,
 } from "@serpvera/crawler/audit-core";
@@ -98,6 +99,20 @@ void describe("bounded project site audit", () => {
     assert.ok(requested.every((url) => new URL(url).origin === ORIGIN));
     assert.ok(!requested.some((url) => url.includes("/private/")));
     assert.equal(result.evidence.length, 3);
+    assert.equal(
+      result.templateGroups.reduce((total, group) => total + group.pageCount, 0),
+      3,
+    );
+    assert.ok(
+      result.evidence.every(
+        (item) =>
+          !item.metadata?.templateId &&
+          !item.metadata?.templateRoutePattern &&
+          !item.metadata?.templateDomSignatureHash &&
+          !item.metadata?.templateGroupingMethod,
+      ),
+      "route-group identifiers remain in crawl history, not general evidence metadata",
+    );
     assert.deepEqual(
       result.evidence.map((item) => item.sourceRef),
       [`${ORIGIN}/`, `${ORIGIN}/catalog/a`, `${ORIGIN}/about`],
@@ -105,6 +120,117 @@ void describe("bounded project site audit", () => {
     assert.ok(result.findings.some((finding) => finding.affectedUrls[0] === `${ORIGIN}/catalog/a`));
     assert.equal(delays.length, 4);
     assert.ok(delays.every((delay) => delay > 0));
+  });
+
+  void it("does not fingerprint XHTML with the HTML tree-construction algorithm", async () => {
+    const fetchPage = (url: NormalizedUrl): Promise<FetchResult> => {
+      const path = new URL(url.normalized).pathname;
+      if (path === "/robots.txt")
+        return Promise.resolve(response(url, "User-agent: *", 200, "text/plain"));
+      return Promise.resolve(
+        response(
+          url,
+          '<html xmlns="http://www.w3.org/1999/xhtml"><body><main/><article><h1>XML</h1></article></body></html>',
+          200,
+          "application/xhtml+xml",
+        ),
+      );
+    };
+    const result = await auditSite(`${ORIGIN}/xhtml`, "xhtml-structure-fixture", {
+      fetchPage,
+      sleep: () => Promise.resolve(),
+    });
+
+    assert.equal(result.pagesCrawled, 1);
+    assert.equal(result.templateGroups.length, 1);
+    assert.equal(result.templateGroups[0]?.domSignatureHash, null);
+    assert.equal(result.templateGroups[0].groupingMethod, "URL_PATTERN_ONLY_PRIVACY_SINGLETON_V2");
+  });
+
+  void it("measures deterministic rule precision and groups 200 fixture pages across five structures", async () => {
+    const urls = Array.from({ length: 200 }, (_, index) => {
+      const template = index % 5;
+      const item = Math.floor(index / 5) + 1;
+      const category = ["products", "articles", "categories", "recipes", "videos"][template];
+      return `${ORIGIN}/${category}/page-${String(item).padStart(3, "0")}`;
+    });
+    const positiveUrls = new Set(urls.filter((_, index) => index % 10 === 0));
+    const pagesByPath = new Map<string, string>();
+    const expectedStructureByCategory = new Map<string, string>();
+    for (const [index, url] of urls.entries()) {
+      const template = index % 5;
+      const title = positiveUrls.has(url) ? "" : `<title>Fixture page ${index} subject</title>`;
+      const shapes = [
+        '<main><article class="product"><h1>Product</h1><figure><img src="/p.jpg" alt="item"></figure><p>Details</p></article></main>',
+        '<main><article class="story"><h1>Article</h1><section><h2>Section</h2><p>Body</p></section></article></main>',
+        '<main><section class="listing"><h1>Category</h1><ul><li>Item</li><li>Item</li></ul></section></main>',
+        '<main><article class="recipe"><h1>Recipe</h1><section><h2>Ingredients</h2><ul><li>Ingredient</li></ul></section></article></main>',
+        '<main><article class="video"><h1>Video</h1><figure><iframe src="/embed"></iframe></figure><section><h2>Transcript</h2><p>Text</p></section></article></main>',
+      ];
+      const shape = shapes[template];
+      assert.ok(shape);
+      const signature = semanticDomSignature(shape);
+      assert.ok(signature);
+      const category = new URL(url).pathname.split("/")[1];
+      assert.ok(category);
+      expectedStructureByCategory.set(category, signature);
+      pagesByPath.set(
+        new URL(url).pathname,
+        `<html lang="en"><head>${title}</head><body>${shape}</body></html>`,
+      );
+    }
+    const sitemap = `<urlset>${urls.map((url) => `<url><loc>${url}</loc></url>`).join("")}</urlset>`;
+    const fetchPage = (url: NormalizedUrl): Promise<FetchResult> => {
+      const path = new URL(url.normalized).pathname;
+      if (path === "/robots.txt")
+        return Promise.resolve(response(url, "User-agent: *", 200, "text/plain"));
+      if (path === "/sitemap.xml")
+        return Promise.resolve(response(url, sitemap, 200, "application/xml"));
+      const body = pagesByPath.get(path);
+      return Promise.resolve(
+        body ? response(url, body) : response(url, "Not found", 404, "text/plain"),
+      );
+    };
+
+    const startUrl = urls.at(0);
+    assert.ok(startUrl);
+    const result = await auditSite(startUrl, "site-crawl-200-page-eval", {
+      maxPages: 200,
+      fetchPage,
+      sleep: () => Promise.resolve(),
+    });
+    const observedUrls = new Set(
+      result.findings
+        .filter((finding) => finding.ruleId === "ONPAGE.MISSING_TITLE")
+        .flatMap((finding) => finding.affectedUrls),
+    );
+    const truePositives = [...observedUrls].filter((url) => positiveUrls.has(url)).length;
+    const falsePositives = [...observedUrls].filter((url) => !positiveUrls.has(url)).length;
+    const falseNegatives = [...positiveUrls].filter((url) => !observedUrls.has(url)).length;
+    const precision = truePositives / (truePositives + falsePositives);
+    const recall = truePositives / (truePositives + falseNegatives);
+
+    assert.equal(result.pagesCrawled, 200);
+    assert.equal(result.pagesFailed, 0);
+    assert.equal(result.templateGroups.length, 5);
+    assert.deepEqual(
+      result.templateGroups.map((group) => group.pageCount),
+      [40, 40, 40, 40, 40],
+    );
+    assert.equal(new Set(result.templateGroups.map((group) => group.domSignatureHash)).size, 5);
+    for (const group of result.templateGroups) {
+      const category = group.routePattern.split("/")[1];
+      assert.ok(category);
+      assert.equal(group.domSignatureHash, expectedStructureByCategory.get(category));
+      assert.equal(group.groupingMethod, "URL_PATTERN_AND_SEMANTIC_DOM_V2");
+      assert.ok(group.sampleUrls.every((url) => new URL(url).pathname.startsWith(`/${category}/`)));
+    }
+    assert.equal(positiveUrls.size, 20);
+    assert.equal(truePositives, 20);
+    assert.equal(falsePositives, 0);
+    assert.equal(falseNegatives, 0);
+    assert.equal(precision, 1);
+    assert.equal(recall, 1);
   });
 
   void it("stops before pages when robots.txt is unavailable instead of guessing access", async () => {

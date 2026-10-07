@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { startProjectCrawl } from "./crawl-kickoff";
+import { crawlTrackingHref, startProjectCrawl } from "./crawl-kickoff";
 import {
   clearPendingProjectCreation,
   normalizeProjectDomain,
@@ -239,7 +239,7 @@ export function CreateProjectForm({
         setCrawlError(crawl.message);
         return;
       }
-      router.push(`/dashboard/${project.project.id}`);
+      router.push(crawlTrackingHref(project.project.id, crawl.crawlRun.id));
       router.refresh();
     } catch {
       setError("The service is temporarily unavailable. Please retry.");
@@ -258,7 +258,7 @@ export function CreateProjectForm({
         setCrawlError(crawl.message);
         return;
       }
-      router.push(`/dashboard/${createdProject.id}`);
+      router.push(crawlTrackingHref(createdProject.id, crawl.crawlRun.id));
       router.refresh();
     } finally {
       setLoading(false);

@@ -21,10 +21,17 @@ function fmt(iso: string | null | undefined): string {
 
 export default async function ProjectOverviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ crawlRunId?: string | string[] }>;
 }) {
   const { projectId } = await params;
+  const query = await searchParams;
+  const crawlRunId =
+    typeof query.crawlRunId === "string" && /^[0-9a-f-]{36}$/i.test(query.crawlRunId)
+      ? query.crawlRunId
+      : null;
 
   let overview: Overview;
   let findings: FindingSummary[] = [];
@@ -117,7 +124,11 @@ export default async function ProjectOverviewPage({
             </Link>
           </nav>
         </div>
-        <StartCrawlButton projectId={projectId} initialRun={overview.crawls.latest} />
+        <StartCrawlButton
+          projectId={projectId}
+          initialRun={overview.crawls.latest}
+          trackingRunId={crawlRunId}
+        />
       </div>
 
       {/* ── Q1: What changed? ── */}

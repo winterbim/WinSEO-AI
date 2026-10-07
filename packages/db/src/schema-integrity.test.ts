@@ -54,6 +54,8 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
   before(async () => {
     configurePool({
       host: process.env.PG_SOCKET_DIR ?? "/var/run/postgresql",
+      port: process.env.PGPORT ? Number(process.env.PGPORT) : undefined,
+      user: process.env.PGUSER,
       database: process.env.PGDATABASE ?? "serpvera_dev",
       runtimeRole: "serpvera_app",
       maxPool: 2,
@@ -63,6 +65,22 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
 
   after(async () => {
     await closePool();
+  });
+
+  void it("connects to the exact database endpoint selected for this test run", async () => {
+    const result = await withAdmin(async (client) => {
+      const row = await client.query<{
+        database: string;
+        port: number;
+        user: string;
+      }>(`SELECT current_database() AS database, current_setting('port')::integer AS port,
+                 current_user AS user`);
+      return row.rows[0];
+    });
+    assert.ok(result, "endpoint query must return one row");
+    assert.equal(result.database, process.env.PGDATABASE ?? "serpvera_dev");
+    assert.equal(result.port, Number(process.env.PGPORT ?? 5432));
+    if (process.env.PGUSER) assert.equal(result.user, process.env.PGUSER);
   });
 
   void it("catalog contains all expected tables, including finding_evidence", async () => {
@@ -164,6 +182,14 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
       rows.includes("0027_crawl_run_coverage"),
       "crawl coverage migration must be recorded",
     );
+    assert.ok(
+      rows.includes("0028_crawl_template_groups"),
+      "crawl template grouping migration must be recorded",
+    );
+    assert.ok(
+      rows.includes("0029_crawl_template_groups_comment"),
+      "accurate crawl group column comment migration must be recorded",
+    );
   });
 
   void it("crawl runs persist bounded coverage with database constraints", async () => {
@@ -175,17 +201,31 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
       const constraints = await c.query<{ conname: string }>(
         `SELECT conname FROM pg_constraint
           WHERE conrelid='public.crawl_runs'::regclass
-            AND conname IN ('crawl_runs_page_limit_range', 'crawl_runs_stop_reason_allowed')`,
+            AND conname IN ('crawl_runs_page_limit_range', 'crawl_runs_stop_reason_allowed',
+                            'crawl_runs_template_groups_array')`,
+      );
+      const description = await c.query<{ description: string | null }>(
+        `SELECT col_description('public.crawl_runs'::regclass,
+                 (SELECT ordinal_position FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name='crawl_runs'
+                     AND column_name='template_groups')) AS description`,
       );
       return {
         columns: columns.rows.map((row) => row.column_name),
         constraints: constraints.rows.map((row) => row.conname),
+        description: description.rows[0]?.description ?? null,
       };
     });
     assert.ok(result.columns.includes("page_limit"));
     assert.ok(result.columns.includes("stop_reason"));
+    assert.ok(result.columns.includes("template_groups"));
     assert.ok(result.constraints.includes("crawl_runs_page_limit_range"));
     assert.ok(result.constraints.includes("crawl_runs_stop_reason_allowed"));
+    assert.ok(result.constraints.includes("crawl_runs_template_groups_array"));
+    assert.equal(
+      result.description,
+      "Observed structure groups only: redacted sample URLs, counts, URL patterns, and content-free DOM hashes. Page bodies are not stored here.",
+    );
   });
 
   void it("removes the temporary GSC migration guard after the migration chain", async () => {

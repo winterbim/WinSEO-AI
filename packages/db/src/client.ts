@@ -4,6 +4,8 @@ export interface DbConfig {
   connectionString?: string;
   /** Unix socket dir for peer auth (no password). e.g. /var/run/postgresql */
   host?: string;
+  port?: number;
+  user?: string;
   database?: string;
   /**
    * Runtime application role (NOSUPERUSER, NOBYPASSRLS). When set, every
@@ -41,6 +43,8 @@ export function getPool(): pg.Pool {
       // Unix-socket peer-auth path: no host=TCP, no password, no committed secret.
       pool = new pg.Pool({
         host: cfg.host,
+        ...(cfg.port === undefined ? {} : { port: cfg.port }),
+        ...(cfg.user === undefined ? {} : { user: cfg.user }),
         database: cfg.database,
         max: cfg.maxPool ?? 10,
       });

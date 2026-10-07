@@ -19,6 +19,7 @@ import type {
   MfaRecord,
   StoredAiVisibilityCapture,
   StoredAiVisibilityImport,
+  StoredTemplateGroup,
 } from "./types.ts";
 import { DuplicateEmailError, DuplicateSlugError } from "./types.ts";
 import {
@@ -26,9 +27,11 @@ import {
   AiVisibilityDuplicateImportError,
   AiVisibilityProjectScopeError,
   GscMeasurementWorkflowAdvancedError,
+  publicEvidenceMetadata,
 } from "@serpvera/db";
 import { createRateLimiter, type RateLimitScope } from "../rate-limit.ts";
 import type { PatchProposal } from "../autofix/workflow.ts";
+import { parseStoredTemplateGroups } from "./template-groups.ts";
 
 function toPublicAiVisibilityImport(
   row: StoredAiVisibilityImport & { organizationId: string },
@@ -87,6 +90,7 @@ export function createMemoryStores(): ApiStores {
       pagesFailed: number;
       pageLimit: number | null;
       stopReason: string | null;
+      templateGroups: StoredTemplateGroup[] | null;
       mode: string;
       startedAt: string;
       completedAt: string | null;
@@ -388,6 +392,7 @@ export function createMemoryStores(): ApiStores {
           pagesFailed: 0,
           pageLimit: null,
           stopReason: null,
+          templateGroups: null,
           mode,
           startedAt: new Date().toISOString(),
           completedAt: null,
@@ -402,6 +407,7 @@ export function createMemoryStores(): ApiStores {
         pagesFailed,
         pageLimit,
         stopReason,
+        templateGroups,
       ) {
         const run = crawlRuns.get(runId);
         // Emulate RLS: a foreign tenant cannot update (or even see) the run.
@@ -411,6 +417,7 @@ export function createMemoryStores(): ApiStores {
           run.pagesFailed = pagesFailed;
           run.pageLimit = pageLimit ?? null;
           run.stopReason = stopReason ?? null;
+          run.templateGroups = parseStoredTemplateGroups(templateGroups ?? null);
           run.completedAt = new Date().toISOString();
         }
         return Promise.resolve();
@@ -430,6 +437,7 @@ export function createMemoryStores(): ApiStores {
               pagesFailed: r.pagesFailed,
               pageLimit: r.pageLimit,
               stopReason: r.stopReason,
+              templateGroups: parseStoredTemplateGroups(r.templateGroups),
             })),
         );
       },
@@ -589,7 +597,7 @@ export function createMemoryStores(): ApiStores {
               contentHash: e.contentHash,
               objectKey: e.objectKey,
               capturedAt: e.createdAt,
-              metadata: e.metadata ?? {},
+              metadata: publicEvidenceMetadata(e.metadata),
             })),
         });
       },
@@ -614,7 +622,7 @@ export function createMemoryStores(): ApiStores {
               contentHash: e.contentHash,
               objectKey: e.objectKey,
               capturedAt: e.createdAt,
-              metadata: e.metadata ?? {},
+              metadata: publicEvidenceMetadata(e.metadata),
             })),
         );
       },

@@ -1,0 +1,356 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "SITE-TEMPLATE-001",
+      "level": "",
+      "text": "",
+      "gate": "",
+      "row_sha256": null,
+      "ledger_sha256_before": null,
+      "status_before": null
+    },
+    "ledger": null,
+    "builder": "codex-builder-001",
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "bash",
+      "scripts/verify-site-crawl-gate.sh"
+    ],
+    "command_string": "env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-site-crawl-gate.sh",
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "started_at": "2026-10-07T21:55:02.778874Z",
+    "finished_at": "2026-10-07T21:56:43.229911Z",
+    "duration_ms": 100451,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "bc239a4856d882c679a2ba06cd9c742f769b8d03e42ec0afec80ecc2120e7cc8",
+      "original_bytes": 325387,
+      "stored_bytes": 325387,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "ra/web:test: (node:1067427) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///tmp/winseo-publish/apps/web/src/lib/preview-audit.test.ts is not specified and it doesn't parse as CommonJS.\n@serpvera/web:test: Reparsing as ES module because module syntax was detected. This incurs a performance overhead.\n@serpvera/web:test: To eliminate this warning, add \"type\": \"module\" to /tmp/winseo-publish/apps/web/package.json.\n@serpvera/web:test: (Use `node --trace-warnings ...` to show where the warning was created)\n@serpvera/web:test: ▶ inline preview audit\n@serpvera/web:test:   ✔ passes the normalized full page URL to the shared audit engine (3.714293ms)\n@serpvera/web:test:   ✔ rejects a private target before the audit engine can run (0.697799ms)\n@serpvera/web:test: ✔ inline preview audit (5.264524ms)\n@serpvera/web:test: (node:1067433) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///tmp/winseo-publish/apps/web/src/lib/preview-rate-limit.test.ts is not specified and it doesn't parse as CommonJS.\n@serpvera/web:test: Reparsing as ES module because module syntax was detected. This incurs a performance overhead.\n@serpvera/web:test: To eliminate this warning, add \"type\": \"module\" to /tmp/winseo-publish/apps/web/package.json.\n@serpvera/web:test: (Use `node --trace-warnings ...` to show where the warning was created)\n@serpvera/web:test: ▶ preview audit rate limiter\n@serpvera/web:test:   ✔ allows up to the configured limit and then returns a retry delay (1.642505ms)\n@serpvera/web:test:   ✔ expires entries after the window and isolates clients (0.206951ms)\n@serpvera/web:test: ✔ preview audit rate limiter (3.224967ms)\n@serpvera/web:test: ℹ tests 31\n@serpvera/web:test: ℹ suites 10\n@serpvera/web:test: ℹ pass 31\n@serpvera/web:test: ℹ fail 0\n@serpvera/web:test: ℹ cancelled 0\n@serpvera/web:test: ℹ skipped 0\n@serpvera/web:test: ℹ todo 0\n@serpvera/web:test: ℹ duration_ms 179.998565\n\n Tasks:    14 successful, 14 total\nCached:    0 cached, 14 total\n  Time:    1m8.59s \n\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "b5aa65e215e485cd79cdb6929bfc725254d81ab192df95410a23590b455c0ce1",
+      "original_bytes": 905,
+      "stored_bytes": 905,
+      "truncated": false,
+      "body_stored": true,
+      "tail": " WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`\n"
+    },
+    "files": [
+      {
+        "path": "PROOF_LEDGER.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "3f16e574beab435d478fa7066e7d508773695a781d4cbf85933c1862e38e0bb4",
+        "bytes": 68684
+      },
+      {
+        "path": "SKEPTIC_CATCHES.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "712810fea516226af73f3f501d70f870ce808d29e069f5ca26b574d58ecb99e9",
+        "bytes": 54207
+      },
+      {
+        "path": "apps/api/src/audit/fixture-audit.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "9650cafa1161f8d7602a8d09eb76b94471a9886ae722f44158d7b880864a63f5",
+        "bytes": 4051
+      },
+      {
+        "path": "apps/api/src/audit/site-audit.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "0172dcd7c3e81b0d806f590bb15f165851a4d6991a28ce1c9c06886cf893927a",
+        "bytes": 14760
+      },
+      {
+        "path": "apps/api/src/audit/site-audit.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "6ca944357596dd9179b1cdb52518be244d3bfe12c4ddc519b870643550a74c4b",
+        "bytes": 19834
+      },
+      {
+        "path": "apps/api/src/crawl-persistence.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7a048d38586becf76c9a5982caa7ff0e53cc75f533dd542e8d3439bebedfefc9",
+        "bytes": 16775
+      },
+      {
+        "path": "apps/api/src/routes/projects.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "2c1d5cba284b25b75cadbeba6b319d8606f502413cdbd06e1bc8727d74f7cb72",
+        "bytes": 14340
+      },
+      {
+        "path": "apps/api/src/stores/db.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "b7cf367b5a825f844bae6df040045abd99666ba7149e7b78cd0b80f1201e4914",
+        "bytes": 41799
+      },
+      {
+        "path": "apps/api/src/stores/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "854634746d38f9af41318715abafa9b6b561de61172376b37737558c595db00c",
+        "bytes": 2835
+      },
+      {
+        "path": "apps/api/src/stores/memory.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "ddd89b6bd4db2a91f13f4d2ff81780a63b93b43f181dc1fba923bbcd6d17db63",
+        "bytes": 27315
+      },
+      {
+        "path": "apps/api/src/stores/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "2696c3e78a90917e4e0f3c7dfd5be70eab6799e84396dddb5690f8808fdb2192",
+        "bytes": 18088
+      },
+      {
+        "path": "apps/api/src/stores/template-groups.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7a82cc2d8f859d7d1512864f7349d13417c7dbe736fbe2417ff7d3b83c894cd4",
+        "bytes": 1960
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/crawls/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "ab936baa50ca7c645e16e5e8090be48607c217373114192577f0ba0a1de83279",
+        "bytes": 9061
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "493675554a8d06f9474222c8333ab4128a2ee098da0c6bacd9cacf37513dcebb",
+        "bytes": 10315
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/start-crawl-button.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "b8a6845cc705a9a848d9ff26d9c3eb401d70d27999109327c4495f71980ae89a",
+        "bytes": 5616
+      },
+      {
+        "path": "apps/web/src/app/dashboard/crawl-kickoff.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "d93be6ae1d9300223f63d8d26106d01ee27e94b07169c3bf625488f1affe9397",
+        "bytes": 2063
+      },
+      {
+        "path": "apps/web/src/app/dashboard/create-project-form.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "0938af38106f33f0ffe8a2f68060759a779ced03d21078f73770d621da3d09ec",
+        "bytes": 15131
+      },
+      {
+        "path": "apps/web/src/app/onboarding.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "a0a4937ebd953ad9b8e8506b410fd74cfc2ed165e7a89946a4a32b499e4241c0",
+        "bytes": 8444
+      },
+      {
+        "path": "apps/web/src/lib/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "c81d18eb278b8c0af3c88b9729acbe45758b646041c1926c1f12c78592c81ec8",
+        "bytes": 7553
+      },
+      {
+        "path": "docs/PROOF_LEDGER_RPLUS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "3cecedf549131bf98fb74ded54d1f720d836167190f3e782cec91216837b015f",
+        "bytes": 36677
+      },
+      {
+        "path": "docs/autoreglage/DECISIONS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "da487f1158251e2180a75bb5ba8a4678e5b27e119e73c8417d1526bef8ad5f0e",
+        "bytes": 55997
+      },
+      {
+        "path": "docs/autoreglage/PLAN.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "feb9650d86c13d0f2cff25d1d1dbd5256c144896037f58085457e4db3c8a968a",
+        "bytes": 140798
+      },
+      {
+        "path": "docs/autoreglage/EVAL-SITE-CRAWL.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "ae177e90eb4f79c9fecf79149a02a5dc9c7c64caacaae9fdc1d2622c37e65acb",
+        "bytes": 5015
+      },
+      {
+        "path": "docs/proofs/wincreator/SITE-TEMPLATE-DISTILL-BASELINE/distill-route-privacy-report.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "72a69d36294dd9e05503134a340655934ddc13d37f6493a12773eda838a77e16",
+        "bytes": 1676
+      },
+      {
+        "path": "docs/proofs/wincreator/SITE-TEMPLATE-DISTILL-BASELINE/distill-route-privacy-current.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "71a5a5b3f057904bff563d037c9c8c3c5523b4325302238080129d3fc91f7ef7",
+        "bytes": 2365
+      },
+      {
+        "path": "packages/db/src/client.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "b3e27ddbcc2a55f254f35f8b8e20579d1a5febed3327fa229e904a9d57345739",
+        "bytes": 4844
+      },
+      {
+        "path": "packages/db/src/migrate.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "cb8529c323b3d6e2a135839ecb8313bb9d07b4c43d539301ed9d694902105725",
+        "bytes": 4996
+      },
+      {
+        "path": "packages/db/src/repositories.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "f343f09742c37ffa1628b1cf57b2e6c5849cd78ce8ca11bceac9235cf9fbc009",
+        "bytes": 36514
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "3afe1877c2d768e88b37bd94d788b898f384bfa80c0749d4b7b7501c1e753b38",
+        "bytes": 26863
+      },
+      {
+        "path": "packages/db/migrations/0028_crawl_template_groups.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "d965167ba56c5d9737c79c0959a318ff49bbca213d41bd52c33af748df6feab1",
+        "bytes": 825
+      },
+      {
+        "path": "packages/db/migrations/0029_crawl_template_groups_comment.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "4c40cb48690b9b1d327dd21fc1801bd87f0f7b75b034cd62236a7631c3fbe7de",
+        "bytes": 436
+      },
+      {
+        "path": "pnpm-lock.yaml",
+        "optional": false,
+        "missing": false,
+        "sha256": "f0148c96cbead57632a8c3678d659b5f7501ba19102f88f5c4c1488f9f70fd1a",
+        "bytes": 94067
+      },
+      {
+        "path": "scripts/verify-site-crawl-gate.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "7b367ad117215027cc4e1841813ef121e15be6deb73d0597471054d192f2aec4",
+        "bytes": 2211
+      },
+      {
+        "path": "services/crawler/package.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "1e96721fa397bddfbe307849a7ba70bb8585632e183a6ec1fc7ea0e30caa2ccd",
+        "bytes": 714
+      },
+      {
+        "path": "services/crawler/src/audit-core.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "a49d90bbf7dba97f37017e0fa0980bd1ef6e73f03a3bb55a9ccf88448e801cc1",
+        "bytes": 1614
+      },
+      {
+        "path": "services/crawler/src/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "260b861d928555c47359a36b1c48056af72ac38e84636b1e4346cbb2faf2ee23",
+        "bytes": 1712
+      },
+      {
+        "path": "services/crawler/src/site-template.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "a743ec59bbf3678998398fb680e771bed5c8b6c40f2f3a19b5ebfbc5ae4fb8c4",
+        "bytes": 13329
+      },
+      {
+        "path": "services/crawler/src/site-template.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "14ef95eb67c4c4a602fa83755d3fa9ef175e8dc8298f29b4ab4ae8a45b6f7e32",
+        "bytes": 13961
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "b3ea77996fc2f888b33a44d6242cf95a7ef50598",
+      "tree": "333cf29af3829091b06c6b9a2c4e7c137dd26384",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "37904fe97256f5380e2cd40558e48969f72db345c78627fb1993de1f15a74bf7",
+      "worktree_digest": "bbf5f5f182946f8d068be123cfcdea25e6f820b71251cbe25c169c481a45a68b"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 1048576,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "855748d06296bef9d609f34a4a32da48347bd721ebd33af7b788f8818e8ef7d0"
+  }
+}

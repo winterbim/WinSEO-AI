@@ -1,5 +1,6 @@
 import type { ActionState } from "@serpvera/contracts";
 import { withTenant } from "./client.ts";
+import { publicEvidenceMetadata } from "./evidence-metadata.ts";
 
 const TRANSITIONS: Record<ActionState, readonly ActionState[]> = {
   DETECTED: ["EVIDENCED"],
@@ -222,7 +223,7 @@ async function hydrate(client: import("pg").PoolClient, row: DbActionRow): Promi
       contentHash: e.content_hash,
       objectKey: e.object_key,
       capturedAt: e.captured_at.toISOString(),
-      metadata: objectOrNull(e.metadata_json) ?? {},
+      metadata: publicEvidenceMetadata(e.metadata_json),
     })),
     history: history.rows.map((h) => ({
       id: h.id,

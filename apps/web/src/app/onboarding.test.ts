@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { startProjectCrawl } from "./dashboard/crawl-kickoff.ts";
+import {
+  crawlTrackingHref,
+  reconcileTrackedCrawl,
+  startProjectCrawl,
+} from "./dashboard/crawl-kickoff.ts";
 import {
   clearPendingProjectCreation,
   normalizeProjectDomain,
@@ -189,6 +193,31 @@ void describe("startProjectCrawl", () => {
       ok: false,
       message:
         "Could not confirm whether the crawl started. Check the site before retrying; the request may have reached the service.",
+    });
+  });
+});
+
+void describe("first crawl tracking", () => {
+  void it("keeps the exact accepted crawl run id in the destination URL", () => {
+    assert.equal(
+      crawlTrackingHref("project id", "run/id"),
+      "/dashboard/project%20id?crawlRunId=run%2Fid",
+    );
+  });
+
+  void it("polls only the accepted run and gives up on an unknown id after three successful reads", () => {
+    const runs = [{ id: "other-newer-run" }, { id: "accepted-run" }];
+    assert.deepEqual(reconcileTrackedCrawl(runs, "accepted-run", 0), {
+      kind: "found",
+      run: runs[1],
+    });
+    assert.deepEqual(reconcileTrackedCrawl(runs, "unknown-run", 0), {
+      kind: "retry",
+      consecutiveMisses: 1,
+    });
+    assert.deepEqual(reconcileTrackedCrawl(runs, "unknown-run", 2), {
+      kind: "missing",
+      consecutiveMisses: 3,
     });
   });
 });

@@ -264,12 +264,14 @@ export function projectRoutes(app: FastifyInstance) {
       let observedPagesFailed = 0;
       let observedPageLimit = 50;
       let observedStopReason: string | null = null;
+      let observedTemplateGroups: Awaited<ReturnType<typeof app.auditSite>>["templateGroups"] = [];
       try {
         const audit = await app.auditSite(crawlTarget, traceId, { maxPages: 50 });
         observedPagesCrawled = audit.pagesCrawled;
         observedPagesFailed = audit.pagesFailed;
         observedPageLimit = audit.pageLimit;
         observedStopReason = audit.stopReason ?? null;
+        observedTemplateGroups = audit.templateGroups;
 
         const findingIdsByUrl = new Map<string, string[]>();
         for (const f of audit.findings) {
@@ -328,6 +330,7 @@ export function projectRoutes(app: FastifyInstance) {
           audit.pagesFailed,
           audit.pageLimit,
           audit.stopReason,
+          audit.templateGroups,
         );
         logger.info("Project crawl completed", {
           jobType: "project-crawl",
@@ -357,6 +360,7 @@ export function projectRoutes(app: FastifyInstance) {
             observedPagesFailed,
             observedPageLimit,
             observedStopReason,
+            observedTemplateGroups,
           )
           .catch(() => undefined);
       }

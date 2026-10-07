@@ -15,14 +15,29 @@ case "$PG_SOCKET_DIR" in
   *) echo "Refusing to run the site crawl gate outside a local temporary PostgreSQL socket." >&2; exit 2 ;;
 esac
 
+printf 'GATE_START disposable PostgreSQL migrations with DATABASE_URL unset\n'
+env -u DATABASE_URL \
+  PG_SOCKET_DIR="$PG_SOCKET_DIR" \
+  PGPORT="$PGPORT" \
+  PGUSER="$PGUSER" \
+  PGDATABASE="$PGDATABASE" \
+  pnpm --filter @serpvera/db db:migrate
+printf 'GATE_PASS disposable PostgreSQL migrations db=%s port=%s\n' "$PGDATABASE" "$PGPORT"
+
 printf 'GATE_START disposable PostgreSQL migration state\n'
-migration_0027=$(psql -X -h "$PG_SOCKET_DIR" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
-  -v ON_ERROR_STOP=1 -Atc "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '0027_crawl_run_coverage')")
-if [[ "$migration_0027" != "t" ]]; then
-  echo "Required migration 0027_crawl_run_coverage is not applied." >&2
+migration_0028=$(psql -X -h "$PG_SOCKET_DIR" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+  -v ON_ERROR_STOP=1 -Atc "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '0028_crawl_template_groups')")
+if [[ "$migration_0028" != "t" ]]; then
+  echo "Required migration 0028_crawl_template_groups is not applied." >&2
   exit 1
 fi
-printf 'GATE_PASS disposable PostgreSQL migration state db=%s port=%s migration=0027\n' "$PGDATABASE" "$PGPORT"
+migration_0029=$(psql -X -h "$PG_SOCKET_DIR" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+  -v ON_ERROR_STOP=1 -Atc "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '0029_crawl_template_groups_comment')")
+if [[ "$migration_0029" != "t" ]]; then
+  echo "Required migration 0029_crawl_template_groups_comment is not applied." >&2
+  exit 1
+fi
+printf 'GATE_PASS disposable PostgreSQL migration state db=%s port=%s migrations=0028,0029\n' "$PGDATABASE" "$PGPORT"
 printf 'GATE_START workspace tests with DATABASE_URL unset; PostgreSQL socket/database explicitly pinned\n'
 
 pnpm format:check

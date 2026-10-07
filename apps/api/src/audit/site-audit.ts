@@ -10,10 +10,14 @@ import {
   parseRobotsTxt,
   parseSitemapXml,
   RULES_VERSION,
+  groupSitePageStructures,
+  semanticDomSignature,
   type EvidenceRecord,
   type FetchResult,
   type NormalizedUrl,
   type RuleFinding,
+  type SiteTemplateGroup,
+  type SitePageStructure,
 } from "@serpvera/crawler/audit-core";
 
 const MAX_PAGES = 200;
@@ -33,6 +37,7 @@ export interface SiteAuditResult {
   pagesCrawled: number;
   pagesFailed: number;
   pageLimit: number;
+  templateGroups: SiteTemplateGroup[];
   findings: RuleFinding[];
   evidence: EvidenceRecord[];
 }
@@ -146,6 +151,7 @@ function failedResult(
     pagesCrawled: 0,
     pagesFailed: 1,
     pageLimit,
+    templateGroups: [],
     findings: [
       failedFinding(
         securityFailure ? "CRAWL.SSRF_BLOCKED" : "CRAWL.HTTP_ERROR",
@@ -407,6 +413,7 @@ export async function auditSite(
   const finalUrls = new Set<string>();
   const findings: RuleFinding[] = [];
   const evidence: EvidenceRecord[] = [];
+  const pageShapes: SitePageStructure[] = [];
   let pagesCrawled = 0;
   let pagesFailed = 0;
   let stopReason: SiteAuditResult["stopReason"];
@@ -519,6 +526,12 @@ export async function auditSite(
 
     const capturedAt = new Date().toISOString();
     const parsed = parseHtmlPage(body, result.finalUrl);
+    pageShapes.push({
+      url: pageUrl,
+      domSignatureHash: contentType.includes("application/xhtml+xml")
+        ? null
+        : semanticDomSignature(body),
+    });
     const pageAudit = evaluatePageRules(parsed, {
       pageUrl,
       finalUrl: result.finalUrl,
@@ -528,6 +541,9 @@ export async function auditSite(
       contentLength: Buffer.byteLength(body, "utf8"),
       capturedAt,
     });
+    for (const item of pageAudit.evidence) {
+      item.metadata = { ...(item.metadata ?? {}), pageUrl };
+    }
     findings.push(...pageAudit.findings);
     evidence.push(...pageAudit.evidence);
     pagesCrawled++;
@@ -564,10 +580,13 @@ export async function auditSite(
       pagesCrawled,
       pagesFailed: Math.max(1, pagesFailed),
       pageLimit,
+      templateGroups: [],
       findings,
       evidence,
     };
   }
+
+  const templateGrouping = groupSitePageStructures(pageShapes);
 
   return {
     status: stopReason && stopReason !== "page_limit" ? "failed" : "completed",
@@ -582,6 +601,7 @@ export async function auditSite(
     pagesCrawled,
     pagesFailed,
     pageLimit,
+    templateGroups: templateGrouping.groups,
     findings,
     evidence,
   };

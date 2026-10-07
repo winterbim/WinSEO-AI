@@ -23,9 +23,15 @@ const MIGRATIONS_DIR = join(__dirname, "..", "migrations");
 function buildAdminPool(): pg.Pool {
   const url = process.env.DATABASE_URL;
   if (url) return new pg.Pool({ connectionString: url, max: 1 });
+  const port = process.env.PGPORT ? Number(process.env.PGPORT) : undefined;
+  if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535)) {
+    throw new Error("PGPORT must be an integer between 1 and 65535");
+  }
   // Peer-auth socket default (local dev). No password.
   return new pg.Pool({
     host: process.env.PG_SOCKET_DIR ?? "/var/run/postgresql",
+    ...(port === undefined ? {} : { port }),
+    ...(process.env.PGUSER ? { user: process.env.PGUSER } : {}),
     database: process.env.PGDATABASE ?? "serpvera_dev",
     max: 1,
   });

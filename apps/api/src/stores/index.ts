@@ -34,6 +34,8 @@ export interface CreateStoresOptions {
   driver?: StoreDriver;
   /** For local dev peer-socket connection (no password). */
   pgSocketDir?: string;
+  pgPort?: number;
+  pgUser?: string;
   pgDatabase?: string;
   pgConnectionString?: string;
   runtimeRole?: string;
@@ -52,6 +54,8 @@ export function createStores(opts: CreateStoresOptions = {}): ApiStores {
     initDbStores({
       connectionString,
       host: opts.pgSocketDir ?? process.env.PG_SOCKET_DIR ?? "/var/run/postgresql",
+      port: opts.pgPort ?? (process.env.PGPORT ? Number(process.env.PGPORT) : undefined),
+      user: opts.pgUser ?? process.env.PGUSER,
       database: opts.pgDatabase ?? process.env.PGDATABASE ?? "serpvera_dev",
       runtimeRole: opts.runtimeRole ?? process.env.DB_RUNTIME_ROLE ?? "serpvera_app",
       maxPool: opts.maxPool ?? 10,

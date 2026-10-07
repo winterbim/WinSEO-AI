@@ -149,6 +149,31 @@ void describe("project crawl persists fixture-derived findings/evidence (real Po
     // Wait for the FULL persistence (findings + evidence + terminal run).
     await waitUntilPersisted(a.cookie, a.projectId);
 
+    const historyResponse = await app.inject({
+      method: "GET",
+      url: `/v1/projects/${a.projectId}/crawl-runs`,
+      headers: { cookie: `serpvera_session=${a.cookie}` },
+    });
+    assert.equal(historyResponse.statusCode, 200, historyResponse.body);
+    const history = JSON.parse(historyResponse.body) as {
+      crawlRuns: {
+        id: string;
+        templateGroups: { pageCount: number; sampleUrls: string[] }[] | null;
+      }[];
+    };
+    const observedRun = history.crawlRuns.find((item) => item.id === runId);
+    assert.ok(observedRun?.templateGroups?.length, "API history returns observed page groups");
+    assert.equal(
+      observedRun.templateGroups.reduce((total, group) => total + group.pageCount, 0),
+      2,
+    );
+    assert.ok(
+      observedRun.templateGroups
+        .flatMap((group) => group.sampleUrls)
+        .every((url) => !/[?#]/.test(url)),
+      "sample paths exclude query parameters and fragments",
+    );
+
     const res = await app.inject({
       method: "GET",
       url: `/v1/projects/${a.projectId}/findings`,
@@ -217,7 +242,8 @@ void describe("project crawl persists fixture-derived findings/evidence (real Po
     // Crawl run reached a terminal state.
     const runRow = await withAdmin(async (c) => {
       const r = await c.query(
-        `SELECT status, pages_crawled, page_limit, stop_reason FROM crawl_runs WHERE id = $1`,
+        `SELECT status, pages_crawled, page_limit, stop_reason, template_groups
+           FROM crawl_runs WHERE id = $1`,
         [runId],
       );
       return r.rows[0] as
@@ -226,6 +252,7 @@ void describe("project crawl persists fixture-derived findings/evidence (real Po
             pages_crawled: number;
             page_limit: number | null;
             stop_reason: string | null;
+            template_groups: { id: string; pageCount: number }[] | null;
           }
         | undefined;
     });
@@ -234,6 +261,12 @@ void describe("project crawl persists fixture-derived findings/evidence (real Po
     assert.equal(runRow.pages_crawled, 2, "run totals must report every observed page");
     assert.equal(runRow.page_limit, 50, "the applied crawl cap must be persisted");
     assert.equal(runRow.stop_reason, null, "an exhausted fixture queue has no stop condition");
+    assert.ok(runRow.template_groups?.length, "observed structure groups must be persisted");
+    assert.equal(
+      runRow.template_groups.reduce((total, group) => total + group.pageCount, 0),
+      2,
+      "group support must account for observed pages",
+    );
   });
 
   void it("admits only one active crawl for a project across concurrent requests", async () => {
@@ -345,6 +378,17 @@ void describe("project crawl persists fixture-derived findings/evidence (real Po
       headers: { cookie: `serpvera_session=${b.cookie}` },
     });
     assert.equal(crossRun.statusCode, 404, "cross-tenant crawl trigger must be 404");
+
+    const crossHistory = await app.inject({
+      method: "GET",
+      url: `/v1/projects/${a.projectId}/crawl-runs`,
+      headers: { cookie: `serpvera_session=${b.cookie}` },
+    });
+    assert.equal(
+      crossHistory.statusCode,
+      404,
+      "cross-tenant history and structure groups must be 404",
+    );
 
     // B's own project query returns zero rows (its own, empty ledger).
     const own = await app.inject({

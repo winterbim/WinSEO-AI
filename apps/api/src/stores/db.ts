@@ -5,6 +5,7 @@
 // production connects as serpvera_app with a vault-provided password.
 
 import { createHmac } from "node:crypto";
+import { parseStoredTemplateGroups } from "./template-groups.ts";
 import {
   configurePool,
   closePool,
@@ -78,6 +79,7 @@ import {
   type AiVisibilityCaptureRow,
   type AiVisibilityImportRow,
   type DbConfig,
+  publicEvidenceMetadata,
 } from "@serpvera/db";
 import type {
   ApiStores,
@@ -638,6 +640,7 @@ export function createDbStores(): ApiStores {
         pagesFailed,
         pageLimit,
         stopReason,
+        templateGroups,
       ) {
         await finishCrawlRunRow(
           organizationId,
@@ -647,6 +650,9 @@ export function createDbStores(): ApiStores {
           pagesFailed,
           pageLimit,
           stopReason,
+          templateGroups === undefined || templateGroups === null
+            ? templateGroups
+            : parseStoredTemplateGroups(templateGroups),
         );
       },
       async addFinding(organizationId, projectId, finding) {
@@ -738,6 +744,7 @@ export function createDbStores(): ApiStores {
           pagesFailed: r.pages_failed,
           pageLimit: r.page_limit,
           stopReason: r.stop_reason,
+          templateGroups: parseStoredTemplateGroups(r.template_groups),
         }));
       },
       async createDetectedAction(organizationId, projectId, findingId) {
@@ -1053,10 +1060,7 @@ function toStoredEvidence(r: {
     contentHash: r.content_hash,
     objectKey: r.object_key,
     capturedAt: r.captured_at.toISOString(),
-    metadata:
-      r.metadata_json && typeof r.metadata_json === "object"
-        ? (r.metadata_json as Record<string, unknown>)
-        : {},
+    metadata: publicEvidenceMetadata(r.metadata_json),
   };
 }
 

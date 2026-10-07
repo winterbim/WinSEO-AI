@@ -537,3 +537,158 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 - Jobs observés verts : `Verify` (format, lint, typecheck, build, PostgreSQL setup, tests) et `Security Scan` (audit dépendances, secret scan, commits de branches latérales et test synthétique de détection).
 - Raw status : `gh run view 37684522886 --json headSha,headBranch,status,conclusion,event,jobs,url`; URL `https://github.com/winterbim/WinSEO-AI/actions/runs/37684522886`.
 - Revue indépendante `audit_security_ci`: `EVIDENCED`; le reviewer a confirmé le SHA exact, l’événement PR #1 et la réussite des deux jobs, puis a promu uniquement `CI-002` à `EVIDENCED` dans le ledger R+.
+
+## 2026-10-07 — M3 en cours : regrouper les pages par gabarit observé
+
+**Fonction prévue :** annoter les instantanés HTML déjà observés avec un identifiant de groupe reproductible, dérivé du motif d’URL et de la structure sémantique du DOM; montrer le nombre de groupes et de pages dans l’historique; évaluer les règles sur 200 pages fixture, 5 structures et des défauts injectés.
+
+- **Quelle preuve ?** Le HTML source est déjà capturé par hash. Un calcul déterministe extrait seulement une forme de DOM, un motif de chemin et quelques URL exemples; un jeu fixture connaît les pages affectées avant le crawl et mesure la précision/rappel par règle.
+- **Quel risque ?** Une similarité de chemin/structure peut confondre deux gabarits distincts. Le libellé restera « groupe de structure observé »; il ne prétendra pas connaître le CMS ou son template réel. Aucun corps HTML ni texte de page supplémentaire ne sera stocké dans le résumé.
+- **Comment l’annuler ?** Revenir sur le calcul, la lecture UI et l’API. Le champ JSONB ajouté à `crawl_runs` est nullable et indépendant; en cas de retour du code, les données restent inertes et la migration historique n’est pas réécrite.
+- **Comment saurons-nous que ça a marché ?** Fixture de 200 URL avec cinq signatures attendues; précision/rappel des règles calculés depuis les défauts injectés; persistance et affichage par run vérifiés sur PostgreSQL/RLS; revue sceptique indépendante; gate complet sans cache.
+
+**Limites avant implémentation :** le résultat ne vaudra pas l’acceptation M3 tant que le rendu JS par échantillon, l’évaluation publiée, le budget du crawler et la reprise durable du worker ne sont pas prouvés. Les mesures ne seront pas présentées comme une preuve sur un site client réel.
+
+**Écart découvert dans la vérification DB :** `packages/db/src/migrate.ts` ignorait `PGPORT`, tandis que la gate pointait le préflight PostgreSQL vers le socket/port de test. Une migration pouvait donc cibler le port socket par défaut, puis laisser la gate croire que la base jetable contenait le schéma attendu. La gate M3 lance maintenant la migration avec `DATABASE_URL` retirée et le socket, port, rôle et nom DB épinglés; le runner consomme ces paramètres. La migration qui vient d’être appliquée au socket de développement par défaut est une base locale `serpvera_dev`, pas une preuve de la base jetable 55432; elle sera vérifiée séparément dans le gate épinglé.
+
+**Surprise du premier gate après compilation :** PostgreSQL retourne `NULL` pour `inet_server_port()` sur une connexion Unix socket. Le test de ciblage a échoué (81/82 tests DB); le contrôle consulte maintenant `current_setting('port')`, qui expose la configuration du serveur même pour une connexion socket. Cet échec est conservé et n’est pas présenté comme une réussite.
+
+### Résultats du fixture M3 (révision avant durcissement final)
+
+- `auditSite` a observé 200 pages HTML en 0,2 s de temps fixture, cinq groupes attendus de 40 pages et aucun échec de fetch. Pour `ONPAGE.MISSING_TITLE`, 20 défauts injectés avant le crawl donnent TP=20, FP=0, FN=0, précision=1,00 et rappel=1,00. Le rapport `docs/autoreglage/EVAL-SITE-CRAWL.md` limite explicitement cette mesure au seul corpus/règle synthétiques.
+- Migration forward-only `0028_crawl_template_groups.sql` appliquée au `serpvera_dev` jetable sur `/tmp/winseo-pgsocket:55432`; le test PostgreSQL confirme la base, le port configuré et le rôle. `packages/db` : 82/82 après correction du test socket-port.
+- Le gate complet a ensuite passé formatage, lint, typecheck, build et les 14 tâches de test sans cache (426 tests au total, avant les dernières assertions de minimisation des URL et d’historique cross-tenant). Le gate final de cette version durcie et l’avis sceptique restent à exécuter avant toute promotion de statut.
+
+- **Quelle preuve ?** Les logs doivent montrer la migration exécutée avec le même tuple socket/port/role/base que le préflight, et `0028_crawl_template_groups` doit figurer dans le ledger de cette base.
+- **Quel risque ?** Le mode `DATABASE_URL` pourrait supplanter la cible de test ou un port ignoré laisserait la gate lire une autre base locale.
+- **Comment l’annuler ?** Revenir à la logique de sélection de connexion; aucune migration métier n’est réécrite. Une migration uniquement appliquée en développement reste additive.
+- **Comment saurons-nous que ça a marché ?** La gate de vérification exécute les migrations avec `DATABASE_URL` unset, vérifie l’identité par paramètres imposés et lit 0028 sur le même socket/port/base avant les tests PostgreSQL.
+
+## 2026-10-07 — Revue adversariale du regroupement de structure
+
+### Correction prévue : rendre l'empreinte sémantique insensible au texte hors DOM et limiter les fausses inférences de route
+
+- **Quelle preuve ?** Une revue indépendante a reproduit quatre défauts : les faux éléments dans les commentaires et contextes raw-text changeaient l'empreinte; la profondeur de `<section>` était perdue; `/docs/new`, `/docs/archive` et `/docs/search` devenaient un faux `:slug`; plusieurs query variants produisaient des exemples identiques après leur retrait. Les nouveaux tests fixture doivent inverser ces repros et conserver le vrai `<iframe>` comme élément observé.
+- **Quel risque ?** Un regroupement incorrect expose une agrégation trompeuse des pages; un parseur lexical ne reproduit pas toute la construction DOM du navigateur. Une signature mémorisée ne doit ni retenir le HTML complet de 200 pages ni être présentée comme identité du CMS.
+- **Comment l'annuler ?** Retirer l'affichage/agrégation des groupes et ne plus les écrire dans le résumé du crawl; la preuve SEO page par page et la colonne JSONB nullable restent utilisables. La migration appliquée n'est jamais réécrite.
+- **Comment saurons-nous que ça a marché ?** Tests adversariaux des commentaires, script/style/textarea/iframe, imbrication, routes statiques et déduplication d'URL; gate complet uncached sur la base jetable; verdict indépendant; aucune promotion R+ avant ces trois preuves.
+
+### Résultats de correction, gates encore ouverts
+
+- Le tokeniseur ignore les commentaires et le contenu raw-text tout en gardant les balises iframe réelles; l'empreinte conserve la hiérarchie sémantique via un fingerprint post-ordre; la route textuelle n'est paramétrée que si trois frères au moins partagent un préfixe explicite; les exemples sont dédupliqués après nettoyage query/fragment.
+- Le crawl calcule le hash DOM page par page et ne garde plus les corps HTML des pages en mémoire jusqu'à la fin du site. La signature reste une heuristique lexicale, pas une preuve de template CMS.
+- `node --experimental-strip-types src/site-template.test.ts` : 6/6 réussis; `pnpm --filter @serpvera/crawler typecheck` réussi. `prettier --check` a d'abord échoué sur les nouveaux fichiers; formatage appliqué, vérification finale encore attendue.
+- Le lancement sandboxé de la suite crawler a échoué dans les tests Chromium existants (`browserType.launch: Target page, context or browser has been closed`); le même défaut apparaît sur `renderer.test.ts` seul. Ce n'est pas compté vert. La gate complète doit être relancée avec l'accès browser/socket autorisé.
+- La gate autorisée a ensuite détecté une règle ESLint `no-unnecessary-condition` dans le nouveau test d'échantillon; l'assertion a été corrigée. Cette première exécution s'arrête au lint et n'est pas comptée comme succès.
+- La deuxième gate a dépassé le lint et échoué au build sur le même test: TypeScript requiert une assertion de présence explicite pour l'élément d'échantillon. L'assertion utilise maintenant `assert.ok(group)` avant les accès; cette tentative n'est pas comptée verte et une nouvelle exécution complète est requise.
+- Gate complète fraîche : `env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-site-crawl-gate.sh` — exit 0; migration 0028 confirmée sur cette base, format-check, diff-check, lint, build, typecheck et 14/14 tâches de test sans cache réussis. PostgreSQL DB 82/82, API 137/137, Web 29/29; le test renderer Chromium réel et les six tests de regroupement passent. Le build avertit que Turbo ne trouve pas de fichiers outputs pour les builds API/crawler et Next avertit du plugin ESLint non détecté; les commandes restent réussies.
+- Statuts `SITE-CRAWL-001` et `SITE-TEMPLATE-001` maintenus `IN_PROGRESS`; revue indépendante précédente `FAIL` sur la version brute et ne couvre pas encore ce correctif.
+
+## 2026-10-07 — Suivre explicitement le premier crawl après création de site
+
+### Fonction : transporter l'identifiant exact du crawl accepté jusqu'à l'écran de projet
+
+- **Quelle preuve ?** La réponse de démarrage contient déjà l'identifiant persistant du crawl; les tests API prouvent l'insertion et l'historique liste les runs du projet. Le navigateur doit recevoir cet identifiant, interroger l'historique du projet jusqu'au statut terminal, puis afficher les pages, échecs, couverture et lien vers l'historique.
+- **Quel risque ?** Se reposer uniquement sur « le run le plus récent » peut suivre un autre run si l'utilisateur lance une seconde action rapidement; un paramètre arbitraire ne doit pas pouvoir lire un crawl d'un autre projet ou tenant.
+- **Comment l'annuler ?** Supprimer le paramètre de suivi et revenir à la sélection du dernier run dans l'aperçu; la consultation d'historique reste autorisée au tenant du projet via l'API existante.
+- **Comment saurons-nous que ça a marché ?** Test unitaire du href encodant le même run ID retourné par le démarrage, tests API existants de portée projet/tenant, build/typecheck et vérification UI. Aucune preuve de parcours navigateur n'est revendiquée sans E2E.
+
+### Avancement
+
+- L'ID du run est maintenant transmis comme `crawlRunId` depuis le formulaire de création et la relance; l'aperçu le valide puis le composant poll le run exact et retire le paramètre après un statut terminal.
+- Tests de route pure et gate complet après ce changement encore à exécuter. La revue UX antérieure signalait un risque de suivi; le code précédent suivait déjà le dernier run, donc le changement rend le lien explicite et élimine l'ambiguïté de sélection, sans prétendre corriger un blocage observé en UI.
+- La première nouvelle gate a aussi détecté le formatage de la ligne du claim R+ ajouté; le ledger a été formaté et `pnpm format:check` passe. Cette tentative n'est pas comptée verte; la gate complète est à relancer.
+
+## 2026-10-07 21:34 UTC — Remédiation sceptique du fingerprint HTML et du poller
+
+### Reproches à conserver
+
+La revue `audit_security_ci` a retourné `FAIL` sur la première empreinte après le gate vert : fermeture HTML5 de commentaire `--!>`, CDATA SVG, fermeture implicite des `<li>`, slash ignoré sur les éléments non void, répétitions de frères effacées, routes statiques `/docs/api-*` fusionnées, email de chemin conservé, allocation des tokens non mesurée, fixture sans assertion catégorie↔structure et commentaire de migration inexact. La revue UX a retourné `INSUFFICIENT` : statut faux `pending`, run inconnu pollé indéfiniment, compteurs présentés comme s'ils étaient live, et erreur temporaire non effacée après récupération. Ces verdicts ne sont ni supprimés ni transformés en succès.
+
+### Correction retenue — parse5 HTML5 pour l'empreinte
+
+- **Quelle preuve ?** Le navigateur construit un DOM HTML5, pas une liste de balises explicites; les repros ci-dessus sont couverts par tests adversariaux. Le corpus 200 pages compare maintenant chaque groupe au hash de sa catégorie fixture, vérifie cinq hashes distincts et exige que ses exemples appartiennent à la catégorie attendue.
+- **Quel risque ?** Le parseur construit un arbre temporaire. L'empreinte refuse les entrées de plus de 128 KiB et les parcours au-delà de 30 000 nœuds; le coût RSS d'un processus de production n'est pas encore mesuré. Le motif d'URL demeure une inférence prudente, pas une identité CMS.
+- **Comment l'annuler ?** Désactiver l'agrégation et l'affichage; laisser les empreintes par page et JSONB optionnel inutilisés. Migration 0028 reste inchangée après application locale; 0029 corrige seulement le commentaire visible de colonne.
+- **Comment saurons-nous que ça a marché ?** Tests `--!>`, CDATA, li implicites, slash non-void, cardinalité, routes API, PII, dépassement des budgets; fixture 200 pages avec signatures attendues; schéma PostgreSQL confirme le commentaire 0029; gate complet uncached et relecture sceptique.
+
+### Correction retenue — suivi exact du premier crawl
+
+- **Quelle preuve ?** L'identifiant renvoyé est testé contre une liste contenant un autre run; un ID absent est réessayé puis abandonné après trois lectures réussies. Le status UI commence vide sans run connu, affiche le statut réel `pending`/`running`, cache les compteurs jusqu'au statut terminal et efface une erreur temporaire quand le poll suivant réussit.
+- **Quel risque ?** L'UI n'affiche toujours pas de progression page par page parce que les compteurs ne sont persistés qu'à la fin du worker. Un run manquant signale une erreur de suivi, pas que le crawl n'a jamais démarré.
+- **Comment l'annuler ?** Revenir au dernier-run historique et supprimer l'URL de suivi; les routes et enregistrements de crawl ne changent pas.
+- **Comment saurons-nous que ça a marché ?** Unit tests des fonctions de reprise exacte, tests API de portée projet, gate complet et relecture UX. Aucun E2E navigateur ne sera revendiqué sans exécution réelle.
+
+### Résultats réellement exécutés depuis la remédiation
+
+- `node --experimental-strip-types --test src/site-template.test.ts` dans `services/crawler` : exit 0; repros HTML5, PII et budget passent.
+- `node --experimental-strip-types --test src/audit/site-audit.test.ts` dans `apps/api` : exit 0; fixture 200 pages passe avec assertion catégorie↔hash.
+- Typecheck crawler, API et web : passent après correction de l'assertion locale; lint API : passe.
+- `node --experimental-strip-types --test src/**/*.test.ts` a passé 9 tâches crawler sur 10, mais le test Chromium `renderer.test.ts` a échoué à lancer/maintenir le navigateur en sandbox. Ce résultat est environnemental non confirmé et n'est pas compté vert; la gate complète doit être exécutée avec accès de test autorisé.
+- La base de développement jetable recevait déjà 0028; la migration 0028 ne doit donc plus être éditée. La migration 0029 ajoute une description PostgreSQL exacte, et le gate doit désormais exiger 0029.
+- Statuts R+ `SITE-TEMPLATE-001` et `ONBOARDING-CRAWL-TRACK-001` restent `IN_PROGRESS`. Revue actuelle, capture WinCreator et gate complet encore en attente. M3 reste incomplet; `CORE-SAAS-001` reste `IN_PROGRESS`.
+
+## 2026-10-07 21:41 UTC — Revue sceptique itération 2 et durcissement complémentaire
+
+### Nouveaux repros indépendants
+
+`audit_security_ci` a encore retourné `FAIL` (sans exécuter les tests sur cette révision) : les exemples conservaient des nombres, UUID et codes courts après `/invite`; l'ID de fallback hashait l'URL brute et donc des valeurs query; trois slugs textuels pouvaient encore être statiques même sous `/articles`; une réponse XHTML était hashée avec parse HTML; le contenu séparé `<template>.content` était omis; les classes de cardinalité `2–4` sont volontairement grossières mais doivent être dites; le texte UI du fallback parlait encore de URL/DOM.
+
+### Corrections de code préparées pour le nouveau gate
+
+- Retirer l'inférence de slugs textuels; ne généraliser que les segments ID numériques/UUID/date et suffixes numériques explicites. Les routes textuelles statiques sous `/articles` restent distinctes.
+- Masquer nombres, dates, UUID, suffixes numériques, emails et toute la queue après des chemins sensibles (`reset`, `invite`, `share`, `token`, etc.). Pour un fingerprint indisponible, créer un groupe singleton dont l'ID dépend du sample assaini et de la position dans le crawl, jamais de l'URL brute ou de sa query.
+- Intégrer le fragment `template.content` comme structure source séparée. L'audit n'utilise pas le parseur HTML pour une réponse `application/xhtml+xml`; cette page reste un groupe URL seul.
+- Remplacer le code méthode trompeur par `URL_PATTERN_ONLY_FINGERPRINT_UNAVAILABLE_V1`; l'UI affiche explicitement l'absence d'empreinte.
+- Les buckets de cardinalité `2–4` restent une approximation intentionnelle et sont explicitement décrits dans l'évaluation et la décision D-039.
+- Revue UX suivante en attente; le statut vide et la suppression de statut/compteurs sur trois réponses sans run ont été ajoutés.
+
+### Distillation et sorties de vérification
+
+- Snapshot pré-nettoyage `.wincreator` externe : SHA-256 `be8f13892fa2dc113651666ce818a67e18e22c986f676847fe0081e4efcb5f5b`; vérifié par WinCreator `SITE-TEMPLATE-DISTILL-BASELINE`, attestation `docs/proofs/wincreator/SITE-TEMPLATE-DISTILL-BASELINE/20261007T213742.932839Z-5990e2a4-d19a-4ef6-a941-972b5209549d/attestation.json` (digest `fe57fe4526582e3488fe83233d9f055bf0f40dc786d171c928bfff2b5cf47fa4`). Le premier compare après un refactor local a affiché `IMPROVED` (–15 lignes non blanches, –16 lignes dans le fichier), mais ce rapport précède les nouvelles corrections de revue et ne sera pas joint comme distillation du code final.
+- Le gate complet autorisé a atteint le lint, puis s'est arrêté sur `@typescript-eslint/no-unnecessary-template-expression` dans `site-template.ts`; correction appliquée et lint crawler ciblé passe. Aucun résultat de cette tentative ne compte comme gate complet.
+- Les tests ciblés du parseur et du fixture 200 pages passaient avant la seconde revue; les ajouts XHTML/privacy/template et changements de types doivent être rejoués. Gate complète uncached et capture WinCreator finale encore requises.
+- Statut `SITE-TEMPLATE-001 = IN_PROGRESS`; verdict sceptique le plus récent `FAIL` non effacé. `ONBOARDING-CRAWL-TRACK-001 = IN_PROGRESS`; revue UX fraîche requise. M3 et `CORE-SAAS-001` restent ouverts.
+
+## 2026-10-07 21:44 UTC — Retests après remédiation
+
+- `node --experimental-strip-types --test src/site-template.test.ts` (crawler), `node --experimental-strip-types --test src/audit/site-audit.test.ts` (API), et `node --experimental-strip-types --test src/app/onboarding.test.ts` (web) : tous exit 0 après ajustement de deux attentes de test sur la redaction des chemins.
+- `pnpm typecheck` dans crawler, API et web : exit 0. `pnpm lint` dans crawler, API et web : exit 0. `pnpm format:check` et `git diff --check` : exit 0.
+- Auto-tests des outils WinCreator et Distill : 6/6 chacun. Distillation finale `IMPROVED` (−33 lignes source, −30 lignes non blanches, −1 465 octets dans le fichier suivi; aucun changement de dépendance ni doublon) : `docs/proofs/wincreator/SITE-TEMPLATE-DISTILL-BASELINE/distill-final-report.json`.
+- Revue UX indépendante fraîche : `PASS` pour l’état de suivi du crawl; elle confirme les resets après trois réponses sans run et signale explicitement l’absence de test composant/E2E navigateur. Aucun statut de preuve promu.
+- Le gate uncached complet WinCreator (`scripts/verify-site-crawl-gate.sh`, PostgreSQL jetable, build, lint, typecheck, suite workspace) a donné `CAPTURED_PASS`, 14 tâches non cachées, 0 échec de test (attestation `docs/proofs/wincreator/SITE-TEMPLATE-001/20261007T214315.064180Z-6272e9c7-84b2-44de-a760-b600a24acd0e/attestation.json`, digest `dde9d55cc13d97cdabae74d92fe1cf3e086396b5d579f63be6314f4b5c69e8bf`). Ce résultat ne clôt pas la revue indépendante.
+- Revue sceptique sécurité/CI fraîche : `FAIL` avec deux risques matériels encore dans les chemins affichés et l’inférence des suffixes numériques; aucun test exécuté par ce reviewer. Capture verte conservée comme evidence d’exécution, mais ne peut pas effacer l’échec adverse.
+- `[AUDIT]` Trois échecs de revue à Meso indiquent que la frontière de regroupement persistait des segments URL arbitraires et généralisait avant d’avoir une preuve de frères. Nouvelle règle avant une autre tentative : seuls des segments de chemin d’une allowlist sûre sont affichables; tout autre segment devient `:private`. Les routes textuelles inconnues sont des singletons. Un segment numérique ou suffixé n’est généralisé que si au moins trois frères distincts confirment la même forme sous un parent de collection reconnu; le préfixe inconnu n’est jamais stocké. Sinon singleton. Rejouer les cas `/users/jane-doe-123`, `/contact/+1-415-555-1234`, `/t/AB12CD`, `/guide/step-1|step-2`, plus le corpus 200 pages.
+- La remédiation garde le calcul des valeurs d’ID en mémoire pour compter les frères, mais ni l’URL brute ni sa valeur ne rentrent dans une clé stockée. Les chemins inconnus deviennent des singletons; les échantillons sont validés contre le motif rendu; l’API rejette également les anciens résumés incompatibles. Nouveau détecteur de méthodes `SEMANTIC_DOM_PRIVACY_SINGLETON_V1` pour un hash disponible qui reste isolé. Tests crawler 15/15, audit API 11/11, tests du parseur historique 2/2 et onboarding 15/15 passent après la correction; typecheck trois paquets passe. Lint crawler/API/web a passé sauf que le dernier lint avait une assertion inutile corrigée ensuite; les deux lints rerun, crawler/API, passent. Gate complet et revue indépendante de cette révision restent à refaire.
+- `SITE-TEMPLATE-001`, `ONBOARDING-CRAWL-TRACK-001`, `SITE-CRAWL-001`, M3 et `CORE-SAAS-001` restent `IN_PROGRESS`; GSC/BILLING/EMAIL live restent `BLOCKED` faute de credentials opérateur.
+
+## 2026-10-08 — Revue adversariale des résumés persistés et preuves
+
+- Revue indépendante `audit_security_ci` : `FAIL`. Elle a reconstruit un identifiant historique à partir d’une URL query secrète et constaté que l’API l’acceptait sous l’ancienne méthode V1; elle a aussi montré qu’un singleton valide `/orders/:id` était produit par le crawler puis rejeté par le lecteur d’historique. Le reviewer confirme que les cas PII précédents et la séparation de `/guide/step-1|2` sont corrigés, et considère les +82 lignes non blanches de garde-fous nécessaires; `REVIEW_REQUIRED` Distill est maintenu comme signal de revue manuelle, sans réduction builder.
+- Correctifs : le crawler écrit désormais `URL_PATTERN_ONLY_PRIVACY_SINGLETON_V2`; le lecteur refuse V1; les routes ID isolées acceptent leur méthode singleton sans autoriser leur fusion hors collection/seuil; les échantillons non vides et les cardinalités singleton sont requis. Tests de régression calculent l’ancien ID à partir d’une URL avec `?token=guess-me` et valident `/orders/:id`.
+- Vérification supplémentaire du chemin preuve : les champs de regroupement ont été retirés des métadonnées Evidence nouvelles et sont filtrés sur lecture pour les anciennes lignes dans le store PostgreSQL, l’adaptateur mémoire et les preuves hydratées dans Action Center. Les groupes restent consultables depuis l’historique du crawl. Tests unitaires du filtre, du store mémoire et assertions sur le résultat d’audit.
+- La revue conceptuelle a ensuite trouvé que le store mémoire retournait encore sans validation ses groupes du crawl. Le parseur commun a été déplacé dans `apps/api/src/stores/template-groups.ts` et appliqué aux écritures/lectures DB et mémoire; une fixture s’assure qu’un groupe V1 n’est pas retourné par l’historique mémoire. Tests ciblés actuels : parser 3/3, mémoire Evidence/historique 2/2, audit 200 pages 11/11, crawler 16/16, DB metadata 2/2; lints/typechecks des trois paquets et format-check passent.
+- Distill a été recalculé après le dernier changement de `site-template.ts`; le rapport précédent +82 ne correspondait pas au SHA capturé. Le nouveau rapport est `docs/proofs/wincreator/SITE-TEMPLATE-DISTILL-BASELINE/distill-route-privacy-final-report.json`, verdict `REVIEW_REQUIRED`, +92 lignes non blanches / +97 lignes, aucun paquet ajouté ni duplicata. Une justification indépendante de la version exacte reste nécessaire.
+- La capture WinCreator précédente a des métadonnées de claim vides parce qu’elle utilisait `--no-ledger`; elle ne peut pas servir de preuve liée au claim. Le prochain gate utilisera la ligne scoped `SITE-TEMPLATE-PRIVACY-001` du ledger afin que claim, gate, capture et revue soient tous reliés. Le statut du claim large `SITE-TEMPLATE-001` restera `IN_PROGRESS`.
+- Tests ciblés du 2026-10-08 : crawler 16/16, API parser 3/3, audit 200 pages/5 structures passé, DB metadata 2/2; lint et typecheck crawler/API/DB passent. Gate complète uncached, capture WinCreator sur cette version, revue sceptique fraîche et statut R+ restent en attente. Les captures du 2026-10-07 ne prouvent pas cette nouvelle version.
+- L’ancienne donnée de groupes en V1 peut rester dans les enregistrements PostgreSQL, mais elle ne sera pas retournée par l’API; les preuves Evidence existantes peuvent conserver leurs anciennes métadonnées en base, filtrées à la lecture. Aucune migration destructive n’est requise.
+- Aucun statut `EVIDENCED` n’est promu. `SITE-TEMPLATE-001`, `SITE-CRAWL-001`, M3 et `CORE-SAAS-001` restent `IN_PROGRESS`; GSC/BILLING/EMAIL restent `BLOCKED` faute de credentials opérateur.
+
+## 2026-10-07 21:54 UTC — Routes anonymisées et validation d’historique
+
+- Après la revue `FAIL` de 21:43, la frontière de niveau Meso a été réauditée avant modification. `routePattern` et `sampleUrls` ne gardent que des segments génériques allowlistés et des marqueurs de paramètres. Les pages à chemin textuel inconnu restent isolées; les identifiants de groupe n’incluent que les motifs assainis, hash DOM et position de page. Les routes dynamiques ne se fusionnent qu’avec trois valeurs distinctes sous une collection reconnue. Les réponses d’historique rejettent aussi les anciens résumés non assainis ou insuffisamment étayés.
+- Fixtures nouvelles pour les trois reproductions PII, le token court, les deux routes `/guide/step-1|2`, le seuil de trois IDs, le garde-fou d’anciens JSON et l’accord entre chemin d’échantillon et motif. Tests ciblés actuels : crawler 15/15, API 13/13, onboarding 15/15; typecheck crawler/API/web exit 0; lint crawler/API/web exit 0; formatage et `git diff --check` exit 0.
+- Distill WinCreator depuis le snapshot pré-changement : `REVIEW_REQUIRED`, +82 lignes non blanches / +87 lignes dans le fichier suivi, aucun nouveau paquet ni duplicata : `docs/proofs/wincreator/SITE-TEMPLATE-DISTILL-BASELINE/distill-route-privacy-report.json`. La revue indépendante doit vérifier que le coût de cette logique est nécessaire et sans abstraction évitable; aucun abaissement builder de ce statut.
+- La capture `CAPTURED_PASS` du 21:43 concernait la révision avant ces corrections et reste une preuve d’exécution historique, pas une preuve de la révision présente. Nouveau gate complet WinCreator et nouvelle revue sceptique sécurité/CI requis avant toute promotion ou push.
+- `SITE-TEMPLATE-001`, `ONBOARDING-CRAWL-TRACK-001`, `SITE-CRAWL-001`, M3 et `CORE-SAAS-001` restent `IN_PROGRESS`; GSC/BILLING/EMAIL live restent `BLOCKED` faute de credentials opérateur.
+
+## 2026-10-08 — Gate final de confidentialité des groupes persistés
+
+- Le gate `scripts/verify-site-crawl-gate.sh`, avec PostgreSQL local explicitement épinglé et `DATABASE_URL` retirée, a passé : migrations jusqu’à 0029, format, lint, build, typecheck et 14 tâches de tests sans cache; API 143/143 et web 31/31. La commande exacte est conservée dans l’attestation WinCreator.
+- Capture WinCreator liée au claim `SITE-TEMPLATE-PRIVACY-001`: `CAPTURED_PASS`, digest canonique `a4495acc834da82b58eb325f00bc16302f928581b9c709b15c5ea584bd40cb19`; challenge packet `cb4f25f9b373e34b9cb8e3d092f582ccc4119ad84fe0410e475d35d353a925b4`; `wincreator verify` retourne `VERIFY OK`.
+- Revue indépendante `skeptic-route-final`: `PASS / EVIDENCED`, digest canonique `94e0cfc657d02c285ebdd21b76e7eacaed875651816e5fbc8a8ad6e210673153`. Le reviewer a rejoué l’attaque d’ID V1 dérivé de `?token=guess-me`, vérifié le round-trip `/orders/:id`, tracé les quatre clés exclues jusqu’aux lectures DB, Action Center et mémoire, et comparé les 22 fichiers capturés.
+- Le rapport Distill lié au SHA exact reste `REVIEW_REQUIRED` (+92 lignes non blanches, +97 lignes, +3718 octets); le reviewer n’a identifié aucune abstraction ou dépendance clairement superflue. Le signal Distill n’est pas requalifié en PASS.
+- `SITE-TEMPLATE-PRIVACY-001 = EVIDENCED`. Le parent `SITE-TEMPLATE-001`, `SITE-CRAWL-001`, M3 et `CORE-SAAS-001` restent `IN_PROGRESS`: le résultat contrôlé ne prouve pas l’identité ni la précision des gabarits sur un site réel. GSC/BILLING/EMAIL live restent `BLOCKED` faute de credentials opérateur.
+- La vérification de l’ensemble du ledger reste non propre : 212 problèmes historiques de captures absentes ou de liaisons de fichiers obsolètes. Le succès scoped ci-dessus ne nettoie ni ne valide ces anciennes lignes.
+- `ledger_check.py PROOF_LEDGER.md` reste non propre avec six violations préexistantes : trois claims `DISPROVEN`, deux `INSUFFICIENT` et le claim parent `SITE-TEMPLATE-001` en `IN_PROGRESS`, statut non reconnu par ce checker hérité. Le nouveau claim scoped est `EVIDENCED`; ces autres lignes n’ont pas été requalifiées.
+- Le reviewer a conservé son indépendance avec `--no-ledger` et un `review.json` immuable. La tentative d’enregistrement WinCreator avec `--ledger` a été refusée (exit 2, revue déjà immuable); après vérification de l’attestation et de l’artefact reviewer, la ligne scoped seule a été mise à jour dans le ledger. Aucune autre ligne ni le claim parent n’a été promu.

@@ -94,6 +94,9 @@ export default async function CrawlHistoryPage({
                 <th scope="col" className="py-2">
                   Coverage
                 </th>
+                <th scope="col" className="py-2 pl-4">
+                  Page structures
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -140,6 +143,52 @@ export default async function CrawlHistoryPage({
                                   ? "Coverage details unavailable for this historical crawl"
                                   : `Discovery queue exhausted · max ${r.pageLimit} pages; not a full site inventory`
                                 : "Coverage unavailable"}
+                  </td>
+                  <td className="py-3 pl-4 text-xs text-slate-700">
+                    {r.templateGroups === null
+                      ? "Unavailable for this run"
+                      : r.templateGroups.length === 0
+                        ? "No page structures observed"
+                        : `${r.templateGroups.length} observed groups · ${r.templateGroups.reduce((total, group) => total + group.pageCount, 0)} pages`}
+                    {r.templateGroups && r.templateGroups.length > 0 ? (
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-primary underline underline-offset-2">
+                          Review groups
+                        </summary>
+                        <ul className="mt-2 space-y-2">
+                          {r.templateGroups.map((group) => (
+                            <li key={group.id}>
+                              <code>{group.routePattern}</code> · {group.pageCount} pages
+                              <ul className="mt-1 list-inside list-disc">
+                                {group.sampleUrls.map((url) => (
+                                  <li key={url} className="break-all font-mono">
+                                    {url}
+                                  </li>
+                                ))}
+                              </ul>
+                              <span className="sr-only">
+                                {group.domSignatureHash
+                                  ? `Structure hash ${group.domSignatureHash}`
+                                  : "DOM fingerprint unavailable; page remains separate"}
+                                ; grouping method {group.groupingMethod}
+                              </span>
+                              <p className="mt-1 text-xs text-slate-600">
+                                {group.groupingMethod === "URL_PATTERN_ONLY_PRIVACY_SINGLETON_V2"
+                                  ? "DOM fingerprint unavailable; kept separate"
+                                  : group.groupingMethod === "SEMANTIC_DOM_PRIVACY_SINGLETON_V1"
+                                    ? "HTML5 fingerprint retained; route values redacted and page kept separate"
+                                    : "HTML5 structure fingerprint"}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-2">
+                          Observed structure groups. Unknown route segments are hidden; pages
+                          without a fingerprint or a safe route pattern stay separate. CMS template
+                          identity is unknown.
+                        </p>
+                      </details>
+                    ) : null}
                   </td>
                 </tr>
               ))}

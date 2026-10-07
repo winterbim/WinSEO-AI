@@ -388,6 +388,7 @@ export interface CrawlRunRow {
   pages_failed: number;
   page_limit: number | null;
   stop_reason: string | null;
+  template_groups: unknown;
 }
 
 export interface EvidenceInsert {
@@ -440,13 +441,14 @@ export async function finishCrawlRun(
   pagesFailed: number,
   pageLimit?: number | null,
   stopReason?: string | null,
+  templateGroups?: unknown,
 ): Promise<void> {
   await withTenant(organizationId, async (client) => {
     await client.query(
       `UPDATE crawl_runs
           SET status = $3, completed_at = now(),
               pages_crawled = $4, pages_failed = $5,
-              page_limit = $6, stop_reason = $7
+              page_limit = $6, stop_reason = $7, template_groups = $8::jsonb
         WHERE id = $2 AND organization_id = $1`,
       [
         organizationId,
@@ -456,6 +458,7 @@ export async function finishCrawlRun(
         pagesFailed,
         pageLimit ?? null,
         stopReason ?? null,
+        templateGroups == null ? null : JSON.stringify(templateGroups),
       ],
     );
   });
@@ -627,7 +630,7 @@ export async function listCrawlRuns(
   return withTenant(organizationId, async (client) => {
     const res = await client.query<CrawlRunRow>(
       `SELECT id, status, mode, started_at, completed_at, pages_crawled, pages_failed,
-              page_limit, stop_reason
+              page_limit, stop_reason, template_groups
          FROM crawl_runs
         WHERE organization_id = $1 AND project_id = $2
         ORDER BY started_at DESC NULLS LAST, id DESC`,

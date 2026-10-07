@@ -7,6 +7,26 @@ export interface StartedCrawl {
 export type CrawlKickoffResult =
   { ok: true; crawlRun: StartedCrawl } | { ok: false; message: string };
 
+export function crawlTrackingHref(projectId: string, crawlRunId: string): string {
+  return `/dashboard/${encodeURIComponent(projectId)}?crawlRunId=${encodeURIComponent(crawlRunId)}`;
+}
+
+export function reconcileTrackedCrawl<T extends { id: string }>(
+  runs: readonly T[] | undefined,
+  crawlRunId: string,
+  consecutiveMisses: number,
+):
+  | { kind: "found"; run: T }
+  | { kind: "retry"; consecutiveMisses: number }
+  | { kind: "missing"; consecutiveMisses: number } {
+  const run = runs?.find((candidate) => candidate.id === crawlRunId);
+  if (run) return { kind: "found", run };
+  const misses = consecutiveMisses + 1;
+  return misses >= 3
+    ? { kind: "missing", consecutiveMisses: misses }
+    : { kind: "retry", consecutiveMisses: misses };
+}
+
 interface CrawlKickoffResponse {
   crawlRun?: Partial<StartedCrawl>;
   error?: { message?: string };

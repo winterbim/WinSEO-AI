@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import type { FetchResult, NormalizedUrl, RenderResult } from "@serpvera/crawler";
+import {
+  groupSitePagesByTemplate,
+  type FetchResult,
+  type NormalizedUrl,
+  type RenderResult,
+} from "@serpvera/crawler";
 import { auditDomain } from "./domain-audit.ts";
 import { auditSite, type SiteAuditOptions } from "./site-audit.ts";
 
@@ -61,25 +66,42 @@ export function createFixtureSiteAuditRunner(): typeof auditSite {
   return async (target, traceId, options?: SiteAuditOptions) => {
     const result = await runFixture(target, traceId);
     const secondUrl = new URL("/about", target).href;
+    const fixtureBody = fixtureHtml(new URL(target).hostname);
+    const templateGroups = groupSitePagesByTemplate([
+      { url: target, html: fixtureBody },
+      { url: secondUrl, html: fixtureBody },
+    ]).groups;
+    const evidence = [
+      ...result.evidence.map((item) => ({
+        ...item,
+        metadata: {
+          ...(item.metadata ?? {}),
+          pageUrl: target,
+        },
+      })),
+      ...result.evidence.map((item) => ({
+        ...item,
+        sourceRef: secondUrl,
+        finalUrl: secondUrl,
+        summary: item.summary.replace(target, secondUrl),
+        metadata: {
+          ...(item.metadata ?? {}),
+          pageUrl: secondUrl,
+        },
+      })),
+    ];
     return {
       status: result.status,
       ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
       pagesCrawled: result.status === "completed" ? 2 : 0,
       pagesFailed: result.status === "failed" ? 1 : 0,
       pageLimit: options?.maxPages ?? 50,
+      templateGroups,
       findings: [
         ...result.findings,
         ...result.findings.map((finding) => ({ ...finding, affectedUrls: [secondUrl] })),
       ],
-      evidence: [
-        ...result.evidence,
-        ...result.evidence.map((item) => ({
-          ...item,
-          sourceRef: secondUrl,
-          finalUrl: secondUrl,
-          summary: item.summary.replace(target, secondUrl),
-        })),
-      ],
+      evidence,
     };
   };
 }

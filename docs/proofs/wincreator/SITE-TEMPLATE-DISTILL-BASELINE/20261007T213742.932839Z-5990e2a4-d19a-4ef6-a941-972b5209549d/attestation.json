@@ -1,0 +1,109 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "SITE-TEMPLATE-DISTILL-BASELINE",
+      "level": "",
+      "text": "",
+      "gate": "",
+      "row_sha256": null,
+      "ledger_sha256_before": null,
+      "status_before": null
+    },
+    "ledger": null,
+    "builder": "codex-builder-001",
+    "command": [
+      "python3",
+      "/home/wina/.agents/skills/wincreator/scripts/distill_check.py",
+      "verify",
+      "--snapshot",
+      "/tmp/site-template-distill-before.json",
+      "--expect-digest",
+      "be8f13892fa2dc113651666ce818a67e18e22c986f676847fe0081e4efcb5f5b"
+    ],
+    "command_string": "python3 /home/wina/.agents/skills/wincreator/scripts/distill_check.py verify --snapshot /tmp/site-template-distill-before.json --expect-digest be8f13892fa2dc113651666ce818a67e18e22c986f676847fe0081e4efcb5f5b",
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "started_at": "2026-10-07T21:37:42.933076Z",
+    "finished_at": "2026-10-07T21:37:42.987581Z",
+    "duration_ms": 54,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "4608f00f57c4c4578f9e95d9e72d12b633e8c60458d6fa9085b52ad8e0b71fb1",
+      "original_bytes": 122,
+      "stored_bytes": 122,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "[VERIFIED] /tmp/site-template-distill-before.json sha256=be8f13892fa2dc113651666ce818a67e18e22c986f676847fe0081e4efcb5f5b\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "files": [
+      {
+        "path": "/tmp/site-template-distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "7c26eb3049f2ee8b23d8fb6c0531ec9113b86d220710acbd4124c8ef451ea008",
+        "bytes": 2365
+      },
+      {
+        "path": "services/crawler/src/site-template.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "a0ebff09be407a5f9ed82cb1018fac0c08aa7003d436b528584a3c4e59274962",
+        "bytes": 10640
+      },
+      {
+        "path": "services/crawler/src/site-template.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "12acd092cf7021925178f72b6ea14691533907082731bcbadd6a879f104d01a1",
+        "bytes": 7265
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "b3ea77996fc2f888b33a44d6242cf95a7ef50598",
+      "tree": "333cf29af3829091b06c6b9a2c4e7c137dd26384",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "67623a4c89d03aace763b8447036d4b3f31faabc3ce23d4fd9a4bca9888613d1",
+      "worktree_digest": "ce0a3cc13d3d5f43aec80d1cd0a17ccd5c6831d2232711a3b83d57a9a17d424c"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 1048576,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "fe57fe4526582e3488fe83233d9f055bf0f40dc786d171c928bfff2b5cf47fa4"
+  }
+}

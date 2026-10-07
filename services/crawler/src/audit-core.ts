@@ -18,6 +18,17 @@ export {
 export type { PageMeta, RuleFinding, RuleResult, EvidenceRecord } from "./seo-rules.ts";
 export { shouldRender } from "./render-escalation.ts";
 export type { EscalationDecision } from "./render-escalation.ts";
+export {
+  groupSitePageStructures,
+  groupSitePagesByTemplate,
+  semanticDomSignature,
+} from "./site-template.ts";
+export type {
+  SitePageShape,
+  SitePageStructure,
+  SiteTemplateGroup,
+  SiteTemplateGrouping,
+} from "./site-template.ts";
 export { compareSourceRender, describeDivergences } from "./render-compare.ts";
 export type { FieldDivergence, RenderComparison } from "./render-compare.ts";
 export type { RenderResult } from "./renderer.ts";

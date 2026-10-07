@@ -27,5 +27,18 @@ export type { RenderOptions, RenderResult } from "./renderer.ts";
 export { compareSourceRender, describeDivergences } from "./render-compare.ts";
 export type { FieldDivergence, RenderComparison } from "./render-compare.ts";
 
+export {
+  groupSitePageStructures,
+  groupSitePagesByTemplate,
+  isPrivacySafeTemplateGroupMetadata,
+  semanticDomSignature,
+} from "./site-template.ts";
+export type {
+  SitePageShape,
+  SitePageStructure,
+  SiteTemplateGroup,
+  SiteTemplateGrouping,
+} from "./site-template.ts";
+
 export { parseRobotsTxt, isUrlAllowed, parseSitemapXml, fetchSitemap } from "./sitemap-parser.ts";
 export type { SitemapEntry, RobotsTxtRules } from "./sitemap-parser.ts";
