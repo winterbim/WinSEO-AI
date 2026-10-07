@@ -54,6 +54,15 @@ export type EvidenceKind =
   | "screenshot"
   | "structured_data";
 
+export {
+  AI_VISIBILITY_MAX_CSV_BYTES,
+  AI_VISIBILITY_MAX_ROWS,
+  computeAiVisibilityStats,
+  parseAiVisibilityCsv,
+  wilsonInterval95,
+} from "./ai-visibility.ts";
+export type { AiVisibilityCapture, AiVisibilityStat } from "./ai-visibility.ts";
+
 // ─── Gate ───
 export interface Gate {
   gateType: GateType;
@@ -223,6 +232,7 @@ export type OrgRole = "OWNER" | "ADMIN" | "ANALYST" | "EDITOR" | "VIEWER" | "BIL
 export type Permission =
   | "project.read"
   | "evidence.read"
+  | "evidence.write"
   | "integration.manage"
   | "action.approve"
   | "production.write"

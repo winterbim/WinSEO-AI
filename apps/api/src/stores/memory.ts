@@ -6,7 +6,7 @@
 // Production wiring selects the DB store — see createStores.ts and server.ts.
 
 import { randomUUID } from "node:crypto";
-import type { OrgRole } from "@serpvera/contracts";
+import { computeAiVisibilityStats, type OrgRole } from "@serpvera/contracts";
 import type {
   ApiStores,
   EvidenceInput,
@@ -17,11 +17,50 @@ import type {
   StoredSession,
   StoredUser,
   MfaRecord,
+  StoredAiVisibilityCapture,
+  StoredAiVisibilityImport,
 } from "./types.ts";
 import { DuplicateEmailError, DuplicateSlugError } from "./types.ts";
-import { ActionMutationError, GscMeasurementWorkflowAdvancedError } from "@serpvera/db";
+import {
+  ActionMutationError,
+  AiVisibilityDuplicateImportError,
+  AiVisibilityProjectScopeError,
+  GscMeasurementWorkflowAdvancedError,
+} from "@serpvera/db";
 import { createRateLimiter, type RateLimitScope } from "../rate-limit.ts";
 import type { PatchProposal } from "../autofix/workflow.ts";
+
+function toPublicAiVisibilityImport(
+  row: StoredAiVisibilityImport & { organizationId: string },
+): StoredAiVisibilityImport {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    uploadedBy: row.uploadedBy,
+    csvSha256: row.csvSha256,
+    rowCount: row.rowCount,
+    provenance: row.provenance,
+    epistemicClass: row.epistemicClass,
+    unverifiedByProvider: row.unverifiedByProvider,
+    createdAt: row.createdAt,
+  };
+}
+
+function toPublicAiVisibilityCapture(
+  row: StoredAiVisibilityCapture & { organizationId: string; projectId: string },
+): StoredAiVisibilityCapture {
+  return {
+    id: row.id,
+    importId: row.importId,
+    rowNumber: row.rowNumber,
+    engine: row.engine,
+    promptId: row.promptId,
+    brandMentioned: row.brandMentioned,
+    clientCited: row.clientCited,
+    citationDomains: [...row.citationDomains],
+    sampledAt: row.sampledAt,
+  };
+}
 
 export function createMemoryStores(): ApiStores {
   const users = new Map<string, StoredUser>();
@@ -73,6 +112,11 @@ export function createMemoryStores(): ApiStores {
       eventCount: number;
     }
   >();
+  const aiVisibilityImports: (StoredAiVisibilityImport & { organizationId: string })[] = [];
+  const aiVisibilityCaptures: (StoredAiVisibilityCapture & {
+    organizationId: string;
+    projectId: string;
+  })[] = [];
 
   // The in-memory driver is a SYNCHRONOUS test double behind the async
   // ApiStores contract: methods return explicitly resolved promises instead of
@@ -612,6 +656,92 @@ export function createMemoryStores(): ApiStores {
         row.fixtureHtml = input.fixtureHtml;
         row.eventCount = input.proposal.events.length;
         return Promise.resolve(true);
+      },
+    },
+
+    aiVisibility: {
+      createImport(input) {
+        const project = projects.get(input.projectId);
+        if (project?.organizationId !== input.organizationId) {
+          throw new AiVisibilityProjectScopeError();
+        }
+        if (
+          aiVisibilityImports.some(
+            (row) =>
+              row.organizationId === input.organizationId &&
+              row.projectId === input.projectId &&
+              row.csvSha256 === input.csvSha256,
+          )
+        ) {
+          throw new AiVisibilityDuplicateImportError();
+        }
+        const createdAt = new Date().toISOString();
+        const stored: StoredAiVisibilityImport & { organizationId: string } = {
+          id: randomUUID(),
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          uploadedBy: input.uploadedBy,
+          csvSha256: input.csvSha256,
+          rowCount: input.captures.length,
+          provenance: "USER_SUPPLIED",
+          epistemicClass: "DOCUMENTED",
+          unverifiedByProvider: true,
+          createdAt,
+        };
+        aiVisibilityImports.push(stored);
+        input.captures.forEach((capture, index) => {
+          aiVisibilityCaptures.push({
+            ...structuredClone(capture),
+            id: randomUUID(),
+            importId: stored.id,
+            rowNumber: index + 1,
+            sampledAt: capture.sampledAt ?? createdAt,
+            organizationId: input.organizationId,
+            projectId: input.projectId,
+          });
+        });
+        return Promise.resolve(toPublicAiVisibilityImport(stored));
+      },
+      listImports(organizationId, projectId, limit, offset) {
+        return Promise.resolve(
+          aiVisibilityImports
+            .filter((row) => row.organizationId === organizationId && row.projectId === projectId)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+            .slice(offset, offset + limit)
+            .map(toPublicAiVisibilityImport),
+        );
+      },
+      getImport(organizationId, projectId, importId) {
+        const row = aiVisibilityImports.find(
+          (candidate) =>
+            candidate.organizationId === organizationId &&
+            candidate.projectId === projectId &&
+            candidate.id === importId,
+        );
+        if (!row) return Promise.resolve(null);
+        return Promise.resolve(toPublicAiVisibilityImport(row));
+      },
+      listCaptures(organizationId, projectId, importId) {
+        return Promise.resolve(
+          aiVisibilityCaptures
+            .filter(
+              (row) =>
+                row.organizationId === organizationId &&
+                row.projectId === projectId &&
+                row.importId === importId,
+            )
+            .sort((a, b) => a.rowNumber - b.rowNumber)
+            .map(toPublicAiVisibilityCapture),
+        );
+      },
+      listStats(organizationId, projectId, importId) {
+        const captures = aiVisibilityCaptures.filter(
+          (row) =>
+            row.organizationId === organizationId &&
+            row.projectId === projectId &&
+            row.importId === importId,
+        );
+        return Promise.resolve(computeAiVisibilityStats(captures));
       },
     },
   };

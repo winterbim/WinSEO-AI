@@ -6,6 +6,7 @@
 // explicitly labeled as such.
 
 import type { OrgRole } from "@serpvera/contracts";
+import type { AiVisibilityCapture, AiVisibilityStat } from "@serpvera/contracts";
 import type { ActionActor, ActionRecord, ActionTransitionInput } from "@serpvera/db";
 import type { RateLimitDecision, RateLimitScope } from "../rate-limit.ts";
 import type { PatchActor, PatchProposal } from "../autofix/workflow.ts";
@@ -200,6 +201,7 @@ export interface ApiStores {
   crawl: CrawlStore;
   actions: ActionStore;
   patches: PatchStore;
+  aiVisibility: AiVisibilityStore;
   /**
    * Google Search Console access. Deliberately OPTIONAL: the in-memory driver
    * provides no GSC store, because Google token material must exist only as
@@ -207,6 +209,56 @@ export interface ApiStores {
    * than degrading to an in-process placeholder that a restart would erase.
    */
   gsc?: GscStore;
+}
+
+export interface StoredAiVisibilityImport {
+  id: string;
+  projectId: string;
+  uploadedBy: string | null;
+  csvSha256: string;
+  rowCount: number;
+  provenance: "USER_SUPPLIED";
+  epistemicClass: "DOCUMENTED";
+  unverifiedByProvider: true;
+  createdAt: string;
+}
+
+export interface StoredAiVisibilityCapture extends AiVisibilityCapture {
+  id: string;
+  importId: string;
+  rowNumber: number;
+  sampledAt: string;
+}
+
+export interface AiVisibilityStore {
+  createImport(input: {
+    organizationId: string;
+    projectId: string;
+    uploadedBy: string;
+    csvSha256: string;
+    captures: readonly AiVisibilityCapture[];
+  }): Promise<StoredAiVisibilityImport>;
+  listImports(
+    organizationId: string,
+    projectId: string,
+    limit: number,
+    offset: number,
+  ): Promise<StoredAiVisibilityImport[]>;
+  getImport(
+    organizationId: string,
+    projectId: string,
+    importId: string,
+  ): Promise<StoredAiVisibilityImport | null>;
+  listCaptures(
+    organizationId: string,
+    projectId: string,
+    importId: string,
+  ): Promise<StoredAiVisibilityCapture[]>;
+  listStats(
+    organizationId: string,
+    projectId: string,
+    importId: string,
+  ): Promise<AiVisibilityStat[]>;
 }
 
 // ─── Project crawl runs / findings / evidence (P-GAP-04, Evidence Ledger) ───

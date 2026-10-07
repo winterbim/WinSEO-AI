@@ -1,0 +1,62 @@
+{
+  "baseline_digest": "e5c9dda00bf974cc962c1c6ec81773224320a88f704a33e7f554a7fcf5fbba50",
+  "current_snapshot_digest": "a5837ae9240daf6a4e0cbd41f2e39c0747140a314ec350c1a49ae005925f9802",
+  "delta": {
+    "declared_dependencies": 0,
+    "duplicate_fingerprints": 0,
+    "largest_file_lines": 0,
+    "nonblank_lines": 123,
+    "source_bytes": 4914,
+    "source_files": 0,
+    "source_lines": 131
+  },
+  "dependency_changes": {
+    "added": [],
+    "removed": [],
+    "unparsed_manifest_changes": []
+  },
+  "digest": "99301a49608e54ba599e6c71f18fad2845b8583b8c6003f424c316ee7fdc589f",
+  "file_changes": {
+    "added": [],
+    "changed": [
+      "apps/api/src/ai-visibility-routes.integration.test.ts",
+      "apps/api/src/routes/ai-visibility.ts",
+      "packages/contracts/src/ai-visibility.test.ts",
+      "packages/contracts/src/ai-visibility.ts",
+      "packages/db/src/ai-visibility-rls.test.ts",
+      "packages/db/src/ai-visibility.ts"
+    ],
+    "removed": []
+  },
+  "improved_dimensions": [],
+  "limits": [
+    "structural metrics are proxies, not a code-quality score",
+    "UNCHANGED does not prove that no simpler implementation exists",
+    "behavioral equivalence requires a separate WinCreator proof gate"
+  ],
+  "metrics_after": {
+    "declared_dependencies": 29,
+    "duplicate_fingerprints": 38,
+    "largest_file_lines": 1081,
+    "nonblank_lines": 5766,
+    "source_bytes": 212894,
+    "source_files": 18,
+    "source_lines": 6106
+  },
+  "metrics_before": {
+    "declared_dependencies": 29,
+    "duplicate_fingerprints": 38,
+    "largest_file_lines": 1081,
+    "nonblank_lines": 5643,
+    "source_bytes": 207980,
+    "source_files": 18,
+    "source_lines": 5975
+  },
+  "policy_digest": "78eef27d5de49a0d903f94956f3d1233fd682325ea5c97b0a4cb3bacfee1cda3",
+  "regressed_dimensions": [
+    "nonblank_lines"
+  ],
+  "schema": "wincreator.distill-report/v1",
+  "verdict": "REVIEW_REQUIRED",
+  "warnings": []
+}

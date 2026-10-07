@@ -31,6 +31,7 @@ import { workspaceRoutes, findingRoutes } from "./routes/workspace.ts";
 import { actionRoutes, projectActionRoutes } from "./routes/actions.ts";
 import { gscRoutes } from "./routes/gsc.ts";
 import { gscDataRoutes } from "./routes/gsc-data.ts";
+import { aiVisibilityRoutes } from "./routes/ai-visibility.ts";
 import { mfaRoutes } from "./routes/mfa.ts";
 import { patchRoutes, projectAutofixRoutes } from "./routes/autofix.ts";
 import { HttpGoogleTransport, type GoogleTransport } from "./integrations/gsc/google-transport.ts";
@@ -241,6 +242,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
   await app.register(patchRoutes, { prefix: "/v1/autofix" });
   await app.register(gscRoutes, { prefix: "/v1" });
   await app.register(gscDataRoutes, { prefix: "/v1" });
+  await app.register(aiVisibilityRoutes, { prefix: "/v1/projects" });
   await app.register(scanRoutes, { prefix: "/v1/public-scans" });
 
   // Close the DB pool on shutdown when using the postgres driver.

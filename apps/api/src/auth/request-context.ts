@@ -6,7 +6,7 @@
 
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { hasPermission } from "@serpvera/authz";
-import type { Permission } from "@serpvera/contracts";
+import type { OrgRole, Permission } from "@serpvera/contracts";
 import { requireAuth } from "./session.ts";
 
 /**
@@ -36,8 +36,9 @@ export function requirePermission(
   request: FastifyRequest,
   reply: FastifyReply,
   permission: Permission,
+  currentRole?: OrgRole | null,
 ): boolean {
-  const role = request.session?.role;
+  const role = currentRole === undefined ? request.session?.role : currentRole;
   if (!role || !hasPermission(role, permission)) {
     void reply.status(403).send({
       error: { code: "FORBIDDEN", message: `Role cannot perform ${permission}.` },

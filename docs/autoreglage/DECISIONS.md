@@ -282,6 +282,20 @@ Sources utilisées pour le benchmark : documentation officielle de Google et de 
 
 **Retour arrière :** restaurer l'action/version précédente seulement avec une preuve d'analyse complète et une config valide; ne jamais transformer le scan en étape advisory.
 
+## D-031 — Autoriser l'ajout de captures AI Visibility par permission dédiée
+
+**Décision :** ajouter la permission `evidence.write`, accordée à OWNER, ADMIN, ANALYST et EDITOR. La route d'import AI Visibility la vérifie après résolution du projet/tenant et avant de parser ou stocker le CSV. VIEWER et BILLING gardent l'accès en lecture sans possibilité d'ajouter des captures.
+
+**Raison :** la première revue sceptique a démontré que la route authentifiait l'appartenance au projet mais ne vérifiait aucun rôle; un Viewer ou Billing pouvait donc modifier l'historique et les mesures affichées. `production.write` serait trop large pour une donnée d'évidence fournie manuellement, tandis que `evidence.write` exprime exactement ce droit.
+
+**Preuve :** test de matrice authz et test d'intégration API/PostgreSQL créant des utilisateurs Viewer et Billing dans le même tenant puis exigeant HTTP 403 lors d'un import valide. Revue sceptique de suivi requise; le résultat du gate complet sera joint au registre.
+
+**Risque :** les permissions attribuées restent un choix de produit; ANALYST/EDITOR peuvent ajouter des données mais ne peuvent pas prétendre à une vérification fournisseur. Les imports restent marqués `USER_SUPPLIED` et `unverified_by_provider`.
+
+**Retour arrière :** retirer la vérification de route et la permission dédiée par commit; aucune ligne importée n'est modifiée. Ne pas accorder `production.write` pour faire passer le test.
+
+**Résultat attendu :** aucun rôle lecture seule ne peut modifier le corpus AI Visibility; les rôles d'analyse et d'édition peuvent enrichir le registre avec une provenance honnête.
+
 ## D-026 — Ne pas modifier une migration après son application, même sur la base jetable
 
 **Décision :** après application d'une migration sur le PostgreSQL jetable, son fichier source est immuable. Toute correction future exige une nouvelle migration forward-only; le test de comportement peut évoluer séparément.
@@ -291,3 +305,39 @@ Sources utilisées pour le benchmark : documentation officielle de Google et de 
 **Preuve :** le SHA-256 actuel de `0019w_gsc_effective_acl_fence.sql` est `5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab`, identique à celui capturé avant l'essai de simplification. Le test PostgreSQL ajoute des cas de refus pour la propriété et l'héritage de rôle sans changer la migration.
 
 **Risque :** une migration historique répétitive peut rester plus longue qu'une réécriture souhaitée; la lisibilité ne justifie pas de changer le contenu déjà appliqué.
+
+## D-032 — Exécuter les contrats AI Visibility dans la suite workspace
+
+**Décision :** déclarer un script `test` pour `@serpvera/contracts`, exécutant les tests `src/*.test.ts` avec le runner Node déjà utilisé par le dépôt. Aucun nouveau framework ni dépendance n'est ajouté.
+
+**Raison :** le premier gate global avait réussi, mais Turbo n'avait pas de tâche `@serpvera/contracts#test`; le test déterministe de parsing CSV restait donc absent de la suite agrégée. Un succès global ne doit pas laisser cette omission implicite.
+
+**Preuve :** la capture suivante de `AI-VIS-001` doit montrer la tâche contracts dans la liste Turbo sans cache et son résumé de tests, puis passer le gate complet et la revue sceptique indépendante. La capture précédente est conservée, mais n'est pas utilisée pour accepter le claim.
+
+**Risque :** les nouveaux fichiers de contrat `.test.ts` seront automatiquement inclus; ils doivent rester déterministes et sans appel réseau.
+
+**Retour arrière :** supprimer uniquement le script du paquet si le runner Node standard ne peut pas exécuter le contrat; ajouter alors une tâche de test équivalente et visible dans Turbo avant d'accepter la gate.
+
+## D-033 — Fonder l'autorisation AI Visibility sur le rôle actif jusqu'au commit
+
+**Décision :** le POST recharge le rôle actif depuis l'adhésion et la persistance PostgreSQL relit puis verrouille cette ligne avec `FOR SHARE` dans la transaction d'import. Le second contrôle utilise la permission centralisée `evidence.write`; un downgrade ou une révocation concurrente attend la fin de l'écriture, tandis qu'une session ancienne ne conserve pas son autorité.
+
+**Raison :** un contrôle basé seulement sur le rôle sérialisé dans la session autorisait un ancien rôle après downgrade. Une lecture fraîche seule conserve aussi une fenêtre TOCTOU avant le commit.
+
+**Risque :** le verrou retient une ligne d'adhésion durant l'import et peut retarder une modification de rôle de quelques millisecondes; le parseur borne le lot à 1 MiB et 5 000 lignes.
+
+**Retour arrière :** retirer le verrou et la seconde barrière du store rétablit le contrôle frais au niveau route; ce retour réouvre toutefois la fenêtre de course et exige une nouvelle revue de sécurité. Aucun changement de migration ou de donnée existante.
+
+**Preuve :** tests de contrat refusant les dates calendrier impossibles; tests API refusant Viewer/Billing avant le contrôle du hash et refusant un rôle Analyst déjà rétrogradé dans la base; test PostgreSQL refusant l'écriture Viewer dans la transaction de persistance; gate complète et revue sceptique sur les sources, tests et store atomique.
+
+## D-034 — Garder visible l'échec de vérification historique du ledger
+
+**Décision :** promouvoir `AI-VIS-001` à `EVIDENCED` sur sa capture vérifiée et revue, tout en enregistrant séparément `PROOF-REPLAY-001 = BLOCKED`. Ne pas réécrire les anciens claims ni transformer un échec de vérification en succès.
+
+**Raison :** le contrôle ciblé de la nouvelle attestation AI-VIS passe, mais la vérification de l'ensemble du ledger signale 35 problèmes, dont des attestations historiques absentes du checkout et d'anciennes captures AI-VIS liées à des fichiers modifiés.
+
+**Risque :** sans artefacts historiques, une preuve passée ne peut pas être indépendamment revalidée depuis ce checkout; les statuts historiques gardent donc une dette de traçabilité.
+
+**Retour arrière :** pas de code modifié. Si les artefacts d'origine sont restaurés ou les gates rejoués, réévaluer `PROOF-REPLAY-001` sur une nouvelle capture; ne pas effacer le constat courant.
+
+**Preuve :** vérification WinCreator ciblée de l'attestation AI-VIS : `VERIFY OK`; vérification du ledger complet : `VERIFY FAILED — 35 problem(s)`; `ledger_check.py PROOF_LEDGER.md` et `ledger_check.py --catches SKEPTIC_CATCHES.md` passent séparément.

@@ -1,0 +1,235 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "AI-VIS-001",
+      "level": "Meso",
+      "text": "AI Visibility CSV imports persist user-supplied captures per project, verify the submitted-text SHA-256 and strict CSV limits, compute separate Wilson statistics/history, enforce tenant RLS and evidence.write role checks, and never claim provider verification",
+      "gate": "`env PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh`",
+      "row_sha256": "4e4e29a4bf1a7b6ad5598bec4ad85b7e80731f74389a7c0d78991efdad945b32",
+      "ledger_sha256_before": "11956a251bb3f2f99933273afa486d16fd32acab5e1e769fe815ec50d884ea41",
+      "status_before": "DISPROVEN"
+    },
+    "ledger": "PROOF_LEDGER.md",
+    "builder": "builder-codex",
+    "command": [
+      "env",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "bash",
+      "scripts/verify-disposable-db-gates.sh"
+    ],
+    "command_string": "env PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh",
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "started_at": "2026-10-07T16:05:33.924947Z",
+    "finished_at": "2026-10-07T16:07:18.938405Z",
+    "duration_ms": 105013,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "124c6388c0b322e4aade34be1932d0dba31f9dc162a6eee468b820b08189a080",
+      "original_bytes": 302437,
+      "stored_bytes": 302437,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "ectId]/search-performance                1.44 kB         108 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/changes          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/opportunities    981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/pages            981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/queries          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/security                                      1.76 kB         104 kB\n@serpvera/web:build: ├ ○ /login                                                   1.98 kB         105 kB\n@serpvera/web:build: ├ ○ /methodology                                               147 B         103 kB\n@serpvera/web:build: ├ ○ /pricing                                                   147 B         103 kB\n@serpvera/web:build: ├ ƒ /projects/[projectId]/actions                              147 B         103 kB\n@serpvera/web:build: ├ ƒ /scan/[scanId]                                           2.16 kB         105 kB\n@serpvera/web:build: └ ƒ /signup                                                    147 B         103 kB\n@serpvera/web:build: + First Load JS shared by all                                 103 kB\n@serpvera/web:build:   ├ chunks/812-52aaa9f8a3640ba4.js                           46.5 kB\n@serpvera/web:build:   ├ chunks/9923a0e2-1a45aa5d099bff40.js                      54.2 kB\n@serpvera/web:build:   └ other shared chunks (total)                              1.92 kB\n@serpvera/web:build: \n@serpvera/web:build: \n@serpvera/web:build: ○  (Static)   prerendered as static content\n@serpvera/web:build: ƒ  (Dynamic)  server-rendered on demand\n@serpvera/web:build: \n\n Tasks:    7 successful, 7 total\nCached:    0 cached, 7 total\n  Time:    15.977s \n\nGATE_PASS production build\nGATE_START dependency audit (high severity)\nNo known vulnerabilities found\nGATE_PASS dependency audit (high severity)\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "d0cc92f7d6cfbb1a5a41793a6da399c6ced42602fc9fa48dfa579090f4d0f400",
+      "original_bytes": 3026,
+      "stored_bytes": 3026,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`\n(node:946334) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    },
+    "files": [
+      {
+        "path": "apps/api/src/routes/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "c3c6046c4d40706a9e154d47aaca530c8ebe3142bdd45ba7998956280f11c7c8",
+        "bytes": 9458
+      },
+      {
+        "path": "apps/api/src/ai-visibility-routes.integration.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "3ccc28bbf390f437b0e4c80e69db2dec61687b35afa7dd0ee3442808f8e1a48f",
+        "bytes": 13516
+      },
+      {
+        "path": "apps/api/src/server.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "76f19cd4c6d46295ede29729e94e995b7dd8c118491fdfbbc60b871767dfb38d",
+        "bytes": 11139
+      },
+      {
+        "path": "apps/api/src/stores/db.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "68e49ab12eeb8dd475a058fc046c0df2be9b7ea101d19c3f82f0e9a62fba45c3",
+        "bytes": 38212
+      },
+      {
+        "path": "apps/api/src/stores/memory.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "6d89b3ee3bb4767f57f26e91eab6cc739f39b1e5d8431c9773cc30857a3b5768",
+        "bytes": 26160
+      },
+      {
+        "path": "apps/api/src/stores/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "dbb3b75115130ad0562768717011f31739ca9b072cc93bc7adb527055134f55b",
+        "bytes": 17263
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/ai-visibility/geo-csv-lab.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "c5c628b27f9e8e6858f2e5fb2d6eb1e9251626b2a4d5f194dc37fff72c0d51f5",
+        "bytes": 20343
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/ai-visibility/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "6f9d8ded5504737c7c58d6ebeab1a2775b9a74db5fbb496ef4396a41901eaf23",
+        "bytes": 3243
+      },
+      {
+        "path": "packages/contracts/src/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "eb086196a7a4f1777485089382bda2a06c8e0dc9d7001c3d441208eebf470baa",
+        "bytes": 10466
+      },
+      {
+        "path": "packages/contracts/src/ai-visibility.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "5e4e25a613a9b286d3f683cc262e9c4c8912bd0bc1ce7232d97d2f0afef0973a",
+        "bytes": 3384
+      },
+      {
+        "path": "packages/contracts/src/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "ec78d8a7e89c91468e0263ef3924d98aebddde57bc436494e1810efbcde39e4f",
+        "bytes": 5620
+      },
+      {
+        "path": "packages/db/src/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "106d559d25077b7a0823079ea54a9204fd51358d30720d211b6011e31ecc0b67",
+        "bytes": 9541
+      },
+      {
+        "path": "packages/db/src/ai-visibility-rls.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "aa19dbc077ac191695eb7fe5129e24967686eb458d25f95d8b6d126344bfcecc",
+        "bytes": 6632
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7ba2ffcf3a1cd92fd24aac7b960bebdc20009b815c7d71c8c85aedf3f8ae6586",
+        "bytes": 23779
+      },
+      {
+        "path": "packages/db/migrations/0025_ai_visibility_imports.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "ef085c5863989277d09517150e3f529f0a454a664d98d006a51a8617fb355c7e",
+        "bytes": 3685
+      },
+      {
+        "path": "packages/db/migrations/0026_ai_visibility_capture_org_fk.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "aa16cf9b5fb6201d5ae4ccea2ab62490937089f6fb66e1d20b836e5bd706cd0d",
+        "bytes": 736
+      },
+      {
+        "path": "packages/authz/src/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "0bf3a6e48781c4f34b7e0f5caac9e3d3848111d3ddd077aed6102f940fdca2ce",
+        "bytes": 1949
+      },
+      {
+        "path": "packages/authz/src/index.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "c2ee5d23b6a65e9a19af0f2f4c703fb484e206f5ea92650cabe814ef1a7a5d12",
+        "bytes": 2854
+      },
+      {
+        "path": "scripts/verify-disposable-db-gates.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "4a5d5bf41eef5baf4db6ca4f046e763a9442347fd3814507570d332181b3a9fd",
+        "bytes": 2712
+      },
+      {
+        "path": "docs/proofs/wincreator/AI-VIS-001/distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "9e5d96c4f95725e40e75a7c45ca05ce0ee86bdcc76e98a90a7a32bd4f05a68cc",
+        "bytes": 16882
+      },
+      {
+        "path": "docs/proofs/wincreator/AI-VIS-001/distill-report.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "f30429ad7c28a587aa0a8a46805c988e80c72ad5798ed9b9d881ef87e07d2e8a",
+        "bytes": 1575
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "e350f25e3c12c280ea144e4f6f52ba7a7dfa104b",
+      "tree": "63b4fc15e15b3630d71ec74f5848c68211c1c0d8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "d25c09feb3d6d6708f8d87ef468e012bfbcd819aa45bfdd58066e7b54fe1bc03",
+      "worktree_digest": "82321dfd4e39ff07340bc1e5048e034d8245aae4ab8f2f5d8fe0e70b268f265b"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 2000000,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "4dd52b31eb3d0d3e9c08201270ac8cc53016dc0619855c407fd6011a267abb75"
+  }
+}

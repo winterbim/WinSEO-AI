@@ -119,3 +119,15 @@ export {
   disableMfa,
 } from "./mfa.ts";
 export type { MfaRow } from "./mfa.ts";
+
+export {
+  createAiVisibilityImport,
+  getAiVisibilityImport,
+  listAiVisibilityCaptures,
+  listAiVisibilityImports,
+  listAiVisibilityStats,
+  AiVisibilityDuplicateImportError,
+  AiVisibilityPermissionError,
+  AiVisibilityProjectScopeError,
+} from "./ai-visibility.ts";
+export type { AiVisibilityCaptureRow, AiVisibilityImportRow } from "./ai-visibility.ts";

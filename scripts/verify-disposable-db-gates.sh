@@ -30,19 +30,23 @@ BEGIN
      '0021_remove_gsc_sync_migration_guard',
      '0022_restore_gsc_runtime_writes',
      '0023_restore_gsc_parent_deletes',
-     '0024_restore_gsc_acl_baseline'
+     '0024_restore_gsc_acl_baseline',
+     '0025_ai_visibility_imports',
+     '0026_ai_visibility_capture_org_fk'
    ]);
 
-  IF applied_count <> 10 THEN
-    RAISE EXCEPTION 'Expected 10 GSC migration records, found %', applied_count;
+  IF applied_count <> 12 THEN
+    RAISE EXCEPTION 'Expected 12 GSC and AI visibility migration records, found %', applied_count;
   END IF;
 END
 $migration_gate$;
 
-SELECT string_agg(version, ', ' ORDER BY version) AS gsc_migrations
+SELECT string_agg(version, ', ' ORDER BY version) AS required_recent_migrations
   FROM schema_migrations
  WHERE version LIKE '0019%gsc%'
-    OR version LIKE '002%gsc%';
+    OR version LIKE '002%gsc%'
+    OR version LIKE '0025_ai_visibility%'
+    OR version LIKE '0026_ai_visibility%';
 SQL
 printf 'GATE_PASS PostgreSQL identity and migration ledger\n'
 

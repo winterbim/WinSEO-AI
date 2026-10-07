@@ -26,6 +26,8 @@ const EXPECTED_TABLES = [
   "gsc_oauth_states",
   "patch_proposals",
   "patch_events",
+  "ai_visibility_imports",
+  "ai_visibility_captures",
   "schema_migrations",
 ];
 
@@ -44,6 +46,8 @@ const TENANT_OWNED = [
   "gsc_oauth_states",
   "patch_proposals",
   "patch_events",
+  "ai_visibility_imports",
+  "ai_visibility_captures",
 ];
 
 void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
@@ -147,6 +151,14 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
     assert.ok(
       rows.includes("0024_restore_gsc_acl_baseline"),
       "0024_restore_gsc_acl_baseline must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0025_ai_visibility_imports"),
+      "0025_ai_visibility_imports must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0026_ai_visibility_capture_org_fk"),
+      "0026_ai_visibility_capture_org_fk must be in ledger",
     );
   });
 

@@ -407,7 +407,23 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 
 ### Résultats observés
 
-- En cours : le backend et son contrat sont en construction; aucun statut de fonctionnalité n'est promu avant migrations appliquées, tests PostgreSQL/RLS, revue sceptique et intégration UI vérifiée.
+- 2026-10-07 : migrations 0025 et 0026 appliquées sur `serpvera_dev` (port 55432); tests API/PostgreSQL 4/4, RLS inclus dans la suite DB, et matrice authz 24/24. L'import, l'historique, la comparaison par batch, les limites/hash et le refus same-tenant VIEWER/BILLING sont exécutés; aucun appel réel de fournisseur n'est fait.
+- 2026-10-07 16:05 UTC : capture WinCreator Standard `AI-VIS-001` `20261007T160533.924761Z-a0bd062b-d8cf-42d7-b600-b2868bb777e2`, exit 0, attestation SHA-256 `4dd52b31eb3d0d3e9c08201270ac8cc53016dc0619855c407fd6011a267abb75`. PostgreSQL identity/migrations, format, `git diff --check`, lint 15/15 tâches, typecheck 15/15, tests 13/13 tâches sans cache (DB 78/78, crawler 124/124, API 123/123, authz 24/24, web 25/25), build 7/7 et `pnpm audit --audit-level=high` passent; aucune vulnérabilité haute connue. Revue post-capture: le test contractuel CSV n'a pas été lancé car `@serpvera/contracts` n'exposait pas de script `test`. Cette capture est conservée mais ne suffit pas au claim final. Sortie brute : `docs/proofs/wincreator/AI-VIS-001/20261007T160533.924761Z-a0bd062b-d8cf-42d7-b600-b2868bb777e2/stdout.log`.
+- Correctif de gate : ajouter le script `test` dans `packages/contracts/package.json` afin que Turbo lance `src/ai-visibility.test.ts`; capture complète et revue sceptique à refaire avant toute promotion. Aucun statut R+ n'est promu sur la capture incomplète.
+- Le test navigateur Playwright a atteint l'API PostgreSQL (inscription/org/projet), mais le navigateur local a répondu `ERR_ACCESS_DENIED` sur l'interface Next même avec des ports isolés. Aucun parcours UI E2E n'est revendiqué; la revue UX est uniquement source-level.
+
+### Correctif de contrôle d'accès après revue sceptique
+
+- **Quelle preuve ?** La revue a identifié un appel POST accessible à Viewer/Billing alors que l'import ajoute une preuve au projet. La permission dédiée `evidence.write` doit autoriser OWNER/ADMIN/ANALYST/EDITOR et refuser VIEWER/BILLING dans la politique commune et dans l'API; un test PostgreSQL/API doit exercer les deux refus avec une vraie session du même tenant.
+- **Quel risque ?** Réutiliser `production.write` donnerait une permission plus large que l'import ne nécessite; ne rien vérifier permettrait à un rôle lecture seule de modifier l'historique et les statistiques.
+- **Comment l'annuler ?** Revert de la permission et de son usage sur la route; les imports déjà enregistrés ne sont pas supprimés. Toute évolution ultérieure des rôles reste explicitement migrée dans la matrice d'autorisation.
+- **Comment saurons-nous que ça a marché ?** Les tests de matrice confirment l'accès des rôles éditeur d'évidence et le refus des rôles lecture seule; l'intégration PostgreSQL reçoit HTTP 403 pour VIEWER et BILLING et le refus a lieu avant toute mutation.
+
+**Résultat provisoire :** le Skeptic sécurité a prouvé le défaut; le correctif `evidence.write` et le test adversarial sont ajoutés. Statut inchangé jusqu'au gate complet frais et à la revue de suivi indépendante. Le navigateur local a retourné `ERR_ACCESS_DENIED` sur les ports de preview même si l'API PostgreSQL répondait; aucune preuve E2E navigateur n'est revendiquée.
+
+**Distillation WinCreator :** baseline structurelle gelée avant la revue finale, périmètre de 18 fichiers ciblés. SHA-256 externe conservé ici : `e5c9dda00bf974cc962c1c6ec81773224320a88f704a33e7f554a7fcf5fbba50`. Vecteur observé : 18 fichiers source, 5 643 lignes non blanches, 29 dépendances reconnues dans les manifests ancêtres, 38 empreintes dupliquées et plus grand fichier 1 081 lignes. Ces mesures ne constituent pas un score de qualité; comparaison et revue sémantique à suivre.
+
+- 2026-10-07 16:04 UTC — première capture WinCreator `AI-VIS-001` arrêtée au gate `format:check` à cause d'une ligne non formatée dans `docs/PROOF_LEDGER_RPLUS.md`; aucun lint/test/build n'a été exécuté dans cette capture. L'attestation échouée reste conservée; correction documentaire puis recapture du même claim requises. La capture n'est pas utilisée comme preuve fonctionnelle.
 
 ## 2026-10-07 — Renforcer la portée du scan de secrets
 
@@ -422,3 +438,23 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 
 - Le premier scan avec règles par défaut (run `37642217666`) a révélé six correspondances `generic-api-key`, toutes dans des tests : cinq identifiants UUID d'idempotence et un mot de passe synthétique utilisé seulement par un test d'inscription. Le SARIF a été inspecté sans afficher les valeurs; les six lignes/fichiers sont listés dans `.gitleaksignore` par empreinte complète commit:chemin:règle:ligne. Aucune règle de chemin/dossier n'a été ajoutée.
 - La revue indépendante du caractère non secret des six fixtures et de l'allowlist par empreinte exacte est en attente. Le scan n'est pas considéré vert jusqu'à la réussite du workflow complet et de la revue sceptique.
+
+## 2026-10-07 — Durcir les dates CSV et l'autorisation de l'import AI Visibility
+
+### Fonction : refuser les timestamps impossibles et empêcher une ancienne session d'écrire après downgrade
+
+- **Quelle preuve ?** Les tests de contrat doivent rejeter les jours de calendrier impossibles, les heures et offsets hors plage, tout en acceptant une date bissextile valide. Les tests API doivent refuser Viewer/Billing avant d'examiner le hash et refuser l'ancien cookie Analyst après downgrade en base. PostgreSQL doit relire le rôle actif et verrouiller l'adhésion `FOR SHARE` jusqu'au commit d'import.
+- **Quel risque ?** `Date` normalise silencieusement des entrées comme le 31 février; un rôle stocké dans une session peut devenir obsolète. Le verrou transactionnel peut retarder un changement de rôle jusqu'à la fin d'un import borné à 1 MiB et 5 000 lignes.
+- **Comment l'annuler ?** Revert ciblé du validateur de timestamp et du contrôle/lock d'adhésion; cela réouvre les défauts prouvés et impose de remettre la capacité `BLOCKED`. Aucune migration ni donnée existante n'est modifiée.
+- **Comment saurons-nous que ça a marché ?** Tests unitaires CSV, API PostgreSQL avec downgrade, contrôle permission dans la persistance PostgreSQL, suite complète uncached, capture WinCreator des sources réellement utilisées et revue sceptique indépendante.
+
+### Avancement
+
+- 2026-10-07 : le reviewer a reproduit la normalisation de `2026-02-31` en `2026-03-03`; validateur calendaire strict et cas bissextiles ajoutés.
+- 2026-10-07 : le reviewer a montré que le rôle de session pouvait survivre à un downgrade; le POST recharge le rôle actuel, puis le store verrouille le membre autorisé dans la même transaction que l'écriture. Tests API et PostgreSQL ajoutés; preuve d'exécution à refaire.
+- 2026-10-07 : la première tentative d'intégration locale s'est heurtée à `Operation not permitted` sur le socket PostgreSQL du bac de test; aucun résultat d'intégration n'est revendiqué de cette tentative. Gate complet à relancer avec accès autorisé au socket.
+- 2026-10-07 16:27 UTC : capture WinCreator Standard `AI-VIS-001` `20261007T162747.166466Z-4f941bae-c079-4da6-970c-461adaa7941c`, exit 0, durée 104,688 ms, attestation SHA-256 `e1bb6a31c0ae19a7932353ed1628f2fc7033a7816c791b0494a24a969e268510`. La base jetable `serpvera_dev`/rôle `wina` et les migrations passent; format et diff-check passent; lint 15/15, typage 15/15, tests 14/14 tâches Turbo sans cache (contracts 19/19, DB 79/79, API 124/124, authz 24/24, crawler 124/124, web 25/25), build 7/7 et audit high sans vulnérabilité connue. La sortie prouve que `@serpvera/contracts:test` et les deux nouveaux refus PostgreSQL/API ont été exécutés. Le challenge packet est vérifié (`80550e3b…`). Revue sceptique finale PASS et `AI-VIS-001 = EVIDENCED`; l'attestation ciblée revérifie avec `VERIFY OK`.
+- 2026-10-07 : comparaison structurelle WinCreator `distill-report.json` donne `REVIEW_REQUIRED` (+123 lignes non blanches, zéro dépendance externe ajoutée) car le périmètre a gagné les tests de dates impossibles et la barrière transactionnelle de rôle. Cette hausse est une couverture exigée, pas une amélioration revendiquée; pas de simplification comportementale tentée avant revue.
+
+- 2026-10-07 : vérification globale `wincreator.py verify --ledger PROOF_LEDGER.md` retourne `VERIFY FAILED — 35 problem(s)` : captures historiques `.wincreator/attestations/` absentes du checkout et anciennes captures AI-VIS dont les fichiers ont changé. La vérification isolée de la capture actuelle passe; `PROOF-REPLAY-001 = BLOCKED` jusqu'à restauration des archives ou rejeu des gates. `ledger_check.py PROOF_LEDGER.md` passe avec 32 lignes et le contrôle des catches passe avec 35 entrées.
+- 2026-10-07 : les six stdout/stderr bruts AI-VIS ont été inspectés pour les marqueurs de secrets avant inclusion. `.gitattributes` les marque non textuels afin de préserver les empreintes SHA-256 de capture dans l'index Git; les octets indexés de la capture finale correspondent aux hashes attestés.

@@ -71,15 +71,15 @@ export default async function AiVisibilityPage({
       <section className="rounded-lg border border-line bg-panel p-5">
         <h2 className="font-semibold">Capture schema</h2>
         <p className="mt-1 text-sm text-slate-700">
-          Required columns are deliberately simple so captures can come from a manual test, an
-          approved provider workflow, or another system.
+          Import captures from a manual test or an external export. WinSEO does not make automated
+          calls to ChatGPT, Claude, Gemini, Perplexity, or other answer engines.
         </p>
         <pre className="mt-3 overflow-x-auto rounded bg-slate-950 p-3 text-xs text-slate-100">
-          engine,prompt_id,brand_mentioned,client_cited,citation_domains
+          engine,prompt_id,brand_mentioned,client_cited,citation_domains,sampled_at (optional)
         </pre>
       </section>
 
-      <GeoCsvLab />
+      <GeoCsvLab key={projectId} projectId={projectId} />
     </div>
   );
 }

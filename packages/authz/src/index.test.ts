@@ -6,6 +6,7 @@ void describe("authz", () => {
   void describe("hasPermission", () => {
     void it("OWNER has all permissions", () => {
       assert.ok(hasPermission("OWNER", "project.read"));
+      assert.ok(hasPermission("OWNER", "evidence.write"));
       assert.ok(hasPermission("OWNER", "production.write"));
       assert.ok(hasPermission("OWNER", "billing.manage"));
     });
@@ -13,13 +14,20 @@ void describe("authz", () => {
     void it("VIEWER only has read permissions", () => {
       assert.ok(hasPermission("VIEWER", "project.read"));
       assert.ok(hasPermission("VIEWER", "evidence.read"));
+      assert.ok(!hasPermission("VIEWER", "evidence.write"));
       assert.ok(!hasPermission("VIEWER", "production.write"));
       assert.ok(!hasPermission("VIEWER", "billing.manage"));
     });
 
     void it("EDITOR has production.write but not billing.manage", () => {
       assert.ok(hasPermission("EDITOR", "production.write"));
+      assert.ok(hasPermission("EDITOR", "evidence.write"));
       assert.ok(!hasPermission("EDITOR", "billing.manage"));
+    });
+
+    void it("BILLING can read project evidence but cannot add evidence", () => {
+      assert.ok(hasPermission("BILLING", "evidence.read"));
+      assert.ok(!hasPermission("BILLING", "evidence.write"));
     });
 
     void it("production.write is separate from action.approve", () => {

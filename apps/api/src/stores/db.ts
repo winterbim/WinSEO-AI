@@ -69,10 +69,19 @@ import {
   query,
   consumeRateLimitWindow,
   healthCheck,
+  createAiVisibilityImport as insertAiVisibilityImport,
+  getAiVisibilityImport as selectAiVisibilityImport,
+  listAiVisibilityCaptures as selectAiVisibilityCaptures,
+  listAiVisibilityImports as selectAiVisibilityImports,
+  listAiVisibilityStats as selectAiVisibilityStats,
+  type AiVisibilityCaptureRow,
+  type AiVisibilityImportRow,
   type DbConfig,
 } from "@serpvera/db";
 import type {
   ApiStores,
+  StoredAiVisibilityCapture,
+  StoredAiVisibilityImport,
   StoredGscConnection,
   StoredGscCredential,
   StoredGscJob,
@@ -755,6 +764,28 @@ export function createDbStores(): ApiStores {
       },
     },
 
+    aiVisibility: {
+      async createImport(input) {
+        const row = await insertAiVisibilityImport(input);
+        return toStoredAiVisibilityImport(row);
+      },
+      async listImports(organizationId, projectId, limit, offset) {
+        const rows = await selectAiVisibilityImports(organizationId, projectId, limit, offset);
+        return rows.map(toStoredAiVisibilityImport);
+      },
+      async getImport(organizationId, projectId, importId) {
+        const row = await selectAiVisibilityImport(organizationId, projectId, importId);
+        return row ? toStoredAiVisibilityImport(row) : null;
+      },
+      async listCaptures(organizationId, projectId, importId) {
+        const rows = await selectAiVisibilityCaptures(organizationId, projectId, importId);
+        return rows.map(toStoredAiVisibilityCapture);
+      },
+      async listStats(organizationId, projectId, importId) {
+        return selectAiVisibilityStats(organizationId, projectId, importId);
+      },
+    },
+
     // Present ONLY on the PostgreSQL driver: Google token material must exist
     // as encrypted rows, never in process memory of a throwaway driver.
     gsc: {
@@ -824,6 +855,34 @@ export function createDbStores(): ApiStores {
         return selectMetricFreshness(organizationId, projectId, connectionId);
       },
     },
+  };
+}
+
+function toStoredAiVisibilityImport(row: AiVisibilityImportRow): StoredAiVisibilityImport {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    uploadedBy: row.uploaded_by,
+    csvSha256: row.csv_sha256,
+    rowCount: row.row_count,
+    provenance: row.provenance,
+    epistemicClass: row.epistemic_class,
+    unverifiedByProvider: row.unverified_by_provider,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function toStoredAiVisibilityCapture(row: AiVisibilityCaptureRow): StoredAiVisibilityCapture {
+  return {
+    id: row.id,
+    importId: row.import_id,
+    rowNumber: row.row_number,
+    engine: row.engine,
+    promptId: row.prompt_id,
+    brandMentioned: row.brand_mentioned,
+    clientCited: row.client_cited,
+    citationDomains: row.citation_domains,
+    sampledAt: row.sampled_at.toISOString(),
   };
 }
 

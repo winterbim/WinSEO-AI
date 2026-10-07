@@ -147,6 +147,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@serpvera/authz':
+        specifier: workspace:*
+        version: link:../authz
       '@serpvera/contracts':
         specifier: workspace:*
         version: link:../contracts

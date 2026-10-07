@@ -1,0 +1,263 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "AI-VIS-001",
+      "level": "Meso",
+      "text": "AI Visibility CSV imports persist user-supplied captures per project, verify the submitted-text SHA-256 and strict CSV limits, compute separate Wilson statistics/history, enforce tenant RLS and evidence.write role checks, and never claim provider verification",
+      "gate": "`env PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh`",
+      "row_sha256": "4e4e29a4bf1a7b6ad5598bec4ad85b7e80731f74389a7c0d78991efdad945b32",
+      "ledger_sha256_before": "c24e68b3e48bb96f363cf05b3000e261acb2ef99b9194f922e7c04c20c2625f6",
+      "status_before": "CLAIMED"
+    },
+    "ledger": "PROOF_LEDGER.md",
+    "builder": "builder-codex",
+    "command": [
+      "env",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "bash",
+      "scripts/verify-disposable-db-gates.sh"
+    ],
+    "command_string": "env PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh",
+    "capture": {
+      "status": "CAPTURED_FAIL",
+      "exit_code": 1,
+      "error": null
+    },
+    "started_at": "2026-10-07T16:04:15.150415Z",
+    "finished_at": "2026-10-07T16:04:18.675348Z",
+    "duration_ms": 3524,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "21dca634ef4c057dd5e5193fa402bb600d1158b2eff7c6ed33d8caebfb59f1d1",
+      "original_bytes": 1645,
+      "stored_bytes": 1645,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "GATE_START PostgreSQL identity and migration ledger\n   database   | role | port  \n--------------+------+-------\n serpvera_dev | wina | 55432\n(1 row)\n\nDO\n                                                                                                                                                                                                     required_recent_migrations                                                                                                                                                                                                     \n------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n 0019_gsc_property_scoped_measurements, 0019w_gsc_effective_acl_fence, 0019x_gsc_parent_delete_fence, 0019y_gsc_sync_write_fence, 0019z_gsc_claim_order_preflight, 0019zz_gsc_sync_migration_guard, 0020_gsc_sync_claim_order, 0021_remove_gsc_sync_migration_guard, 0022_restore_gsc_runtime_writes, 0023_restore_gsc_parent_deletes, 0024_restore_gsc_acl_baseline, 0025_ai_visibility_imports, 0026_ai_visibility_capture_org_fk\n(1 row)\n\nGATE_PASS PostgreSQL identity and migration ledger\nGATE_START format:check\n\n> serpvera@0.1.0 format:check /tmp/winseo-publish\n> prettier --check .\n\nChecking formatting...\n ELIFECYCLE  Command failed with exit code 1.\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "96434175dd00d78ef07b84b2d360667850c163beabbf5316b76df2c829fdd760",
+      "original_bytes": 118,
+      "stored_bytes": 118,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "[warn] docs/PROOF_LEDGER_RPLUS.md\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.\n"
+    },
+    "files": [
+      {
+        "path": "apps/api/src/routes/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "c3c6046c4d40706a9e154d47aaca530c8ebe3142bdd45ba7998956280f11c7c8",
+        "bytes": 9458
+      },
+      {
+        "path": "apps/api/src/ai-visibility-routes.integration.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "3ccc28bbf390f437b0e4c80e69db2dec61687b35afa7dd0ee3442808f8e1a48f",
+        "bytes": 13516
+      },
+      {
+        "path": "apps/api/src/server.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "76f19cd4c6d46295ede29729e94e995b7dd8c118491fdfbbc60b871767dfb38d",
+        "bytes": 11139
+      },
+      {
+        "path": "apps/api/src/stores/db.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "68e49ab12eeb8dd475a058fc046c0df2be9b7ea101d19c3f82f0e9a62fba45c3",
+        "bytes": 38212
+      },
+      {
+        "path": "apps/api/src/stores/memory.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "6d89b3ee3bb4767f57f26e91eab6cc739f39b1e5d8431c9773cc30857a3b5768",
+        "bytes": 26160
+      },
+      {
+        "path": "apps/api/src/stores/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "dbb3b75115130ad0562768717011f31739ca9b072cc93bc7adb527055134f55b",
+        "bytes": 17263
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/ai-visibility/geo-csv-lab.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "c5c628b27f9e8e6858f2e5fb2d6eb1e9251626b2a4d5f194dc37fff72c0d51f5",
+        "bytes": 20343
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/ai-visibility/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "6f9d8ded5504737c7c58d6ebeab1a2775b9a74db5fbb496ef4396a41901eaf23",
+        "bytes": 3243
+      },
+      {
+        "path": "packages/contracts/src/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "eb086196a7a4f1777485089382bda2a06c8e0dc9d7001c3d441208eebf470baa",
+        "bytes": 10466
+      },
+      {
+        "path": "packages/contracts/src/ai-visibility.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "5e4e25a613a9b286d3f683cc262e9c4c8912bd0bc1ce7232d97d2f0afef0973a",
+        "bytes": 3384
+      },
+      {
+        "path": "packages/contracts/src/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "ec78d8a7e89c91468e0263ef3924d98aebddde57bc436494e1810efbcde39e4f",
+        "bytes": 5620
+      },
+      {
+        "path": "packages/db/src/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "106d559d25077b7a0823079ea54a9204fd51358d30720d211b6011e31ecc0b67",
+        "bytes": 9541
+      },
+      {
+        "path": "packages/db/src/ai-visibility-rls.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "aa19dbc077ac191695eb7fe5129e24967686eb458d25f95d8b6d126344bfcecc",
+        "bytes": 6632
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7ba2ffcf3a1cd92fd24aac7b960bebdc20009b815c7d71c8c85aedf3f8ae6586",
+        "bytes": 23779
+      },
+      {
+        "path": "packages/db/migrations/0025_ai_visibility_imports.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "ef085c5863989277d09517150e3f529f0a454a664d98d006a51a8617fb355c7e",
+        "bytes": 3685
+      },
+      {
+        "path": "packages/db/migrations/0026_ai_visibility_capture_org_fk.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "aa16cf9b5fb6201d5ae4ccea2ab62490937089f6fb66e1d20b836e5bd706cd0d",
+        "bytes": 736
+      },
+      {
+        "path": "packages/authz/src/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "0bf3a6e48781c4f34b7e0f5caac9e3d3848111d3ddd077aed6102f940fdca2ce",
+        "bytes": 1949
+      },
+      {
+        "path": "packages/authz/src/index.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "c2ee5d23b6a65e9a19af0f2f4c703fb484e206f5ea92650cabe814ef1a7a5d12",
+        "bytes": 2854
+      },
+      {
+        "path": "scripts/verify-disposable-db-gates.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "4a5d5bf41eef5baf4db6ca4f046e763a9442347fd3814507570d332181b3a9fd",
+        "bytes": 2712
+      },
+      {
+        "path": "docs/proofs/wincreator/AI-VIS-001/distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "9e5d96c4f95725e40e75a7c45ca05ce0ee86bdcc76e98a90a7a32bd4f05a68cc",
+        "bytes": 16882
+      },
+      {
+        "path": "docs/proofs/wincreator/AI-VIS-001/distill-report.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "f30429ad7c28a587aa0a8a46805c988e80c72ad5798ed9b9d881ef87e07d2e8a",
+        "bytes": 1575
+      },
+      {
+        "path": "docs/autoreglage/PLAN.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "cd7db5cbe3d62934e71f02a4af9160072f9390149513efb0b127b690f440fb77",
+        "bytes": 93115
+      },
+      {
+        "path": "docs/autoreglage/DECISIONS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "1af7f6309248509f2a6aa1f19bf6455a2af4d1428b792fdd046a329a2035b413",
+        "bytes": 40073
+      },
+      {
+        "path": "docs/PROOF_LEDGER_RPLUS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "706017190411985ca392b7566538af44ff25d803e805c98d503a21edb2aa9d43",
+        "bytes": 16809
+      },
+      {
+        "path": "SKEPTIC_CATCHES.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "47a830266a8aef99ea547dbaa0d2cbc04b7141a740d736083364d0d49c484890",
+        "bytes": 35212
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "e350f25e3c12c280ea144e4f6f52ba7a7dfa104b",
+      "tree": "63b4fc15e15b3630d71ec74f5848c68211c1c0d8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "13b589aba0b3a1aa388b5debdee77ce983d984bc579e82e04c8b9169ae39fb50",
+      "worktree_digest": "af934eacf787689293f9a8bfb0883f578c50513e9ba2cc4d272dec3119299db5"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 2000000,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "1cc79d9d4d42e1539898411760e0f07bbb88799ab75d811f3492e39d41b8994f"
+  }
+}
