@@ -73,6 +73,7 @@ jobs:
       - name: Prepare PostgreSQL roles and schema
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/bootstrap.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE serpvera_dev"
           pnpm --filter @serpvera/db db:migrate
 
       - name: Test
@@ -88,6 +89,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
         with:

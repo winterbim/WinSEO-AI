@@ -380,3 +380,12 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 - 2026-10-07 : la première revue du fence ACL a signalé que les tables credentials/OAuth n'étaient pas protégées pour des écritures directes. Le claim et D-025 ont été limités explicitement à `organizations`, `projects`, `gsc_connections`, `gsc_sync_jobs`, `gsc_metrics`; les écritures credentials/OAuth restent hors périmètre de cette barrière.
 - 2026-10-07 : la suite DB complète exécutée directement sur PostgreSQL jetable réussit 75/75. Revue indépendante finale du claim borné : aucun bypass dans ce périmètre; les deux tests supplémentaires de propriété et d'appartenance justifient `REVIEW_REQUIRED` de l'outil de distillation. `GSC-MIGRATION-FENCE-001 = EVIDENCED`.
 - 2026-10-07 : les checks GitHub de la nouvelle révision restent à attendre après push. Le scan de secrets demeure exécuté par GitHub Actions, et non par la gate locale; aucune validation de production ni connexion Google n'a été effectuée.
+
+## 2026-10-07 — Réparer les deux gates CI révélées par GitHub
+
+### Fonction prévue : exécuter les migrations CI et le scan de secrets sur la bonne cible
+
+- **Quelle preuve ?** Les logs GitHub de `37640262984` montrent que Verify échoue à `0001` car `serpvera_dev` manque alors que les migrations tournent sur `serpvera_test`; Gitleaks échoue avant scan complet car le checkout superficiel ne contient pas la base du PR. La source Gitleaks officielle demande le token et sa config via `GITLEAKS_CONFIG`.
+- **Quel risque ?** Donner des permissions trop larges au token ou masquer le scan; créer la base annexe dans un service CI non isolé. Garder les permissions read-only, désactiver les commentaires du scanner et créer `serpvera_dev` seulement dans le service PostgreSQL éphémère du job.
+- **Comment l'annuler ?** Revenir sur la modification du workflow; aucun changement de migration ou base externe. Garder le vrai scan bloquant, sans passer le job en advisory.
+- **Comment saurons-nous que ça a marché ?** Sur le nouveau commit, GitHub Actions doit réussir les migrations `serpvera_test` et les tests, et Gitleaks doit analyser le range du PR avec l'historique complet; les deux jobs doivent être verts.

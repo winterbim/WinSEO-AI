@@ -238,6 +238,30 @@ Sources utilisées pour le benchmark : documentation officielle de Google et de 
 
 **Retour arrière :** la porte de preuve demeure indépendante des commandes développeur; retirer `--force` uniquement si la CI conserve les résultats bruts et démontre l'exécution fraîche sur la bonne base.
 
+## D-028 — Garder la base PostgreSQL historique demandée par la migration CI
+
+**Décision :** le job PostgreSQL CI garde `serpvera_test` comme base cible pour migrations et tests, et crée aussi `serpvera_dev` dans le service PostgreSQL temporaire avant la migration.
+
+**Raison :** la migration historique `0001_init_schema.sql` accorde `CONNECT` sur `serpvera_dev` en dur. Elle ne doit pas être réécrite après application; le job isolé doit donc fournir cette dépendance historique sans déplacer les tests vers une base locale ou externe.
+
+**Preuve attendue :** GitHub Actions exécute le runner sur `serpvera_test`, passe les migrations et les tests sur son PostgreSQL éphémère; le log indique la base cible exacte.
+
+**Risque :** ajouter une seconde base au conteneur CI masque une hypothèse codée dans la migration historique; toute nouvelle base fixe doit être identifiée par recherche et revue.
+
+**Retour arrière :** supprimer la création de la base auxiliaire et rétablir le workflow précédent. Aucune base réelle n'est touchée.
+
+## D-029 — Scanner l'historique du PR avec un checkout complet
+
+**Décision :** le job Security Scan récupère l'historique Git complet; Gitleaks compare ainsi le commit de base du PR à la tête de branche. Le job garde les permissions en lecture seule, transmet `GITHUB_TOKEN`, utilise `GITLEAKS_CONFIG` et désactive uniquement les commentaires.
+
+**Raison :** Gitleaks a échoué avec `unknown revision` parce que `actions/checkout` ne ramenait pas le commit de base. Le log « aucun leak dans le scan partiel » ne prouve rien et ne doit pas produire un statut vert.
+
+**Preuve attendue :** le run GitHub Actions montre une exécution complète du range de commits du PR et le job de scan réussit; les sources Gitleaks consultées le 2026-10-07 documentent le token, la config par variable d'environnement et la migration de l'action vers v3.
+
+**Risque :** plus de données Git téléchargées; le token n'a pas de permission d'écriture et les commentaires sont désactivés.
+
+**Retour arrière :** restaurer l'action/version précédente seulement avec une preuve d'analyse complète et une config valide; ne jamais transformer le scan en étape advisory.
+
 ## D-026 — Ne pas modifier une migration après son application, même sur la base jetable
 
 **Décision :** après application d'une migration sur le PostgreSQL jetable, son fichier source est immuable. Toute correction future exige une nouvelle migration forward-only; le test de comportement peut évoluer séparément.
