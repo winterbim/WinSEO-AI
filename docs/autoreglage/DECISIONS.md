@@ -20,6 +20,8 @@
 
 **Preuve attendue :** CI verte sur la configuration par défaut, puis test synthétique local temporaire sur une branche latérale dont le secret est supprimé par le commit merge. Le secret synthétique reste hors du dépôt partagé après l'essai; une preuve retenue démontre l'échec du scan avant nettoyage.
 
+**Revue du premier passage :** le scan des règles intégrées a révélé six faux positifs dans des tests (UUID d'idempotence et mot de passe de fixture). Après examen, six empreintes complètes sont ignorées dans `.gitleaksignore`, chacune rattachée à un commit, un chemin, une règle et une ligne. La documentation Gitleaks décrit cette forme d'exception unitaire; aucune allowlist de chemin n'est rétablie. Revue sceptique indépendante encore requise.
+
 ## D-001 — Ordre imposé par la mission
 
 **Décision :** suivre M0 → M1 → M2, sans publication de comportement pendant M0. Le benchmark antérieur mettait « exécuter le dernier kilomètre WordPress, titles/metas » en P0. Cette priorité produit est retenue, mais sa séquence directe est remplacée par la tranche complète et sûre R0 multimodale (`alt`) + R1 (`title`) de M2, avec preuves et rollback avant toute extension.  

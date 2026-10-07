@@ -417,3 +417,8 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 - **Quel risque ?** Le secret scan actuel pourrait réussir sans appliquer les règles intégrées ou sans parcourir tous les commits concernés. Le rétablissement des règles peut aussi révéler des faux positifs ou des secrets existants; aucun chemin entier ne sera autorisé en réponse.
 - **Comment l'annuler ?** Revenir au commit du workflow/configuration précédent; aucune donnée de production n'est modifiée. Cette réversion rétablit aussi la lacune et doit donc faire repasser le gate en `BLOCKED`.
 - **Comment saurons-nous que ça a marché ?** Gitleaks valide la config étendue aux règles par défaut et réussit sur la plage `$HEAD ^$BASE`; un test d'attaque contrôlé avec un secret synthétique généré uniquement dans un dépôt Git temporaire de CI, présent dans une branche latérale fusionnée, doit être détecté sans inscrire un secret ni sa valeur dans le dépôt ou les logs.
+
+### Résultats observés
+
+- Le premier scan avec règles par défaut (run `37642217666`) a révélé six correspondances `generic-api-key`, toutes dans des tests : cinq identifiants UUID d'idempotence et un mot de passe synthétique utilisé seulement par un test d'inscription. Le SARIF a été inspecté sans afficher les valeurs; les six lignes/fichiers sont listés dans `.gitleaksignore` par empreinte complète commit:chemin:règle:ligne. Aucune règle de chemin/dossier n'a été ajoutée.
+- La revue indépendante du caractère non secret des six fixtures et de l'allowlist par empreinte exacte est en attente. Le scan n'est pas considéré vert jusqu'à la réussite du workflow complet et de la revue sceptique.
