@@ -2,6 +2,24 @@
 
 **Mis à jour :** 2026-10-06 20:25 UTC. Décisions de mission séparées des ADR d’architecture générales.
 
+## D-026 — Historique des captures AI Visibility
+
+**Décision :** conserver chaque lot importé sous une identité d'import append-only, liée au projet/organisation, avec SHA-256 du fichier CSV source, horodatage d'import, provenance `USER_SUPPLIED` et indicateur explicite « non vérifié auprès du fournisseur ». Stocker les lignes normalisées nécessaires aux statistiques; ne pas stocker le texte complet des réponses de fournisseurs dans cette première tranche. Autoriser la suppression tenant-scopée selon la rétention définie.
+
+**Raison :** le calcul actuel est seulement dans le navigateur et disparaît au rechargement. La chaîne de preuve doit pouvoir relire le même échantillon depuis la base sans prétendre que WinSEO a capturé ou authentifié une réponse stochastique externe.
+
+**Garde-fous :** plafond strict par import, vérification serveur des champs/types/domaines, FK composites organisation/projet, RLS avec `USING` et `WITH CHECK`, `FORCE ROW LEVEL SECURITY`, audit d'intégrité sur le lot et tests d'attaque inter-tenant. Les appels API de modèles restent désactivés.
+
+**Retour arrière :** retirer la route et les vues UI; la migration additive reste intacte, les nouvelles lignes pouvant être supprimées via le flux tenant-scopé. Pas de réécriture ni de suppression des anciennes migrations.
+
+## D-027 — Scanner les commits PR atteignables et activer les règles Gitleaks par défaut
+
+**Décision :** étendre la configuration Gitleaks intégrée avec `useDefault = true`, retirer les allowlists globales de chemins, et exécuter en CI `gitleaks git` sur les commits atteignables depuis le head mais pas depuis le base (`HEAD ^BASE`). Garder le scan GitHub Action, ajouter ce scan de graphe complet, et bloquer la CI si l'un échoue. Toute exception future doit être une empreinte de faux positif étroite, examinée en revue; aucun dossier ne peut être exclu globalement.
+
+**Raison :** le code de l'action v3 utilise `--no-merges --first-parent` sur les PR et ne couvre donc pas tous les commits d'une branche latérale fusionnée; la configuration précédente n'étendait pas les règles par défaut et excluait tout `docs/*.md`.
+
+**Preuve attendue :** CI verte sur la configuration par défaut, puis test synthétique local temporaire sur une branche latérale dont le secret est supprimé par le commit merge. Le secret synthétique reste hors du dépôt partagé après l'essai; une preuve retenue démontre l'échec du scan avant nettoyage.
+
 ## D-001 — Ordre imposé par la mission
 
 **Décision :** suivre M0 → M1 → M2, sans publication de comportement pendant M0. Le benchmark antérieur mettait « exécuter le dernier kilomètre WordPress, titles/metas » en P0. Cette priorité produit est retenue, mais sa séquence directe est remplacée par la tranche complète et sûre R0 multimodale (`alt`) + R1 (`title`) de M2, avec preuves et rollback avant toute extension.  

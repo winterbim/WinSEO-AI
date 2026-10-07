@@ -1,11 +1,5 @@
 # Gitleaks configuration for WinSEO/SERPVERA
 title = "SERPVERA Gitleaks Config"
 
-[allowlist]
-  description = "Global allowlist"
-  paths = [
-    '''pnpm-lock\.yaml''',
-    '''\.gitignore''',
-    '''\.env\.example''',
-    '''docs/.*\.md''',
-  ]
+[extend]
+useDefault = true

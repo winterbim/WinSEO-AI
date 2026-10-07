@@ -379,7 +379,7 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 - 2026-10-07 : capture finale `VERIFY-001` `20261007T144620.896118Z-33c33788-dabf-4592-962b-06ee566a2a8a`; sortie complète 285 899 octets, exit 0, durée 103,118 ms. Lint 15/15, typage 15/15, tests 13/13 tâches Turbo sans cache : PostgreSQL DB 75/75, crawler 124/124, API 119/119, authz 23/23, web 25/25; build 7/7 sans cache; `pnpm audit --audit-level=high` sans vulnérabilité connue. La revue indépendante a confirmé chaque marqueur et le contenu brut : `EVIDENCED`. `wincreator verify` et `ledger_check --catches` sont aussi passés.
 - 2026-10-07 : la première revue du fence ACL a signalé que les tables credentials/OAuth n'étaient pas protégées pour des écritures directes. Le claim et D-025 ont été limités explicitement à `organizations`, `projects`, `gsc_connections`, `gsc_sync_jobs`, `gsc_metrics`; les écritures credentials/OAuth restent hors périmètre de cette barrière.
 - 2026-10-07 : la suite DB complète exécutée directement sur PostgreSQL jetable réussit 75/75. Revue indépendante finale du claim borné : aucun bypass dans ce périmètre; les deux tests supplémentaires de propriété et d'appartenance justifient `REVIEW_REQUIRED` de l'outil de distillation. `GSC-MIGRATION-FENCE-001 = EVIDENCED`.
-- 2026-10-07 : les checks GitHub de la nouvelle révision restent à attendre après push. Le scan de secrets demeure exécuté par GitHub Actions, et non par la gate locale; aucune validation de production ni connexion Google n'a été effectuée.
+- 2026-10-07 : lors de la première capture de ce plan, les checks GitHub étaient encore en cours; le résultat final est consigné ci-dessous. Le scan de secrets est exécuté par GitHub Actions et non par la gate locale; aucune validation de production ni connexion Google n'a été effectuée.
 
 ## 2026-10-07 — Réparer les deux gates CI révélées par GitHub
 
@@ -389,3 +389,31 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 - **Quel risque ?** Donner des permissions trop larges au token ou masquer le scan; créer la base annexe dans un service CI non isolé. Garder les permissions read-only, désactiver les commentaires du scanner et créer `serpvera_dev` seulement dans le service PostgreSQL éphémère du job.
 - **Comment l'annuler ?** Revenir sur la modification du workflow; aucun changement de migration ou base externe. Garder le vrai scan bloquant, sans passer le job en advisory.
 - **Comment saurons-nous que ça a marché ?** Sur le nouveau commit, GitHub Actions doit réussir les migrations `serpvera_test` et les tests, et Gitleaks doit analyser le range du PR avec l'historique complet; les deux jobs doivent être verts.
+
+### Résultats observés
+
+- 2026-10-07 14:55–14:59 UTC — GitHub Actions run [`37640824929`](https://github.com/winterbim/WinSEO-AI/actions/runs/37640824929) sur `48de90aa002e203895b6547c913099f223d3f7dc` : `Security Scan` passe, dont l'audit de dépendances et Gitleaks; `Verify` passe, dont format, lint, typecheck, build, préparation PostgreSQL et tests. Durée `Verify` : 3 min 41 s. Résultat aussi visible dans `gh pr checks 1`. Cela valide la CI sur ce commit, pas la mise en production.
+- Limite : la CI distante s'exécute sur des bases PostgreSQL éphémères; elle ne prouve pas le démarrage ou les migrations d'une base de production. GSC, paiements et email restent bloqués par leurs configurations/identifiants externes.
+- Revue sceptique indépendante `audit_security_ci` : le succès du job ne prouve pas la couverture complète des commits de PR; l'action v3 excluait les commits latéraux (`--first-parent --no-merges`) et la configuration ne chargeait pas les règles intégrées, avec une allowlist globale de `docs/*.md`. `CI-SEC-001 = DISPROVEN`; la correction et le test d'attaque sont décrits ci-dessous.
+
+## 2026-10-07 — Persister les imports AI Visibility
+
+### Fonction prévue : conserver les captures CSV réelles d'un projet et comparer leur historique
+
+- **Quelle preuve ?** L'interface actuelle parse et calcule les statistiques uniquement dans le navigateur, puis indique que les lignes ne sont pas enregistrées. Une preuve exploitable est un import reçu du navigateur, associé à son empreinte CSV et à son horodatage, puis relu depuis PostgreSQL sous le même tenant. Les statistiques doivent être recalculées depuis ces lignes persistées.
+- **Quel risque ?** Une provenance utilisateur peut être présentée à tort comme vérifiée par un fournisseur; des captures pourraient traverser les tenants; un import trop volumineux peut épuiser la base. La provenance reste `USER_SUPPLIED`/non vérifiée par le fournisseur, l'API borne le lot à 5 000 lignes, et chaque enregistrement est rattaché au projet et à l'organisation avec RLS.
+- **Comment l'annuler ?** Désactiver l'import via une configuration/route, puis supprimer les nouveaux imports par la fonction de rétention tenant-scopée. Une migration forward-only n'altère pas les données ni les tables préexistantes; rollback logiciel retire seulement l'accès aux nouvelles tables.
+- **Comment saurons-nous que ça a marché ?** Tests API et PostgreSQL couvrent import, hash, relecture/statistiques, erreurs de forme, quotas et refus d'accès croisé. L'interface affiche les horodatages/provenance de lignes persistées et distingue un exemple illustratif d'une capture fournie par l'utilisateur. Aucun appel externe de fournisseur n'est fait.
+
+### Résultats observés
+
+- En cours : le backend et son contrat sont en construction; aucun statut de fonctionnalité n'est promu avant migrations appliquées, tests PostgreSQL/RLS, revue sceptique et intégration UI vérifiée.
+
+## 2026-10-07 — Renforcer la portée du scan de secrets
+
+### Fonction prévue : appliquer les règles Gitleaks par défaut et couvrir tout l'historique nouveau de la PR
+
+- **Quelle preuve ?** La revue du workflow montre que Gitleaks Action v3 construit le range PR avec `--no-merges --first-parent`, donc omet les commits d'une branche latérale fusionnée. La configuration locale ne définit que des allowlists de chemins, sans `[extend] useDefault = true`, et exclut globalement `docs/*.md`. La documentation officielle Gitleaks précise qu'une configuration personnalisée sans extension remplace les règles intégrées et que `gitleaks git --log-opts` permet de choisir la plage commit. Sources consultées le 2026-10-07 : [implémentation Gitleaks Action v3](https://github.com/gitleaks/gitleaks-action/blob/e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e/src/gitleaks.js) et [CLI/configuration Gitleaks](https://github.com/gitleaks/gitleaks/blob/master/README.md).
+- **Quel risque ?** Le secret scan actuel pourrait réussir sans appliquer les règles intégrées ou sans parcourir tous les commits concernés. Le rétablissement des règles peut aussi révéler des faux positifs ou des secrets existants; aucun chemin entier ne sera autorisé en réponse.
+- **Comment l'annuler ?** Revenir au commit du workflow/configuration précédent; aucune donnée de production n'est modifiée. Cette réversion rétablit aussi la lacune et doit donc faire repasser le gate en `BLOCKED`.
+- **Comment saurons-nous que ça a marché ?** Gitleaks valide la config étendue aux règles par défaut et réussit sur la plage `$HEAD ^$BASE`; un test d'attaque contrôlé avec un secret synthétique généré uniquement dans un dépôt Git temporaire de CI, présent dans une branche latérale fusionnée, doit être détecté sans inscrire un secret ni sa valeur dans le dépôt ou les logs.

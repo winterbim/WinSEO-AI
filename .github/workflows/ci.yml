@@ -112,3 +112,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
           GITLEAKS_ENABLE_COMMENTS: "false"
+
+      - name: Scan all new commits, including merged side branches
+        env:
+          SCAN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCAN_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ! [[ "$SCAN_BASE_SHA" =~ ^[0-9a-f]{40}$ && "$SCAN_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Secret scan received invalid base/head commit identifiers."
+            exit 1
+          fi
+          gitleaks git --config .gitleaks.toml --redact --exit-code 2 \
+            --log-opts="$SCAN_HEAD_SHA ^$SCAN_BASE_SHA" .
+
+      - name: Verify side-branch secret detection
+        run: bash scripts/security/test-gitleaks-branch-scan.sh
