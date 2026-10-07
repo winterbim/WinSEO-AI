@@ -10,6 +10,7 @@ async function forward(method: string, request: Request, path: string[]): Promis
   const url = new URL(request.url);
   const target = `${API_URL}/v1/${path.join("/")}${url.search}`;
   const cookie = request.headers.get("cookie") ?? undefined;
+  const idempotencyKey = request.headers.get("idempotency-key") ?? undefined;
   const body = method === "GET" ? undefined : await request.text();
 
   let res: Response;
@@ -19,6 +20,7 @@ async function forward(method: string, request: Request, path: string[]): Promis
       headers: {
         accept: "application/json",
         ...(cookie ? { cookie } : {}),
+        ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
         ...(body ? { "content-type": "application/json" } : {}),
       },
       // `??` is safe for `""` too: the JSON content-type header above is only

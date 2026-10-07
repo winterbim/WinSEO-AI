@@ -1,0 +1,90 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "c3b8a155cdeecfa196700876742628c2eed0d92910936b384f37d73b6fe9d2ef",
+    "claim": {
+      "id": "GSC-DISTILL-BASELINE-001",
+      "level": "Micro",
+      "text": "The pre-simplification structural snapshot for the GSC ACL fence is bound to the exact source scope and policy digest.",
+      "gate": "Run WinCreator distill_check verify against the captured snapshot and separately frozen SHA-256 before simplifying the source.",
+      "row_sha256": "edc126372ae21aae35b88f3b07d632ae629b5e382d3101660005b93578be33f4",
+      "ledger_sha256_before": "f647a2682dd257b17b288b8eeeb2ef96773e3845aa5bfae49d1779a66b95bd0c",
+      "status_before": "CLAIMED"
+    },
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "command": [
+      "python3",
+      "/home/wina/.agents/skills/wincreator/scripts/distill_check.py",
+      "verify",
+      "--snapshot",
+      "/tmp/winseo-gsc-distill-before.json",
+      "--expect-digest",
+      "a9c1543b9fffea12fbe1aef7e25d1e327718428ed510e477f312e94d3e8ed835"
+    ],
+    "stdout": {
+      "sha256": "2c045833937d185b0886247c3fec526f8b0bfda8ee898efb1f82c7c2f5722b85",
+      "original_bytes": 119,
+      "stored_bytes": 119,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "[VERIFIED] /tmp/winseo-gsc-distill-before.json sha256=a9c1543b9fffea12fbe1aef7e25d1e327718428ed510e477f312e94d3e8ed835\n"
+    },
+    "stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "files": [
+      {
+        "path": "/tmp/winseo-gsc-distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "bc615142e7f1c30e85dee0630e92f6115bd9c5b5bf99433c8abc040494b506bd",
+        "bytes": 4504
+      },
+      {
+        "path": "packages/db/migrations/0019w_gsc_effective_acl_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab",
+        "bytes": 4715
+      },
+      {
+        "path": "packages/db/migrations/0024_restore_gsc_acl_baseline.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "dc8b495a68fdf8070f6a762018a4dd8e64ce403174d94cd47c4146607f8f6a54",
+        "bytes": 1186
+      },
+      {
+        "path": "packages/db/src/gsc-claim-order-migration.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7a40807960088c1a3830edad4682826d88d54778d51bee755688b33ca7fa1bbc",
+        "bytes": 19013
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "27705eca57ff1f208bddbbe6eb95b3663a3c603be34b39b3dc9584ce05236f8c",
+      "worktree_digest": "ac0d1b7f855dd3de4114c01557b1a25e28ef031a66dbed338c44eb0448eac413"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "5e09870edc3cda870db0e55627157dbdaee9befe4500aee2a10045d4c8956ad4"
+}

@@ -27,11 +27,7 @@ function JsonView({ value }: { value: Record<string, unknown> | null }) {
 }
 
 /** Baseline vs measured rows per metric, from the GSC remeasurement. */
-function ComparisonRows({
-  comparison,
-}: {
-  comparison: NonNullable<GscBeforeAfter["comparison"]>;
-}) {
+function ComparisonRows({ comparison }: { comparison: NonNullable<GscBeforeAfter["comparison"]> }) {
   return (
     <>
       {(["clicks", "impressions", "ctr", "position"] as const).map((metric) => {
@@ -154,7 +150,10 @@ export default async function ActionDetailPage({
         </div>
       </section>
 
-      <section className="rounded-lg border border-line bg-panel p-5" aria-label="GSC remeasurement">
+      <section
+        className="rounded-lg border border-line bg-panel p-5"
+        aria-label="GSC remeasurement"
+      >
         <h2 className="font-semibold">GSC before / after (measured)</h2>
         {gscNote && <p className="mt-2 text-sm text-slate-700">{gscNote}</p>}
         {gsc && (
@@ -177,10 +176,18 @@ export default async function ActionDetailPage({
                   </caption>
                   <thead>
                     <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                      <th scope="col" className="py-2 pr-4">Metric</th>
-                      <th scope="col" className="py-2 pr-4 text-right">Baseline</th>
-                      <th scope="col" className="py-2 pr-4 text-right">Measured</th>
-                      <th scope="col" className="py-2 text-right">Delta</th>
+                      <th scope="col" className="py-2 pr-4">
+                        Metric
+                      </th>
+                      <th scope="col" className="py-2 pr-4 text-right">
+                        Baseline
+                      </th>
+                      <th scope="col" className="py-2 pr-4 text-right">
+                        Measured
+                      </th>
+                      <th scope="col" className="py-2 text-right">
+                        Delta
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -190,7 +197,8 @@ export default async function ActionDetailPage({
                 <p className="mt-2 text-xs text-slate-700">
                   Evidence class <strong>MEASURED</strong> · dataset window{" "}
                   <span className="font-mono">
-                    {gsc.comparison.datasetWindow.startDate} → {gsc.comparison.datasetWindow.endDate}
+                    {gsc.comparison.datasetWindow.startDate} →{" "}
+                    {gsc.comparison.datasetWindow.endDate}
                   </span>{" "}
                   · freshness: latest measured day {gsc.freshness.latestMetricDate ?? "—"}
                 </p>

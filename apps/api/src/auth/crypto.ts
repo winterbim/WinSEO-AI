@@ -18,10 +18,7 @@ function hashWithSalt(password: string, salt: string): Promise<string> {
   });
 }
 
-export async function verifyPassword(
-  password: string,
-  stored: string,
-): Promise<boolean> {
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [salt, hash] = stored.split(":");
   if (!salt || !hash) return false;
   const computed = await hashWithSalt(password, salt);

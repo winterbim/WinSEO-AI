@@ -31,9 +31,42 @@ export function projectRoutes(app: FastifyInstance) {
       });
     }
 
+    const idempotencyHeader = request.headers["idempotency-key"];
+    if (idempotencyHeader !== undefined && typeof idempotencyHeader !== "string") {
+      return reply.status(400).send({
+        error: { code: "INVALID_IDEMPOTENCY_KEY", message: "Idempotency-Key must be a UUID." },
+      });
+    }
+    const parsedIdempotencyKey =
+      idempotencyHeader === undefined ? null : z.uuid().safeParse(idempotencyHeader);
+    if (parsedIdempotencyKey && !parsedIdempotencyKey.success) {
+      return reply.status(400).send({
+        error: { code: "INVALID_IDEMPOTENCY_KEY", message: "Idempotency-Key must be a UUID." },
+      });
+    }
+
+    const name = body.name ?? body.primaryDomain;
+    if (parsedIdempotencyKey?.success) {
+      const result = await app.stores.projects.createProjectWithIdempotencyKey(
+        body.organizationId,
+        name,
+        body.primaryDomain,
+        parsedIdempotencyKey.data.toLowerCase(),
+      );
+      if (result.kind === "conflict") {
+        return reply.status(409).send({
+          error: {
+            code: "IDEMPOTENCY_KEY_REUSED",
+            message: "This idempotency key was already used for a different project.",
+          },
+        });
+      }
+      return reply.status(result.kind === "created" ? 201 : 200).send({ project: result.project });
+    }
+
     const project = await app.stores.projects.createProject(
       body.organizationId,
-      body.name ?? body.primaryDomain,
+      name,
       body.primaryDomain,
     );
 

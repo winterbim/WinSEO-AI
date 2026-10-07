@@ -4,15 +4,28 @@
   "title": "Experiment",
   "description": "A controlled change experiment with verification gates. Ported from NEXUS Search Intelligence v0.1.0.",
   "type": "object",
-  "required": ["id", "project_id", "action_id", "hypothesis", "baseline_window", "measurement_window"],
+  "required": [
+    "id",
+    "project_id",
+    "action_id",
+    "hypothesis",
+    "baseline_window",
+    "measurement_window"
+  ],
   "properties": {
     "id": { "type": "string", "format": "uuid" },
     "project_id": { "type": "string", "format": "uuid" },
     "action_id": { "type": "string", "format": "uuid" },
     "hypothesis": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
-    "baseline_window": { "type": "string", "description": "ISO 8601 duration or date range for baseline measurement" },
-    "measurement_window": { "type": "string", "description": "ISO 8601 duration or date range for post-change measurement" },
+    "baseline_window": {
+      "type": "string",
+      "description": "ISO 8601 duration or date range for baseline measurement"
+    },
+    "measurement_window": {
+      "type": "string",
+      "description": "ISO 8601 duration or date range for post-change measurement"
+    },
     "confounders": {
       "type": "array",
       "items": { "type": "string" },
@@ -40,7 +53,16 @@
       "items": {
         "type": "object",
         "properties": {
-          "gate_type": { "type": "string", "enum": ["recrawl_rule_absent", "gsc_window", "ai_search_rerun", "indexation_check", "custom"] },
+          "gate_type": {
+            "type": "string",
+            "enum": [
+              "recrawl_rule_absent",
+              "gsc_window",
+              "ai_search_rerun",
+              "indexation_check",
+              "custom"
+            ]
+          },
           "spec": { "type": "object" },
           "expected_verdict": { "type": "string" }
         }
@@ -48,7 +70,15 @@
     },
     "status": {
       "type": "string",
-      "enum": ["planned", "running", "measuring", "verifying", "completed", "inconclusive", "rejected"]
+      "enum": [
+        "planned",
+        "running",
+        "measuring",
+        "verifying",
+        "completed",
+        "inconclusive",
+        "rejected"
+      ]
     },
     "verdict": {
       "type": "string",

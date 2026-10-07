@@ -25,9 +25,10 @@ interface Recorded {
   headers: Record<string, string>;
 }
 
-function stubFetch(
-  responses: { status: number; body: unknown }[],
-): { fetchFn: (url: string, init?: RequestInit) => Promise<Response>; calls: Recorded[] } {
+function stubFetch(responses: { status: number; body: unknown }[]): {
+  fetchFn: (url: string, init?: RequestInit) => Promise<Response>;
+  calls: Recorded[];
+} {
   const calls: Recorded[] = [];
   const queue = [...responses];
   const fetchFn = (url: string, init?: RequestInit): Promise<Response> => {
@@ -35,9 +36,7 @@ function stubFetch(
       url,
       method: init?.method ?? "GET",
       body: typeof init?.body === "string" ? init.body : "",
-      headers: Object.fromEntries(
-        Object.entries((init?.headers ?? {}) as Record<string, string>),
-      ),
+      headers: Object.fromEntries(Object.entries((init?.headers ?? {}) as Record<string, string>)),
     });
     const next = queue.shift() ?? queue.at(-1) ?? { status: 200, body: {} };
     return Promise.resolve(
@@ -142,7 +141,10 @@ void describe("GSC wire — OAuth token endpoints", () => {
 
   void it("classifies invalid_grant as UNAUTHORIZED (revoked refresh token)", async () => {
     const { fetchFn } = stubFetch([
-      { status: 400, body: { error: "invalid_grant", error_description: "Token has been revoked." } },
+      {
+        status: 400,
+        body: { error: "invalid_grant", error_description: "Token has been revoked." },
+      },
     ]);
     const transport = new HttpGoogleTransport(fetchFn);
     await assert.rejects(
@@ -196,7 +198,13 @@ void describe("GSC wire — Search Console endpoints", () => {
         body: {
           rows: [
             {
-              keys: ["2026-09-15", "evidence seo", "https://example.com/evidence", "fra", "DESKTOP"],
+              keys: [
+                "2026-09-15",
+                "evidence seo",
+                "https://example.com/evidence",
+                "fra",
+                "DESKTOP",
+              ],
               clicks: 4,
               impressions: 40,
               ctr: 0.1,
@@ -215,17 +223,13 @@ void describe("GSC wire — Search Console endpoints", () => {
       },
     ]);
     const transport = new HttpGoogleTransport(fetchFn);
-    const response = await transport.querySearchAnalytics(
-      "ya29.wire",
-      "sc-domain:example.com",
-      {
-        startDate: "2026-09-01",
-        endDate: "2026-09-30",
-        dimensions: ["date", "query", "page", "country", "device"],
-        rowLimit: 25_000,
-        startRow: 0,
-      },
-    );
+    const response = await transport.querySearchAnalytics("ya29.wire", "sc-domain:example.com", {
+      startDate: "2026-09-01",
+      endDate: "2026-09-30",
+      dimensions: ["date", "query", "page", "country", "device"],
+      rowLimit: 25_000,
+      startRow: 0,
+    });
 
     const requestBody = JSON.parse(calls[0]?.body ?? "{}") as Record<string, unknown>;
     assert.deepEqual(requestBody, {

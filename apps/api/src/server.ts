@@ -17,9 +17,12 @@ import type { ApiStores } from "./stores/types.ts";
 import {
   createStores,
   resolveStoreDriver,
+  assertStoreDriverAllowed,
   type CreateStoresOptions,
   type StoreDriver,
 } from "./stores/index.ts";
+import { inspectDatabaseReadiness, type DatabaseReadiness } from "./stores/db.ts";
+import { isReadinessReady, type ReadinessChecks } from "./stores/readiness.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { orgRoutes } from "./routes/organizations.ts";
 import { projectRoutes } from "./routes/projects.ts";
@@ -61,6 +64,17 @@ export interface BuildAppOptions extends CreateStoresOptions {
   auditDomain?: typeof auditDomain;
   /** Test-only site/CMS simulator used by the proven-patch flow. */
   fixturePageAdapter?: FixturePageAdapter;
+  /** Database readiness seam for deterministic tests; never available in production. */
+  databaseReadiness?: () => Promise<DatabaseReadiness>;
+}
+
+export function assertDatabaseReadinessOverrideAllowed(
+  nodeEnv: string,
+  hasOverride: boolean,
+): void {
+  if (nodeEnv === "production" && hasOverride) {
+    throw new Error("Database readiness overrides are disabled in production.");
+  }
 }
 
 export async function buildApp(opts: BuildAppOptions = {}) {
@@ -70,6 +84,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
   if (config.nodeEnv === "production" && opts.auditDomain) {
     throw new Error("Audit runner overrides are disabled in production.");
   }
+  assertDatabaseReadinessOverrideAllowed(config.nodeEnv, Boolean(opts.databaseReadiness));
   const app = Fastify({
     logger: { level: config.nodeEnv === "production" ? "info" : "debug" },
     // TRUST_PROXY=true is REQUIRED behind a reverse proxy/load balancer:
@@ -81,6 +96,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
 
   // ─── Stores: production=postgres (RLS), tests=memory (explicit) ───
   const storeDriver = opts.driver ?? resolveStoreDriver();
+  assertStoreDriverAllowed(storeDriver, config.nodeEnv);
   app.decorate("stores", createStores({ ...opts, driver: storeDriver }));
   app.decorate("fixturePageAdapter", opts.fixturePageAdapter ?? null);
   app.decorate("gscTransport", opts.gscTransport ?? new HttpGoogleTransport());
@@ -170,7 +186,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       return;
     }
 
-    if (status === 400 || status === 404 || status === 409) {
+    if (status === 400 || status === 404 || status === 409 || status === 413) {
       void reply.status(status).send({
         error: { code: error.code ?? "BAD_REQUEST", message: error.message },
       });
@@ -185,7 +201,34 @@ export async function buildApp(opts: BuildAppOptions = {}) {
     void reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Internal error" } });
   });
 
+  // Liveness only: a live process should not be restarted because a dependency
+  // is temporarily unavailable. Load balancers should use /ready for routing.
   app.get("/health", () => ({ status: "ok", version: "0.1.0" }));
+  app.get("/ready", async (_request, reply) => {
+    const checks: ReadinessChecks =
+      storeDriver === "postgres"
+        ? {
+            coreConfiguration: "valid",
+            store: storeDriver,
+            ...(await (opts.databaseReadiness ?? inspectDatabaseReadiness)()),
+          }
+        : {
+            coreConfiguration: "valid",
+            store: storeDriver,
+            database: "not_required",
+            requiredSchemaChecks: "not_required",
+            migrationState: "not_required",
+            latestMigration: null,
+            requiredMigration: null,
+            verifiedSchemaMarkers: [],
+            requiredSchemaMarkers: [],
+          };
+    const ready = isReadinessReady(checks);
+    return reply.status(ready ? 200 : 503).send({
+      status: ready ? "ready" : "not_ready",
+      checks,
+    });
+  });
   await app.register(authRoutes, { prefix: "/v1/auth" });
   await app.register(mfaRoutes, { prefix: "/v1/auth/mfa" });
   await app.register(orgRoutes, { prefix: "/v1/organizations" });

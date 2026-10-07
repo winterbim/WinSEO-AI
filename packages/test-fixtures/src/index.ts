@@ -21,12 +21,20 @@ export const SSRF_CORPUS: SsrfTestCase[] = [
   { url: "http://192.168.1.1:8080", description: "192.168.0.0/16", mustBeBlocked: true },
 
   // Link-local
-  { url: "http://169.254.169.254/latest/meta-data/", description: "AWS metadata endpoint", mustBeBlocked: true },
+  {
+    url: "http://169.254.169.254/latest/meta-data/",
+    description: "AWS metadata endpoint",
+    mustBeBlocked: true,
+  },
   { url: "http://169.254.169.254", description: "Link-local range", mustBeBlocked: true },
 
   // Cloud metadata
   { url: "http://metadata.google.internal", description: "GCP metadata", mustBeBlocked: true },
-  { url: "http://169.254.169.254/computeMetadata/v1/", description: "GCP metadata IP", mustBeBlocked: true },
+  {
+    url: "http://169.254.169.254/computeMetadata/v1/",
+    description: "GCP metadata IP",
+    mustBeBlocked: true,
+  },
 
   // CGNAT
   { url: "http://100.64.0.1:8080", description: "100.64.0.0/10 (CGNAT)", mustBeBlocked: true },
@@ -40,7 +48,11 @@ export const SSRF_CORPUS: SsrfTestCase[] = [
   { url: "gopher://localhost:70", description: "gopher:// protocol", mustBeBlocked: true },
 
   // Embedded credentials
-  { url: "http://admin:password@example.com", description: "URL with credentials", mustBeBlocked: true },
+  {
+    url: "http://admin:password@example.com",
+    description: "URL with credentials",
+    mustBeBlocked: true,
+  },
 ];
 
 // ─── Safe URLs (should NOT be blocked) ───

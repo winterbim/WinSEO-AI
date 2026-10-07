@@ -48,40 +48,36 @@ const intelligenceQuery = filtersQuery.extend({
   baselineEnd: isoDate.optional(),
 });
 
-const metricValue = z.union([z.string(), z.number(), z.boolean()]);
-const recommendationSchema = z.object({
-  module: z.string().min(1).max(64),
+const promotionSelectorSchema = z.object({
+  module: z.enum([
+    "high_impressions_low_ctr",
+    "ranking_opportunity",
+    "page_query_decay",
+    "query_cannibalization",
+    "emerging_queries",
+    "winners_losers",
+    "page_query_intersections",
+  ]),
   subject: z.object({
     query: z.string().max(500).optional(),
     page: z.string().max(2000).optional(),
     device: z.string().max(16).optional(),
     country: z.string().max(8).optional(),
+    property: z.string().max(500).optional(),
   }),
-  title: z.string().min(1).max(500),
-  rationale: z.string().max(4000),
-  datasetWindow: z.object({ startDate: isoDate, endDate: isoDate }),
-  filters: z.record(z.string(), metricValue),
-  comparisonWindow: z.object({ startDate: isoDate, endDate: isoDate }).optional(),
-  observed: z.record(z.string(), metricValue),
-  baseline: z.record(z.string(), metricValue).optional(),
-  delta: z.record(z.string(), z.number()).optional(),
-  // Hard integrity requirements: nothing but a measurement may become a finding,
-  // and only the declared GSC gate may verify it.
-  evidenceClass: z.literal("MEASURED"),
-  verificationGate: z.object({
-    type: z.literal("gsc_window"),
-    spec: z.object({
-      metric: z.enum(["ctr", "clicks", "impressions", "position"]),
-      operator: z.enum(["gte", "lte"]),
-      threshold: z.number(),
+  sourceFilters: z
+    .object({
       query: z.string().max(500).optional(),
       page: z.string().max(2000).optional(),
-      minImpressions: z.number().min(0),
-      windowDays: z.number().int().min(1).max(366),
-    }),
-  }),
-  severity: z.enum(["critical", "high", "medium", "low", "info"]),
+      device: z.enum(["DESKTOP", "MOBILE", "TABLET"]).optional(),
+      country: z.string().max(8).optional(),
+    })
+    .optional(),
+  datasetWindow: z.object({ startDate: isoDate, endDate: isoDate }),
+  comparisonWindow: z.object({ startDate: isoDate, endDate: isoDate }).optional(),
 });
+
+const BASELINE_MODULES = new Set(["page_query_decay", "emerging_queries", "winners_losers"]);
 
 type Filters = z.infer<typeof filtersQuery>;
 
@@ -92,10 +88,41 @@ function sendError(reply: FastifyReply, status: number, code: string, message: s
 function windowError(window: { startDate: string; endDate: string }): string | null {
   const start = Date.parse(`${window.startDate}T00:00:00Z`);
   const end = Date.parse(`${window.endDate}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return "Malformed date.";
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    new Date(start).toISOString().slice(0, 10) !== window.startDate ||
+    new Date(end).toISOString().slice(0, 10) !== window.endDate
+  ) {
+    return "Malformed date.";
+  }
   if (end < start) return "endDate must not precede startDate.";
   if ((end - start) / 86_400_000 > 366) return "Window exceeds 366 days.";
   return null;
+}
+
+function nextIsoDate(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+}
+
+function hasCompletedWindowCoverage(
+  jobs: Awaited<ReturnType<GscStore["listJobs"]>>,
+  window: { startDate: string; endDate: string },
+  connectionId: string,
+): boolean {
+  let nextUncoveredDate = window.startDate;
+  const completed = jobs
+    .filter((job) => job.status === "COMPLETED")
+    .filter((job) => job.connectionId === connectionId)
+    .filter((job) => job.windowEnd >= window.startDate && job.windowStart <= window.endDate)
+    .sort((a, b) => a.windowStart.localeCompare(b.windowStart));
+
+  for (const job of completed) {
+    if (job.windowStart > nextUncoveredDate) return false;
+    if (job.windowEnd >= window.endDate) return true;
+    if (job.windowEnd >= nextUncoveredDate) nextUncoveredDate = nextIsoDate(job.windowEnd);
+  }
+  return false;
 }
 
 function toFilters(q: Filters): {
@@ -111,6 +138,49 @@ function toFilters(q: Filters): {
     ...(q.country ? { country: q.country } : {}),
   };
 }
+
+/** Preserve dataset-level device/country scope in both the claim and its gate. */
+function bindRecommendationScope(
+  recommendations: MeasuredRecommendation[],
+  filters: ReturnType<typeof toFilters>,
+  property: { id: string; externalProperty: string },
+): MeasuredRecommendation[] {
+  return recommendations.map((recommendation) => {
+    const subject = {
+      ...recommendation.subject,
+      ...(filters.device ? { device: filters.device } : {}),
+      ...(filters.country ? { country: filters.country } : {}),
+      property: property.externalProperty,
+    };
+    return {
+      ...recommendation,
+      subject,
+      verificationGate: {
+        ...recommendation.verificationGate,
+        spec: {
+          ...recommendation.verificationGate.spec,
+          ...(filters.device ? { device: filters.device } : {}),
+          ...(filters.country ? { country: filters.country } : {}),
+          connectionId: property.id,
+        },
+      },
+    };
+  });
+}
+
+async function connectedProperty(
+  gsc: GscStore,
+  organizationId: string,
+  projectId: string,
+): Promise<{ id: string; externalProperty: string } | null> {
+  const connections = await gsc.listConnections(organizationId, projectId);
+  const active = connections.filter((connection) => connection.status === "CONNECTED");
+  if (active.length !== 1) return null;
+  const connection = active[0];
+  return connection ? { id: connection.id, externalProperty: connection.externalProperty } : null;
+}
+
+const NO_CONNECTED_PROPERTY = "00000000-0000-0000-0000-000000000000";
 
 /** Baseline defaults to the same length immediately before the measurement window. */
 function deriveBaselineWindow(
@@ -177,20 +247,25 @@ export function gscDataRoutes(app: FastifyInstance) {
     if (problem) return await sendError(reply, 400, "INVALID_WINDOW", problem);
 
     const window = { startDate: query.data.startDate, endDate: query.data.endDate };
-    const series = await gsc.metricSeries(
-      organizationId,
-      project.id,
-      window,
-      toFilters(query.data),
-    );
+    const property = await connectedProperty(gsc, organizationId, project.id);
+    const measurementFilters = {
+      ...toFilters(query.data),
+      connectionId: property?.id ?? NO_CONNECTED_PROPERTY,
+    };
+    const series = await gsc.metricSeries(organizationId, project.id, window, measurementFilters);
     const clicks = series.reduce((sum, p) => sum + p.clicks, 0);
     const impressions = series.reduce((sum, p) => sum + p.impressions, 0);
     const weightedPosition = series.reduce((sum, p) => sum + p.position * p.impressions, 0);
-    const freshness = await gsc.metricFreshness(organizationId, project.id);
+    const freshness = await gsc.metricFreshness(
+      organizationId,
+      project.id,
+      property?.id ?? NO_CONNECTED_PROPERTY,
+    );
 
     return await reply.send({
       window,
       filters: toFilters(query.data),
+      property: property?.externalProperty ?? null,
       totals: {
         clicks,
         impressions,
@@ -223,14 +298,23 @@ export function gscDataRoutes(app: FastifyInstance) {
     if (problem) return await sendError(reply, 400, "INVALID_WINDOW", problem);
 
     const window = { startDate: query.data.startDate, endDate: query.data.endDate };
-    const rows = await gsc.loadMetricRows(organizationId, project.id, window, toFilters(query.data));
+    const property = await connectedProperty(gsc, organizationId, project.id);
+    const rows = await gsc.loadMetricRows(organizationId, project.id, window, {
+      ...toFilters(query.data),
+      connectionId: property?.id ?? NO_CONNECTED_PROPERTY,
+    });
     const limit = query.data.limit ? Math.min(Number(query.data.limit), 1000) : 100;
     const grouped = summarizeByDimension(rows, query.data.dimension).slice(0, limit);
-    const freshness = await gsc.metricFreshness(organizationId, project.id);
+    const freshness = await gsc.metricFreshness(
+      organizationId,
+      project.id,
+      property?.id ?? NO_CONNECTED_PROPERTY,
+    );
 
     return await reply.send({
       window,
       filters: toFilters(query.data),
+      property: property?.externalProperty ?? null,
       dimension: query.data.dimension,
       rows: grouped,
       totalGroups: grouped.length,
@@ -259,35 +343,74 @@ export function gscDataRoutes(app: FastifyInstance) {
     if (problem) return await sendError(reply, 400, "INVALID_WINDOW", problem);
 
     const window = { startDate: query.data.startDate, endDate: query.data.endDate };
-    const baseline = deriveBaselineWindow(
-      window,
-      query.data.baselineStart,
-      query.data.baselineEnd,
-    );
+    const baseline = deriveBaselineWindow(window, query.data.baselineStart, query.data.baselineEnd);
     const filters = toFilters(query.data);
-    const current = await gsc.loadMetricRows(organizationId, project.id, window, filters);
+    const property = await connectedProperty(gsc, organizationId, project.id);
+    if (!property) {
+      return await sendError(
+        reply,
+        409,
+        "GSC_PROPERTY_NOT_CONNECTED",
+        "Connect exactly one Search Console property to this project before measuring recommendations.",
+      );
+    }
+    const measurementFilters = { ...filters, connectionId: property.id };
     const needsBaseline =
       !query.data.module ||
       ["page_query_decay", "emerging_queries", "winners_losers", "pre_post_comparison"].includes(
         query.data.module,
       );
+    if (needsBaseline) {
+      const invalidBaseline = windowError(baseline);
+      if (invalidBaseline) {
+        return await sendError(reply, 400, "INVALID_COMPARISON_WINDOW", invalidBaseline);
+      }
+    }
+    const jobs = await gsc.listJobs(organizationId, project.id);
+    if (!hasCompletedWindowCoverage(jobs, window, property.id)) {
+      return await sendError(
+        reply,
+        409,
+        "MEASUREMENT_WINDOW_NOT_SYNCED",
+        "The requested Search Console window is not completely synchronized. Sync it before using its measurements.",
+      );
+    }
+    if (needsBaseline && !hasCompletedWindowCoverage(jobs, baseline, property.id)) {
+      return await sendError(
+        reply,
+        409,
+        "COMPARISON_WINDOW_NOT_SYNCED",
+        "The comparison window is not completely synchronized. Missing data is not evidence of zero impressions; sync it before comparing periods.",
+      );
+    }
+    const current = await gsc.loadMetricRows(
+      organizationId,
+      project.id,
+      window,
+      measurementFilters,
+    );
     const baselineRows = needsBaseline
-      ? await gsc.loadMetricRows(organizationId, project.id, baseline, filters)
+      ? await gsc.loadMetricRows(organizationId, project.id, baseline, measurementFilters)
       : [];
 
-    const recommendations = runModules(query.data.module, {
-      current,
-      baseline: baselineRows,
-      window,
-      baselineWindow: baseline,
-    });
-    const freshness = await gsc.metricFreshness(organizationId, project.id);
+    const recommendations = bindRecommendationScope(
+      runModules(query.data.module, {
+        current,
+        baseline: baselineRows,
+        window,
+        baselineWindow: baseline,
+      }),
+      filters,
+      property,
+    );
+    const freshness = await gsc.metricFreshness(organizationId, project.id, property.id);
 
     return await reply.send({
       module: query.data.module ?? "all",
       window,
       comparisonWindow: baseline,
       filters,
+      property: property.externalProperty,
       recommendations,
       counts: {
         total: recommendations.length,
@@ -299,103 +422,226 @@ export function gscDataRoutes(app: FastifyInstance) {
     });
   });
 
-  // ─── Promote a recommendation to a MEASURED finding + DETECTED action ───
+  // ─── Promote a recommendation after recomputing it from persisted GSC rows ───
   app.post("/projects/:projectId/gsc/findings", async (request, reply) => {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
-    if (!requirePermission(request, reply, "project.read")) return;
+    if (!requirePermission(request, reply, "action.approve")) return;
     const gsc = requireStore(reply);
     if (!gsc) return;
 
     const params = z.object({ projectId: z.uuid() }).safeParse(request.params);
     if (!params.success) return await sendError(reply, 404, "NOT_FOUND", "Project not found.");
-    const body = recommendationSchema.safeParse(request.body);
+    const body = promotionSelectorSchema.safeParse(request.body);
     if (!body.success) {
       return await sendError(
         reply,
         400,
         "VALIDATION_ERROR",
-        "Recommendation must be a MEASURED GSC observation with a gsc_window gate.",
+        "A recommendation module, subject, and measured date window are required.",
       );
     }
     const project = await requireProject(organizationId, params.data.projectId, reply);
     if (!project) return;
-    const rec = body.data as MeasuredRecommendation;
+
+    const property = await connectedProperty(gsc, organizationId, project.id);
+    if (!property) {
+      return await sendError(
+        reply,
+        409,
+        "GSC_PROPERTY_NOT_CONNECTED",
+        "Connect exactly one Search Console property to this project before promoting a recommendation.",
+      );
+    }
+
+    const window = body.data.datasetWindow;
+    const invalidWindow = windowError(window);
+    if (invalidWindow) {
+      return await sendError(reply, 400, "INVALID_WINDOW", invalidWindow);
+    }
+    const needsBaseline = BASELINE_MODULES.has(body.data.module);
+    if (needsBaseline && !body.data.comparisonWindow) {
+      return await sendError(
+        reply,
+        400,
+        "INVALID_COMPARISON_WINDOW",
+        "This recommendation requires its measured comparison window.",
+      );
+    }
+    const baselineWindow =
+      body.data.comparisonWindow ?? deriveBaselineWindow(window, undefined, undefined);
+    if (body.data.comparisonWindow) {
+      const invalidBaseline = windowError(body.data.comparisonWindow);
+      if (invalidBaseline) {
+        return await sendError(reply, 400, "INVALID_COMPARISON_WINDOW", invalidBaseline);
+      }
+    }
+
+    const jobs = await gsc.listJobs(organizationId, project.id);
+    if (!hasCompletedWindowCoverage(jobs, window, property.id)) {
+      return await sendError(
+        reply,
+        409,
+        "MEASUREMENT_WINDOW_NOT_SYNCED",
+        "The current Search Console window has not been completely synchronized. Sync it, then refresh the analysis.",
+      );
+    }
+    if (needsBaseline && !hasCompletedWindowCoverage(jobs, baselineWindow, property.id)) {
+      return await sendError(
+        reply,
+        409,
+        "COMPARISON_WINDOW_NOT_SYNCED",
+        "The comparison window has not been completely synchronized. Its absence cannot be treated as zero; sync it, then refresh the analysis.",
+      );
+    }
+
+    const sourceFilters = body.data.sourceFilters ?? {};
+    const measurementFilters = { ...sourceFilters, connectionId: property.id };
+    const sourceProperty = {
+      connectionId: property.id,
+      externalProperty: property.externalProperty,
+    };
+    const current = await gsc.loadMetricRows(
+      organizationId,
+      project.id,
+      window,
+      measurementFilters,
+    );
+    const baseline = needsBaseline
+      ? await gsc.loadMetricRows(organizationId, project.id, baselineWindow, measurementFilters)
+      : [];
+    const candidates = bindRecommendationScope(
+      runModules(body.data.module, {
+        current,
+        baseline,
+        window,
+        baselineWindow,
+      }),
+      sourceFilters,
+      property,
+    );
+    const subjectKey = (subject: MeasuredRecommendation["subject"]) =>
+      JSON.stringify(Object.entries(subject).sort(([a], [b]) => a.localeCompare(b)));
+    const rec = candidates.find(
+      (candidate) => subjectKey(candidate.subject) === subjectKey(body.data.subject),
+    );
+    if (!rec) {
+      return await sendError(
+        reply,
+        409,
+        "MEASUREMENT_STALE",
+        "This recommendation is no longer present in the project's persisted Search Console data. Refresh the analysis and try again.",
+      );
+    }
+
+    const canonicalMetricRows = (rows: Awaited<ReturnType<GscStore["loadMetricRows"]>>) =>
+      rows
+        .map((row) => ({
+          date: row.date,
+          query: row.query,
+          page: row.page,
+          country: row.country,
+          device: row.device,
+          clicks: row.clicks,
+          impressions: row.impressions,
+          ctr: row.ctr,
+          position: row.position,
+        }))
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    const sourceRows = {
+      current: canonicalMetricRows(current),
+      baseline: canonicalMetricRows(baseline),
+    };
+    const measurementSource = {
+      sha256: createHash("sha256")
+        .update(JSON.stringify({ sourceProperty, sourceRows }))
+        .digest("hex"),
+      sourceProperty,
+      currentRowCount: sourceRows.current.length,
+      baselineRowCount: sourceRows.baseline.length,
+    };
 
     const ruleId = recommendationRuleId(rec);
     const affectedUrl = rec.subject.page ?? `https://${project.primaryDomain}`;
 
-    // One open workflow per (rule, subject): re-running intelligence must not
-    // spawn duplicate actions for the same measured claim.
-    const existing = await app.stores.crawl.listFindings(organizationId, project.id);
-    const duplicate = existing.find(
-      (f) => f.ruleId === ruleId && f.affectedUrls.includes(affectedUrl) && f.status !== "resolved",
-    );
-    if (duplicate) {
-      return await reply.send({
-        created: false,
-        findingId: duplicate.id,
-        ruleId,
-        reason: "an equivalent measured finding is already open",
-      });
-    }
-
-    // Canonical payload → content hash: the evidence can be re-derived and
-    // compared byte-for-byte against what the gate will later read.
+    // Canonical server-derived payload → hash. Nothing claimed by the browser
+    // about title, rationale, observed values, severity, or gate is persisted.
     const canonical = JSON.stringify({
       module: rec.module,
       subject: rec.subject,
+      sourceProperty,
       datasetWindow: rec.datasetWindow,
+      sourceFilters,
       filters: rec.filters,
       comparisonWindow: rec.comparisonWindow ?? null,
+      baseline: rec.baseline ?? null,
+      delta: rec.delta ?? null,
+      measurementSource,
       observed: rec.observed,
       evidenceClass: rec.evidenceClass,
       verificationGate: rec.verificationGate,
     });
     const contentHash = createHash("sha256").update(canonical).digest("hex");
 
-    const finding = await app.stores.crawl.addFinding(organizationId, project.id, {
-      ruleId,
-      ruleVersion: "1.0.0",
-      title: rec.title,
-      epistemicClass: "MEASURED",
-      severity: rec.severity,
-      explanation: rec.rationale,
-      recommendation: rec.title,
-      affectedUrls: [affectedUrl],
-      verificationGate: rec.verificationGate.type,
-    });
-    const evidence = await app.stores.crawl.addEvidence(organizationId, project.id, {
-      kind: "gsc_data",
-      sourceRef: `gsc://search-analytics?start=${rec.datasetWindow.startDate}&end=${rec.datasetWindow.endDate}&rule=${encodeURIComponent(ruleId)}`,
-      contentHash,
-      objectKey: `${organizationId}/${project.id}/gsc_data/${contentHash}`,
-      metadata: {
-        evidenceClass: rec.evidenceClass,
-        module: rec.module,
-        subject: rec.subject,
-        datasetWindow: rec.datasetWindow,
-        filters: rec.filters,
-        comparisonWindow: rec.comparisonWindow ?? null,
-        observed: rec.observed,
-        baseline: rec.baseline ?? null,
-        delta: rec.delta ?? null,
-        verificationGate: rec.verificationGate,
-        rationale: rec.rationale,
-      },
-    });
-    await app.stores.crawl.linkFindingEvidence(organizationId, finding.id, evidence.id);
-    const action = await app.stores.crawl.createDetectedAction(
+    const workflow = await app.stores.crawl.createMeasuredGscWorkflow(
       organizationId,
       project.id,
-      finding.id,
+      {
+        ruleId,
+        ruleVersion: "1.0.0",
+        title: rec.title,
+        epistemicClass: "MEASURED",
+        severity: rec.severity,
+        explanation: rec.rationale,
+        recommendation: rec.title,
+        affectedUrls: [affectedUrl],
+        verificationGate: rec.verificationGate.type,
+      },
+      {
+        kind: "gsc_data",
+        sourceRef: `gsc://search-analytics?start=${rec.datasetWindow.startDate}&end=${rec.datasetWindow.endDate}&rule=${encodeURIComponent(ruleId)}`,
+        contentHash,
+        objectKey: `${organizationId}/${project.id}/gsc_data/${contentHash}`,
+        metadata: {
+          evidenceClass: rec.evidenceClass,
+          module: rec.module,
+          subject: rec.subject,
+          datasetWindow: rec.datasetWindow,
+          sourceFilters,
+          sourceProperty,
+          filters: rec.filters,
+          comparisonWindow: rec.comparisonWindow ?? null,
+          measurementSource,
+          observed: rec.observed,
+          baseline: rec.baseline ?? null,
+          delta: rec.delta ?? null,
+          verificationGate: rec.verificationGate,
+          rationale: rec.rationale,
+        },
+      },
     );
+
+    if (!workflow.created) {
+      return await reply.send({
+        created: false,
+        updated: workflow.updated,
+        findingId: workflow.findingId,
+        evidenceId: workflow.evidenceId,
+        actionId: workflow.actionId,
+        ruleId,
+        contentHash,
+        reason: workflow.updated
+          ? "the open finding was refreshed with current measured evidence"
+          : "an equivalent measured finding is already open",
+      });
+    }
 
     return await reply.status(201).send({
       created: true,
-      findingId: finding.id,
-      evidenceId: evidence.id,
-      actionId: action.id,
+      updated: false,
+      findingId: workflow.findingId,
+      evidenceId: workflow.evidenceId,
+      actionId: workflow.actionId,
       ruleId,
       contentHash,
       epistemicClass: "MEASURED",
@@ -428,6 +674,19 @@ export function gscDataRoutes(app: FastifyInstance) {
         "This action has no declared GSC gate yet (propose it first).",
       );
     }
+    const connectionId = z.uuid().safeParse(spec.connectionId);
+    if (!connectionId.success) {
+      return await sendError(
+        reply,
+        409,
+        "GSC_PROPERTY_UNKNOWN",
+        "This legacy action has no verified Search Console property attached to its measurement gate.",
+      );
+    }
+    const property = await gsc.getConnection(organizationId, connectionId.data);
+    if (property?.projectId !== action.projectId) {
+      return await sendError(reply, 404, "NOT_FOUND", "Action not found.");
+    }
 
     const comparison = action.comparisonWindow as { startsAt?: string; endsAt?: string } | null;
     const measurementWindow = windowFromIso(comparison?.startsAt, comparison?.endsAt);
@@ -437,17 +696,27 @@ export function gscDataRoutes(app: FastifyInstance) {
       ...(typeof spec.page === "string" ? { page: spec.page } : {}),
       ...(typeof spec.device === "string" ? { device: spec.device } : {}),
       ...(typeof spec.country === "string" ? { country: spec.country } : {}),
+      ...(typeof spec.property === "string" ? { property: spec.property } : {}),
     };
 
+    const measurementFilters = {
+      ...(typeof spec.query === "string" ? { query: spec.query } : {}),
+      ...(typeof spec.page === "string" ? { page: spec.page } : {}),
+      ...(typeof spec.device === "string" ? { device: spec.device } : {}),
+      ...(typeof spec.country === "string" ? { country: spec.country } : {}),
+      connectionId: connectionId.data,
+    };
     const beforeRows = await gsc.loadMetricRows(
       organizationId,
       action.projectId,
       baselineWindow,
+      measurementFilters,
     );
     const afterRows = await gsc.loadMetricRows(
       organizationId,
       action.projectId,
       measurementWindow,
+      measurementFilters,
     );
     const comparisonRec = prePostComparison(
       beforeRows,
@@ -457,13 +726,18 @@ export function gscDataRoutes(app: FastifyInstance) {
       subject,
       { minImpressions: typeof spec.minImpressions === "number" ? spec.minImpressions : 0 },
     );
-    const freshness = await gsc.metricFreshness(organizationId, action.projectId);
+    const freshness = await gsc.metricFreshness(
+      organizationId,
+      action.projectId,
+      connectionId.data,
+    );
 
     return await reply.send({
       actionId: action.id,
       state: action.state,
       gate: action.verificationGate,
       subject,
+      property: property.externalProperty,
       baselineWindow,
       measurementWindow,
       comparison: comparisonRec,

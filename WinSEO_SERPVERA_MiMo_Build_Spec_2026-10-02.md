@@ -66,7 +66,6 @@ Le dépôt NEXUS possède déjà la partie la plus difficile à inventer correct
 - **Experiment plan** — **Ce qui existe:** baseline, change, control, confounders, rollback; **Transformation SaaS requise:** Experiment Ledger et verification jobs
 - **Skeptic** — **Ce qui existe:** revue adverse séparée; **Transformation SaaS requise:** second-pass validator + règles déterministes + tests
 
-
 **Décision d'architecture :** le code NEXUS reste un package métier versionné. L'application l'appelle via une interface stable. L'UI ne doit pas implémenter les règles SEO elle-même.
 
 ## 1.2 Modèle de preuve à préserver
@@ -108,7 +107,6 @@ Le marché 2026 s'est scindé en quatre familles : suites SEO historiques, crawl
 - **CiteRank** — **Force méthodologique à récupérer:** score fondé sur de vrais checks, texte de réponse conservé, mention ≠ citation, historique quotidien; **Limite/opportunité pour notre produit:** modèle de mesure clair ; ne pas réduire le produit à un pourcentage de visibilité; **Indication tarifaire observée:** private/beta selon offre; **Source:** [S18]
 - **SearchProof AI** — **Force méthodologique à récupérer:** audit SEO/AEO/GEO public fondé sur preuves et validation hebdomadaire; **Limite/opportunité pour notre produit:** preuve que « evidence-first » devient un axe concurrentiel : il faut rendre la boucle d'action plus forte; **Indication tarifaire observée:** pricing local; **Source:** [S19]
 - **Oscar AI** — **Force méthodologique à récupérer:** audit → production d'articles → publication CMS ; simplicité pour TPE; **Limite/opportunité pour notre produit:** ne pas concurrencer sur volume d'articles ; diagnostiquer avant de produire; **Indication tarifaire observée:** **95 € HT/mo** pour 7 articles, annuel; **Source:** [S20]
-
 
 ## 2.2 Les meilleurs patterns observés
 
@@ -190,7 +188,6 @@ Le produit ne doit pas viser au départ les équipes enterprise qui exigent un i
 - **Verify** — **Promesse:** re-crawl + re-query + GSC window + verdict du gate
 - **Learn** — **Promesse:** historique des actions efficaces/inefficaces par projet, sans réécrire le passé
 
-
 ## 4.3 Signature fonctionnelle
 
 Le dashboard doit répondre en moins d'une minute à quatre questions :
@@ -210,7 +207,7 @@ Une recherche préliminaire montre que `WinSEO` est déjà utilisé par plusieur
 
 **Codename interne : `WinSEO`.**
 
-**Candidat externe prioritaire de travail : `SERPVERA`.** Le nom associe SERP + *vera* (vrai/vérifiable) et colle à l'ADN evidence-first. Au moment de cette étude, une recherche web exacte n'a pas fait ressortir de marque SEO évidente portant ce nom ; ce constat n'est **pas** une recherche d'antériorité juridique et ne garantit ni domaine ni marque.
+**Candidat externe prioritaire de travail : `SERPVERA`.** Le nom associe SERP + _vera_ (vrai/vérifiable) et colle à l'ADN evidence-first. Au moment de cette étude, une recherche web exacte n'a pas fait ressortir de marque SEO évidente portant ce nom ; ce constat n'est **pas** une recherche d'antériorité juridique et ne garantit ni domaine ni marque.
 
 Alternatives à tester juridiquement : `VeriSERP`, `ProofCrawl`, `SearchVera` et une marque totalement inventée sans « SEO ». Certains noms intuitifs sont déjà occupés (`RankLedger`, `SearchLedger`, `RankVera`, `SearchProof AI`) et doivent être évités. [S36][S37][S38][S19]
 
@@ -239,7 +236,6 @@ La navigation doit rester stable et courte :
 - **Evidence** — **Question utilisateur:** Puis-je vérifier le constat ?
 - **Integrations** — **Question utilisateur:** Quelles données sont connectées ?
 - **Settings** — **Question utilisateur:** Marchés, limites, membres, sécurité, billing
-
 
 ## 6.1 Page Overview
 
@@ -297,7 +293,6 @@ L'identité doit inspirer contrôle, clarté et mesure. Éviter le gradient viol
 - **`geo`** — **Valeur:** `#7C3AED`; **Usage:** AI Search uniquement, en accent
 - **`warning`** — **Valeur:** `#D97706`; **Usage:** hypothèse/attention
 - **`critical`** — **Valeur:** `#DC2626`; **Usage:** erreur bloquante, jamais décoration
-
 
 Le statut ne doit jamais dépendre de la couleur seule : icône + texte + couleur.
 
@@ -395,7 +390,6 @@ Le site doit être son propre cas de démonstration. La stratégie ne repose pas
 - **`/compare/semrush-alternative`** — **Intention:** comparaison factuelle et maintenue
 - **`/compare/ahrefs-alternative`** — **Intention:** comparaison factuelle et maintenue
 
-
 Les pages de comparaison doivent être factuelles, datées et mises à jour automatiquement via un contenu éditorial validé ; ne jamais inventer des fonctionnalités concurrentes.
 
 ## 9.2 Structured data et contenu
@@ -426,7 +420,6 @@ L'architecture doit être **modulaire, event-driven et séparée entre control p
 - **Observability** — **Choix recommandé:** OpenTelemetry + logs structurés + error tracking; **Raison:** preuve d'exploitation
 - **Billing** — **Choix recommandé:** Stripe Checkout/Customer Portal; **Raison:** ne pas stocker de carte
 - **Email** — **Choix recommandé:** provider transactionnel; **Raison:** verification, alerts, billing
-
 
 **Règle :** ne pas introduire Kubernetes au MVP. Conteneurs managés + autoscaling suffisent tant que les SLOs et coûts le permettent.
 
@@ -827,7 +820,6 @@ Le pricing doit vendre la simplicité et protéger la marge. Les coûts variable
 - **Growth** — **Prix cible:** **29 €/mois**; **Sites:** 3; **Crawl/mois:** 20k URLs; **GSC:** oui; **AI checks:** 500/mois; **Usage principal:** PME/consultant
 - **Studio** — **Prix cible:** **59 €/mois**; **Sites:** 10; **Crawl/mois:** 75k URLs; **GSC:** oui; **AI checks:** 2,000/mois; **Usage principal:** consultant/agence légère
 - **Agency** — **Prix cible:** **119 €/mois**; **Sites:** 25; **Crawl/mois:** 250k URLs; **GSC:** oui; **AI checks:** 5,000/mois; **Usage principal:** agence + white label
-
 
 Ces prix sont **hypothèses de test**, pas engagement final. Le modèle doit conserver l'unité `AI check` visible, avec top-up si nécessaire. La proposition reste nettement sous les offres AI visibility autour de $99–$199/mois observées chez Semrush/Ahrefs, tout en protégeant les coûts par quotas. [S01][S02]
 

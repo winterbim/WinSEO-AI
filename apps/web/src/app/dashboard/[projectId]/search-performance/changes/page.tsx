@@ -84,6 +84,7 @@ export default async function GscChangesPage({
               key={`${rec.module}:${JSON.stringify(rec.subject)}`}
               projectId={projectId}
               recommendation={rec}
+              sourceFilters={intelligence.filters}
             />
           ))}
         </div>

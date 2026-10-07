@@ -16,7 +16,11 @@ export function defaultWindow(): GscWindow {
 }
 
 export function windowQuery(window: GscWindow, extra: Record<string, string> = {}): string {
-  const params = new URLSearchParams({ ...extra, startDate: window.startDate, endDate: window.endDate });
+  const params = new URLSearchParams({
+    ...extra,
+    startDate: window.startDate,
+    endDate: window.endDate,
+  });
   return params.toString();
 }
 

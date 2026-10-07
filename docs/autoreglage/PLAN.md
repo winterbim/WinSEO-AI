@@ -1,8 +1,25 @@
 # Plan vivant — auto-réglage prouvé WinSEO
 
-**Dernière mise à jour :** 2026-10-06 21:38 UTC
-**Dépôt de travail :** `/home/wina/WinSEO/staging-autoreglage/vercel-deploy` (copie locale sans métadonnées Git). Le dépôt GitHub communiqué était vide au moment du clonage.  
+**Dernière mise à jour :** 2026-10-07
+**Dépôt de référence actif :** `winterbim/WinSEO-AI`, clone `/tmp/winseo-publish`, branche `feat/product-finish-2026`, HEAD initial `937f9fb2f78df2b0cadc325e62e3943b767f9d10`.
 **Priorité :** garde-fous §4 → critères §9 → conventions du dépôt → benchmark antérieur.
+
+## Reprise sur le dépôt de référence et baseline R+
+
+Le texte historique ci-dessous décrit un précédent espace de travail. Il n'est pas une preuve fraîche des portes d'acceptation du commit courant. Le dépôt Git communiqué est maintenant accessible, et l'état réellement audité est consigné dans [`docs/CURRENT_STATE_2026-10-07.md`](../CURRENT_STATE_2026-10-07.md). Aucun code applicatif n'a été modifié avant cette baseline. Résumé : typecheck réussi; les tests des paquets réussissent en exécution directe; formatage, lint, build et le test agrégé sont en échec; le run GitHub PR #1 échoue au formatage. GSC, paiements et email restent bloqués faute de secrets/autorisation réels.
+
+Les lignes M0–M2 du tableau historique ne sont pas rétroactivement effacées, mais leur statut ne vaut pas acceptation du commit de référence. Les parcours fixtures, RLS, migration et CI doivent être rejoués sur cette branche avant une décision `EVIDENCED` ou `ACCEPTED`.
+
+### Travaux actifs — questions préalables
+
+| Fonction                                             | Quelle preuve ?                                                                                                                                                 | Quel risque ?                                                                                                               | Comment l'annuler ?                                                                                                                                                           | Comment saurons-nous que ça a marché ?                                                                                                      |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rétablir les portes CI (format, lint, build/test)    | Logs baseline locaux et GitHub, fichiers fautifs, puis nouveaux logs complets attachés au commit                                                                | Gros diff mécanique; masquer un vrai défaut en désactivant une règle                                                        | Revert du commit dédié; aucune règle critique ne doit être ignorée                                                                                                            | Format, lint, typecheck, build et tests réexécutés avec exit 0; CI distante verte                                                           |
+| Réparer inscription et premier crawl                 | Reproduire les liens `/signup`, vérifier le formulaire `Add & crawl`, puis API/database observés                                                                | Création partielle laissant une organisation/projet sans crawl, ou promesse d'inscription payante                           | Revert des routes/composants; les projets et crawls persistés restent explicites et récupérables                                                                              | Test HTTP/E2E confirme inscription en mode création, projet créé, crawl lancé et erreur de lancement présentée honnêtement                  |
+| Isoler `finding_evidence` par tenant                 | État du catalogue PostgreSQL et tests négatifs sous deux organisations                                                                                          | Migration qui supprime/désassocie des données ou FK incompatible                                                            | Migration forward-only; toute anomalie préconditionnelle fait échouer la transaction. Le rollback de sécurité est un nouveau correctif contrôlé, jamais la suppression de RLS | Migration sur DB préremplie; tests prouvant qu'un tenant ne peut ni lire, ni créer, ni relier des identifiants de l'autre                   |
+| Séparer santé du processus et disponibilité DB       | Réponses observées de `/health` et `/ready` avec DB active/arrêtée et config invalide                                                                           | Readiness faussement rouge si une dépendance optionnelle est absente, ou faussement verte quand PostgreSQL est indisponible | Revert des endpoints/config après retour aux probes explicites; aucun démarrage silencieux en stockage mémoire en production                                                  | Tests HTTP/process valident liveness indépendante, DB/migrations sur readiness et échec rapide pour env invalide/mémoire prod               |
+| Limiter les tentatives de connexion et d'inscription | Reproduire répétition d'essais HTTP depuis une IP externe de fixture et observer quota/Retry-After                                                              | Faux blocage d'un NAT partagé ou limites combinées entre endpoints                                                          | Revert des scopes dédiés; les compteurs persistants expirent sous leur fenêtre sans exposer l'IP brute                                                                        | Login/inscription échouent avec 429 après seuil, essais valides passent avant seuil, scopes indépendants et tests du stockage partagé verts |
+| Corriger les dépendances signalées par l'audit       | Sortie npm du lockfile initial: PostCSS 8.4.31 avait deux avis High et un avis Moderate. L'override fixé en 8.5.23 répond à l'avis restant, qui demande ≥8.5.23 | Override CSS global qui casserait le pipeline Next/PostCSS                                                                  | Revert l'override et son lockfile; la correction reste isolée                                                                                                                 | Build CSS/Next vert, `pnpm audit --audit-level=high` puis `pnpm audit` sans avis restant                                                    |
 
 ## Avancement
 
@@ -191,3 +208,175 @@ Sources : [configuration Site Audit](https://www.semrush.com/kb/539-configuring-
 **Décision d’implémentation :** réaliser un module crawl partagé pour tous les appels HTTP_FAST; le client preview lance un crawl synchrone plafonné à 50 pages/30 secondes. Le coeur accepte 1–200 pages pour le worker futur. Il ne prétend pas offrir reprise durable ou audit infini; ces fonctions exigent jobs persistants et stockage API.
 
 **Ledger WinCreator dédié :** `docs/autoreglage/PROOF_LEDGER-M3.md`, séparé du ledger historique. Vérificateurs du skill passés avant utilisation : `wincreator --self-test` 6/6; `ledger_check --self-test` 38/38; `distill_check --self-test` 6/6. Reste à capturer la RED lock, le test complet, la review Skeptic, la distillation et le déploiement preview.
+
+## Progression — 2026-10-07 — sécurisation de la migration des liens de preuve
+
+### Fonction prévue : publier uniquement les lignes Search Console d’une synchronisation terminée
+
+- **Quelle preuve ?** Une fenêtre complétée reste lisible pendant un nouveau sync; les lignes d’un job `RUNNING` sont absentes des mesures, des fraîcheurs et des snapshots vérifiés; après la transition `COMPLETED`, les nouvelles lignes remplacent les anciennes atomiquement.
+- **Quel risque ?** Filtrer seulement une route laisserait une recommandation ou un snapshot approuvé consommer des lignes partielles; effacer les anciennes lignes avant la fin du sync ferait perdre la dernière fenêtre valide sur un crash.
+- **Comment l’annuler ?** Revert ciblé du changement de repository; les lignes historiques de jobs terminés sont conservées et aucun état de site client n’est modifié.
+- **Comment saurons-nous que ça a marché ?** Test PostgreSQL adversarial : fenêtre terminée A, tentative B incomplète avec valeurs distinctes, preuve que les vues restent sur A; achèvement de B, preuve que seules les valeurs de B restent. La suite GSC API devra aussi refuser une proposition fondée exclusivement sur B avant achèvement.
+
+### Fonction prévue : respecter la séparation grant Google / propriété GSC
+
+- **Quelle preuve ?** Chaque connexion, job et ligne de mesure identifie une propriété sélectionnée sous un grant autorisé au tenant/projet; aucune requête n’agrège des propriétés distinctes par défaut.
+- **Quel risque ?** Une migration ou un sélecteur incomplet peut détourner un token, casser le readiness ou contaminer les analyses de propriétés qui se chevauchent.
+- **Comment l’annuler ?** Migrations strictement forward-only, préflight des grants/connections et rollback d’application avant toute écriture live; aucune suppression de token ou de mesure historique dans un patch de schéma.
+- **Comment saurons-nous que ça a marché ?** Cas PostgreSQL et routes couvrant deux grants, deux propriétés, association refusée entre grants, mesures séparées, sélection obligatoire en cas de pluralité, révocation d’un grant sans affecter l’autre. Sans preuve, la capacité reste `IN_PROGRESS`.
+
+### Fonction prévue : verrouiller `finding_evidence` par tenant sans perdre de relation historique
+
+- **Quelle preuve ?** Les lignes préexistantes doivent conserver la relation exacte; une ligne inter-organisation doit interrompre la transaction; une relation valide doit être rétro-renseignée et protégée par RLS forcée et clés étrangères composées.
+- **Quel risque ?** Une migration qui réattribue silencieusement une preuve ou une ancienne instance qui tente d'insérer sans `organization_id`; les index et le verrou DDL peuvent aussi retarder les écritures sur une grande table.
+- **Comment l'annuler ?** La migration est forward-only et atomique. Toute ligne incohérente fait échouer avant commit; les corrections de schéma après usage seront de nouvelles migrations. Le déploiement doit coordonner le démarrage du binaire compatible avec l'application de la migration.
+- **Comment saurons-nous que ça a marché ?** Une fixture PostgreSQL reproduit à la fois un lien inter-organisation (échec atomique, relation conservée) et un lien valide (backfill, RLS forcée, politique); les tests d'isolation passent sous le rôle applicatif.
+
+### Fonction prévue : guider le premier compte et limiter les abus d'authentification
+
+- **Quelle preuve ?** Destinations de connexion locales sûres, appartenance à l'organisation vérifiée par l'API, organisation choisie explicitement en présence de plusieurs espaces, et compteurs PostgreSQL atomiques distincts par opération et IP.
+- **Quel risque ?** Redirection non sûre, projet placé dans le mauvais espace, quotas contournés entre instances ou erreur de crawl présentée comme un succès.
+- **Comment l'annuler ?** Retirer les aides d'onboarding et les limites nouvelles sans modifier les comptes, sessions, projets ou historiques existants; garder les échecs de lancement explicitement récupérables.
+- **Comment saurons-nous que ça a marché ?** Tests ciblés web/API; intégration PostgreSQL concurrente qui prouve le plafond exact; revue sceptique indépendante des entrées, des transitions de tenant et des libellés.
+
+### Fonction prévue : ne promouvoir en preuve GSC que des métriques recalculées côté serveur
+
+- **Quelle preuve ?** L'API relit les lignes Search Console persistées du projet et recalcule la recommandation déterministe avant de créer le finding et l'evidence.
+- **Quel risque ?** Une donnée client périmée ou falsifiée peut sinon être enregistrée comme `MEASURED`; un rôle en lecture seule peut aussi créer une mutation.
+- **Comment l'annuler ?** La route refusera les sélecteurs absents des métriques; aucune donnée historique ne sera réécrite. Le contrôle d'autorisation pourra être ajusté par une nouvelle version de route sans rétrograder les findings existants.
+- **Comment saurons-nous que ça a marché ?** Une recommandation réelle dérivée d'une fixture GSC persistée est promue; titre, observations et hash enregistrés sont recalculés; un sujet sans métrique et un rôle `VIEWER` sont rejetés sans nouvelle evidence.
+
+### Fonction prévue : distinguer les captures AI importées des exemples illustratifs
+
+- **Quelle preuve ?** Chaque statistique est calculée sur les lignes CSV chargées dans le formulaire; la source affichée reflète si l'utilisateur a importé une capture ou utilisé le jeu d'exemple WinSEO.
+- **Quel risque ?** Un exemple pourrait être pris pour une observation réelle d'un fournisseur d'IA.
+- **Comment l'annuler ?** Retirer le badge de provenance de l'interface; aucun enregistrement extérieur n'est modifié.
+- **Comment saurons-nous que ça a marché ?** La source reste « illustrative » après chargement de l'exemple et devient « fournie par l'utilisateur » après import/saisie; test unitaire du modèle de provenance.
+
+### Fonction prévue : rendre la création initiale et les retries de projet idempotents
+
+- **Quelle preuve ?** Une création sans clé produit toujours un projet normal; une requête répétée avec la même clé et le même tenant/payload retourne le même projet; même clé avec payload différent répond conflit. Le client conserve une clé stable pendant les retries. L'allocation automatique du slug du premier espace vérifie l'unicité PostgreSQL et réessaie les collisions; `next` est validé après normalisation d'URL.
+- **Quel risque ?** Une collision globale du slug bloque le signup; une réponse perdue du POST peut créer un doublon; une clé réutilisée avec un autre payload pourrait masquer la destination; une normalisation percent-encoded peut contourner le garde-fou de redirection.
+- **Comment l'annuler ?** Migration 0017 additive et rollback possible uniquement avant consommation de clés; retrait du paramètre client rétablit le chemin legacy sans clé. Les slugs d'espaces déjà alloués ne sont pas renommés; la validation `next` garde `/dashboard` comme fallback.
+- **Comment saurons-nous que ça a marché ?** Tests API/PostgreSQL forcent le slug `my-workspace` déjà pris et une collision concurrente; tests projet prouvent replay même payload, conflit payload différent, isolation tenant et compatibilité sans clé; test web couvre une réponse perdue puis retry avec même clé; tests `next` incluent segments `.`/`..` percent-encoded et chemins normalisés vers `//`.
+
+## 2026-10-07 — Éliminer les mesures GSC issues d’un job incomplet et les courses de synchronisation
+
+### Questions avant correction
+
+- **Quelle preuve ?** Une action fondée sur GSC ne lit que des lignes dont le job source est `COMPLETED`; deux appels concurrents pour la même fenêtre ne peuvent pas exécuter la même tentative, réécrire ses lignes après achèvement ni rétrograder son état. Un job `RUNNING` abandonné est récupérable après expiration du bail de 30 minutes. Le gagnant des fenêtres qui se chevauchent est ordonné par `claim_order`, compteur PostgreSQL par propriété alloué sous verrou, pas par une horloge de worker.
+- **Quel risque ?** Une ligne partielle peut faire franchir un seuil de vérification et déclarer une action `VERIFIED`; une course peut remplacer une mesure complète par une réponse plus ancienne, effacer la dernière fenêtre valide ou laisser un job terminé marqué en échec. Des plages distinctes qui se chevauchent ne doivent jamais supprimer les écritures partielles l'une de l'autre, et l'ordre de fin des workers ne doit pas rendre un fetch plus ancien autoritaire. L’ordre incohérent des verrous peut produire un deadlock PostgreSQL. Un bail trop court pourrait lancer un fetch concurrent; le fencing protège les écritures, mais un fetch supplémentaire consommerait du quota.
+- **Comment l’annuler ?** La migration 0020 est additive et forward-only; une restauration du code seul réintroduirait l'ambiguïté d'ordre, donc ne pas la faire sans procédure séparée de réconciliation. Les anciennes lignes sont classées une fois par les horodatages historiques disponibles, les tentatives futures utilisent le compteur monotone.
+- **Comment saurons-nous que ça a marché ?** PostgreSQL réel prouve qu’un seul appel revendique une tentative, qu’un worker dépassant son bail est réclamé avec un nouveau numéro de fencing, que l’ancien worker ne peut ni écrire ni clôturer le job, que l’évaluation d’action ignore les jobs `RUNNING`/`FAILED`, et que pour des fenêtres chevauchantes le fetch démarré le plus récemment reste la source publiée même si son worker termine avant ou après l'ancien.
+
+### Avancement
+
+- 2026-10-07 : revue sceptique indépendante de la première correction GSC a trouvé que `gscWindowVerdict` ne filtrait pas les jobs terminés et qu’un même job pouvait être partagé, puis rétrogradé. Elle a également identifié un ordre de verrous inversé et confirmé que le schéma GSC ne prend toujours pas en charge plusieurs grants/propriétés.
+- 2026-10-07 : correction de la porte de vérification, revendication atomique/fencing et ordre cohérent des verrous; la suite ciblée PostgreSQL/API a passé 14/14 + 26/26.
+- 2026-10-07 : la seconde revue indépendante a trouvé le cas d’un worker tué après l’écriture partielle, laissant un job `RUNNING` impossible à reprendre. Ajout d’un bail de 30 minutes, de reprise sur expiration et d’un test de fencing; suite ciblée à rejouer.
+- 2026-10-07 : revue indépendante : deux jobs de fenêtres différentes mais chevauchantes pouvaient supprimer les lignes partielles l'un de l'autre. La suppression à la persistance a été limitée aux lignes du job qui écrit; le remplacement des mesures complètes reste transactionnel à la clôture.
+- 2026-10-07 : revue sceptique de suivi : l'ordre de fin seul pouvait laisser un fetch plus ancien écraser un fetch plus récent, et les horodatages applicatifs peuvent être égaux ou décalés. La migration 0020 ajoute un compteur de revendication monotone par propriété; la clôture utilise cet ordre pour arbitrer les fenêtres, quel que soit l'ordre d'achèvement.
+- 2026-10-07 : PostgreSQL réel : `gsc-rls.test.ts` passe 17/17, y compris les fenêtres chevauchantes dans les deux ordres d'achèvement et avec des horodatages applicatifs inversés/identiques. API ciblée : 46/46 tests passent après le filtrage des mesures non terminées. Appliquer la migration 0020 au cluster jetable, puis refaire `pnpm verify` sur l'état final.
+
+## 2026-10-07 — Préserver les variables de base dans les commandes Turbo
+
+### Questions avant correction
+
+- **Quelle preuve ?** La migration et les tests PostgreSQL doivent ouvrir le chemin de socket et la base explicitement fournis dans l'environnement d'exécution.
+- **Quel risque ?** Le mode strict Turbo peut supprimer ces variables et rediriger les tests/migrations vers le socket PostgreSQL par défaut.
+- **Comment l'annuler ?** Retirer `--env-mode=loose` après définition d'une liste Turbo `globalPassThroughEnv` explicite, puis vérifier la cible réelle des commandes.
+- **Comment saurons-nous que ça a marché ?** Lancer `pnpm verify` avec `PG_SOCKET_DIR=/tmp/winseo-pgsocket`, `PGPORT=55432`, `PGDATABASE=serpvera_dev`, puis confirmer le résultat PostgreSQL et le ledger de migration 0020 sur ce cluster.
+
+### Avancement
+
+- 2026-10-07 : `pnpm db:migrate` via Turbo a visé le PostgreSQL local par défaut. L'inspection limitée aux métadonnées et aux comptes GSC y a trouvé 0 job et 0 mesure; la migration 0020 a été enregistrée. Elle a ensuite été appliquée directement au cluster jetable via `node packages/db/src/migrate.ts`. Les scripts racine `test`, `db:migrate` et `db:seed` passent maintenant l'environnement à Turbo explicitement; refaire le contrôle complet sur le cluster jetable.
+
+## 2026-10-07 — Bloquer le backfill GSC ambigu avant le nettoyage 0020
+
+### Fonction prévue : vérifier la cohérence de l'ordre historique avant la migration destructive
+
+- **Quelle preuve ?** Une fixture PostgreSQL réelle avec deux synchronisations terminées, périodes et lignes qui se chevauchent, et horodatages `started_at` client inversés doit faire échouer le préflight avant 0020 tout en gardant les lignes et en n'inscrivant pas le préflight. Une chronologie cohérente doit passer.
+- **Quel risque ?** Une lecture historique fondée sur des horloges de workers peut supprimer la ligne d'une synchronisation qui semble plus ancienne seulement à cause du décalage d'horloge. Un préflight conservateur peut aussi interrompre une mise à niveau valide; le message doit indiquer que l'historique doit être examiné sans supprimer de ligne.
+- **Comment l'annuler ?** Ajout uniquement de la migration forward-only `0019z_gsc_claim_order_preflight.sql` et de son test. Elle ne modifie aucune ligne et s'exécute lexicalement avant 0020; retirer le préflight n'est acceptable qu'avant le déploiement de ces migrations et après revue des données historiques.
+- **Comment saurons-nous que ça a marché ?** Les tests d'intégration PostgreSQL couvrent l'inversion de l'ordre client/DB, la conservation de la ligne après échec, l'absence d'inscription et la chronologie cohérente; la migration réelle est inscrite dans le ledger avant que le build soit poussé.
+
+### Avancement
+
+- 2026-10-07 : l'audit sceptique indépendant de 0020 a relevé que le backfill utilisait `started_at` (horloge applicative) comme premier critère. La migration 0020 reste inchangée. Nouveau préflight 0019z : si l'ordre client/DB est inversé pour des jobs terminés contenant des lignes sur les jours qui se chevauchent, il lève une exception avant que 0020 puisse nettoyer; ambiguïté historique conservée et mise à niveau bloquée pour revue.
+- 2026-10-07 : migration `0019z` appliquée au PostgreSQL jetable; test d'intégration ciblé : 3/3 passés (ordre des migrations, blocage et conservation sur horloges inversées, acceptation d'un ordre cohérent). Rejouer toute la suite et capturer une nouvelle preuve aveugle avec claim/gate complets et sortie non tronquée.
+
+## 2026-10-07 — Fermer la fenêtre entre préflight et nettoyage GSC
+
+### Fonction prévue : bloquer temporairement les écritures GSC pendant les migrations 0019z–0021
+
+- **Quelle preuve ?** Un test PostgreSQL insère les tables de fixture puis prouve qu'après activation du garde, un écrivain runtime ne peut ni créer/modifier un job ni ajouter/supprimer des métriques; l'écrivain de migration peut exécuter le nettoyage; après 0021, les écritures runtime reprennent. Le runner réutilise une connexion dédiée pour conserver le signal de migration pendant la chaîne.
+- **Quel risque ?** Une panne entre 0019zz et 0021 laisse les synchronisations GSC bloquées. C'est un échec fermé récupérable en relançant le runner après résolution; ne pas supprimer manuellement le garde pendant que 0020 est incomplet. Les lectures restent disponibles.
+- **Comment l'annuler ?** Migration forward-only 0021 enlève les triggers et le contrôle après 0020. Si une réparation opérateur est requise, nouvelle migration auditée uniquement après vérification du ledger et des mesures; jamais suppression manuelle du garde.
+- **Comment saurons-nous que ça a marché ?** Tests d'intégration PostgreSQL couvrent la fenêtre, le bypass réservé à la session de migration, la reprise après le nettoyage, et l'ordre lexical 0019z → 0019zz → 0020 → 0021; tests de schéma confirment qu'aucun déclencheur temporaire ne reste après le runner complet.
+
+### Avancement
+
+- 2026-10-07 : le reviewer sceptique a prouvé une course possible entre la validation 0019z et le nettoyage 0020; le préflight seul n'était pas atomique. La correction est en cours. Aucune écriture sur un site ou une base client n'est réalisée.
+
+## 2026-10-07 — Rendre le verrou temporaire GSC non contournable par un GUC
+
+### Fonction prévue : clôturer les privilèges runtime autour du nettoyage historique
+
+- **Quelle preuve ?** Une fixture PostgreSQL accorde initialement les droits au rôle applicatif, applique 0019y, puis tente une mutation sous `SET ROLE serpvera_app` après avoir forgé `app.winseo_gsc_migration='on'`. PostgreSQL doit refuser l'écriture. Le rôle migration doit pouvoir passer le nettoyage; après 0021 puis 0022, les droits sont restaurés et le garde est absent.
+- **Quel risque ?** Le rôle applicatif pourrait utiliser des privilèges hérités, être propriétaire des tables, ou définir lui-même le GUC supposé réservé au runner. Dans ces cas, on ne doit pas lancer le nettoyage destructif.
+- **Comment l'annuler ?** Migrations additives et forward-only : 0019y retire DML avant le préflight, 0022 rend DML seulement après suppression du garde. Une chaîne interrompue reste en lecture seule côté GSC jusqu'au redémarrage réussi; aucun bypass manuel.
+- **Comment saurons-nous que ça a marché ?** Test PostgreSQL adversarial du GUC forgé, vérification des privilèges finaux par catalogues, test du retour des écritures, contrôle lexical 0019y → 0019z → 0019zz → 0020 → 0021 → 0022 et avis indépendant du Skeptic.
+
+### Avancement
+
+- 2026-10-07 : le Skeptic a montré que `app.winseo_gsc_migration` est modifiable par le rôle applicatif; la première barrière par trigger ne suffit donc pas. 0019y retire désormais les privilèges DML avant le préflight, contrôle propriété, adhésion à d'autres rôles et privilèges résiduels. 0022 ne rend les droits qu'après confirmation que 0021 a retiré le garde. Tests et migration locale à exécuter avant une nouvelle revue aveugle.
+
+## 2026-10-07 — Bloquer les cascades depuis les tables parentes GSC
+
+### Fonction prévue : empêcher une suppression de connexion/projet/organisation de contourner le fence enfant
+
+- **Quelle preuve ?** Une fixture PostgreSQL avec les mêmes relations `ON DELETE CASCADE` que le schéma produit doit refuser les `DELETE` sous `SET ROLE serpvera_app` avec GUC forgé sur `gsc_connections`, `projects` et `organizations`; les métriques restent présentes. Après les migrations de retrait/restauration, les droits `DELETE` sont revenus et les droits `TRUNCATE` restent absents.
+- **Quel risque ?** Une suppression parentale autorisée par la politique tenant peut effacer des jobs et mesures durant le préflight, même si le rôle n'a pas de DML direct sur les enfants; elle pourrait recréer une histoire incohérente entre le préflight et 0020.
+- **Comment l'annuler ?** Migrations forward-only 0019x et 0023 révoquent/restaurent uniquement des privilèges. La restauration ne se produit qu'après 0021; aucun accès direct aux données n'est modifié.
+- **Comment saurons-nous que ça a marché ?** Tests réels PostgreSQL forçant les suppressions en cascade, compteur des métriques inchangé pendant la barrière, vérification des privilèges finaux et ordre 0019x → 0019y → 0019z → 0019zz → 0020 → 0021 → 0022 → 0023, revue sceptique indépendante.
+
+### Avancement
+
+- 2026-10-07 : le reviewer indépendant a trouvé un chemin de suppression en cascade par `gsc_connections`; le rôle runtime peut aussi supprimer projets et organisations dans l'état de base, et leurs FK atteignent les mêmes enfants. Les migrations 0019x/0023 encadrent les trois parents; le test PostgreSQL utilise de vraies FK en cascade et tente les trois suppressions avec le GUC forgé.
+- 2026-10-07 : sur le PostgreSQL jetable `serpvera_dev` (socket `/tmp/winseo-pgsocket`, port 55432), `pnpm db:migrate` applique 0019x puis 0023 et termine « Migrations up to date ». Les tests `gsc-claim-order-migration.test.ts` + `schema-integrity.test.ts` passent 24/24; la revue sceptique de suivi reste en attente.
+
+## 2026-10-07 — Fermer les grants d’écriture par colonne accordés à PUBLIC
+
+### Fonction prévue : s’assurer que la barrière GSC retire tout droit effectif du runtime, même en présence d’ACL de colonne préexistantes
+
+- **Quelle preuve ?** Une fixture PostgreSQL accorde `INSERT` sur les colonnes nécessaires et `UPDATE(status)` à `PUBLIC` avant `0019w`; sous `SET ROLE serpvera_app`, avec le GUC de migration falsifié, l’UPDATE et l’INSERT doivent être refusés. La fixture vérifie l’absence de privilèges effectifs par colonne pendant la barrière, puis la reprise du DML après 0021–0024. Une assertion de catalogue vérifie qu’aucun grant d’écriture de table ou colonne à `PUBLIC` ne subsiste sur les tables concernées.
+- **Quel risque ?** Une permission de colonne peut survivre à la révocation d’un droit de table et réouvrir une mutation malgré un contrôle qui ne vérifie que `has_table_privilege`. La migration doit échouer si la propriété ou l’appartenance du rôle runtime rend la révocation non fiable.
+- **Comment l’annuler ?** Migrations forward-only `0019w` et `0024`; l’ACL applicative existante est restaurée par la dernière migration, après retrait des gardes. Aucune ligne métier n’est modifiée. Ne pas supprimer la barrière manuellement si une migration s’arrête à mi-chaîne.
+- **Comment saurons-nous que ça a marché ?** Tests PostgreSQL réels contre des grants de colonnes à `PUBLIC`, assertions `has_any_column_privilege`, contrôle de l’ACL finale via catalogues, migration jetable, suite complète et revue sceptique indépendante.
+
+### Avancement
+
+- 2026-10-07 : revue sceptique indépendante a démontré le contournement avec `GRANT UPDATE(status) TO PUBLIC`; migration `0019w` retire les grants de table et de colonne de `PUBLIC` et du runtime sur les cinq tables ciblées, et refuse les configurations où le runtime possède les tables ou hérite de rôles. Migration `0024` restaure les droits applicatifs après les gardes. Test adversarial en cours; statut reste `IN_PROGRESS` jusqu’à l’exécution PostgreSQL, revue et capture de preuve.
+
+### Résultats et immutabilité des migrations
+
+- 2026-10-07 : migration forward-only `0019w` appliquée à la base jetable; `0024` a ensuite restauré les droits applicatifs. La suite `packages/db` sur PostgreSQL réel a réussi **75/75** tests, dont le grant `PUBLIC` par colonne, les mutations avec GUC falsifié, les trois suppressions parentes, ainsi que les chemins fail-closed de rôle propriétaire et d'appartenance. Le contrôle de schéma confirme zéro grant d'écriture à `PUBLIC` et les privilèges runtime attendus.
+- 2026-10-07 : la revue sceptique de sécurité indépendante n'a trouvé aucun bypass dans le modèle d'ACL couvert et a exécuté 25 tests ciblés (75 tests de la suite complète exécutés ensuite par le builder). La revue a demandé de rendre les checks de propriété et d'appartenance visibles en tests; deux cas PostgreSQL ont été ajoutés et réussissent.
+- 2026-10-07 : un essai de simplification de `0019w` a été annulé après son application sur la base jetable, conformément à la règle d'immutabilité des migrations. Le fichier a été restauré byte pour byte au SHA-256 `5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab`; aucune migration déjà appliquée n'est livrée avec un contenu modifié.
+- 2026-10-07 : le snapshot structurel avant simplification est capturé et son hash vérifié par WinCreator; verdict indépendant sur le paquet de distillation : `EVIDENCED`. Le résultat comparatif final et la revue de la barrière restent à capturer après l'ensemble des gates.
+
+## 2026-10-07 — Rejouer les gates sans cache et borner la preuve ACL
+
+### Fonction prévue : capturer une vérification fraîche sur PostgreSQL jetable
+
+- **Quelle preuve ?** La gate vérifie la base `serpvera_dev`, le rôle `wina`, le port 55432 et les dix migrations GSC attendues; Prettier, `git diff --check`, lint, typage, tests, build et audit doivent tous passer. Turbo est forcé sans cache, et chaque gate produit des marqueurs `GATE_START`/`GATE_PASS`.
+- **Quel risque ?** Des sorties Turbo en cache peuvent montrer des totaux de tests sans prouver une exécution PostgreSQL dans cette capture. Un gate global peut aussi cacher quel sous-contrôle a échoué.
+- **Comment l'annuler ?** Le script est une porte de vérification locale et n'altère pas le code produit ni une base client. Retirer le script n'annule aucune migration; garder les migrations forward-only.
+- **Comment saurons-nous que ça a marché ?** Capture WinCreator non tronquée, avec `Cached: 0` pour chaque groupe Turbo, identité et migrations PostgreSQL visibles, compteurs de tests et sorties de build/audit, puis revue sceptique indépendante.
+
+### Résultats observés
+
+- 2026-10-07 : capture finale `VERIFY-001` `20261007T144620.896118Z-33c33788-dabf-4592-962b-06ee566a2a8a`; sortie complète 285 899 octets, exit 0, durée 103,118 ms. Lint 15/15, typage 15/15, tests 13/13 tâches Turbo sans cache : PostgreSQL DB 75/75, crawler 124/124, API 119/119, authz 23/23, web 25/25; build 7/7 sans cache; `pnpm audit --audit-level=high` sans vulnérabilité connue. La revue indépendante a confirmé chaque marqueur et le contenu brut : `EVIDENCED`. `wincreator verify` et `ledger_check --catches` sont aussi passés.
+- 2026-10-07 : la première revue du fence ACL a signalé que les tables credentials/OAuth n'étaient pas protégées pour des écritures directes. Le claim et D-025 ont été limités explicitement à `organizations`, `projects`, `gsc_connections`, `gsc_sync_jobs`, `gsc_metrics`; les écritures credentials/OAuth restent hors périmètre de cette barrière.
+- 2026-10-07 : la suite DB complète exécutée directement sur PostgreSQL jetable réussit 75/75. Revue indépendante finale du claim borné : aucun bypass dans ce périmètre; les deux tests supplémentaires de propriété et d'appartenance justifient `REVIEW_REQUIRED` de l'outil de distillation. `GSC-MIGRATION-FENCE-001 = EVIDENCED`.
+- 2026-10-07 : les checks GitHub de la nouvelle révision restent à attendre après push. Le scan de secrets demeure exécuté par GitHub Actions, et non par la gate locale; aucune validation de production ni connexion Google n'a été effectuée.

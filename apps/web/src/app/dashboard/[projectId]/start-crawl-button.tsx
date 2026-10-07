@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { startProjectCrawl } from "../crawl-kickoff";
 
 /**
  * Triggers a fresh crawl of the project's domain through the control plane.
@@ -18,26 +19,18 @@ export function StartCrawlButton({ projectId }: { projectId: string }) {
   async function runCrawl() {
     setError("");
     setBusy(true);
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}/crawl-runs`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: { message?: string };
-        };
-        setError(body.error?.message ?? "Could not start the crawl.");
-        return;
-      }
-      // Give the worker a head start, then reload the real rows.
-      setTimeout(() => {
-        router.refresh();
-        setBusy(false);
-      }, 2500);
-    } catch {
-      setError("The service is temporarily unavailable.");
+    const result = await startProjectCrawl(projectId);
+    if (!result.ok) {
+      setError(result.message);
       setBusy(false);
+      return;
     }
+
+    // Give the worker a head start, then reload the real rows.
+    setTimeout(() => {
+      router.refresh();
+      setBusy(false);
+    }, 2500);
   }
 
   return (

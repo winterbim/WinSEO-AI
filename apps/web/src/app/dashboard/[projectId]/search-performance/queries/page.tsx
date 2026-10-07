@@ -78,12 +78,24 @@ export default async function GscQueriesPage({
               <caption className="sr-only">Clicks, impressions, CTR and position per query</caption>
               <thead>
                 <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                  <th scope="col" className="py-2 pr-4">Query</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Clicks</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Impressions</th>
-                  <th scope="col" className="py-2 pr-4 text-right">CTR</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Avg. position</th>
-                  <th scope="col" className="py-2 text-right">Days</th>
+                  <th scope="col" className="py-2 pr-4">
+                    Query
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Clicks
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Impressions
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    CTR
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Avg. position
+                  </th>
+                  <th scope="col" className="py-2 text-right">
+                    Days
+                  </th>
                 </tr>
               </thead>
               <tbody>

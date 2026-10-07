@@ -79,9 +79,7 @@ const transitionSchema = z.object({
     })
     .optional(),
   baselineSnapshot: z.record(z.string(), z.unknown()).optional(),
-  comparisonWindow: z
-    .object({ startsAt: z.iso.datetime(), endsAt: z.iso.datetime() })
-    .optional(),
+  comparisonWindow: z.object({ startsAt: z.iso.datetime(), endsAt: z.iso.datetime() }).optional(),
   note: z.string().trim().max(4_000).optional(),
 });
 

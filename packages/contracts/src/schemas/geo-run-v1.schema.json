@@ -16,13 +16,19 @@
     "intent": { "type": "string" },
     "funnel_stage": { "type": "string" },
     "persona": { "type": "string" },
-    "engine": { "type": "string", "description": "e.g. chatgpt, gemini, perplexity, google-ai-mode" },
+    "engine": {
+      "type": "string",
+      "description": "e.g. chatgpt, gemini, perplexity, google-ai-mode"
+    },
     "surface": { "type": "string", "description": "e.g. web, app, api" },
     "locale": { "type": "string", "pattern": "^[a-z]{2}(-[A-Z]{2})?$" },
     "language": { "type": "string" },
     "engine_label": { "type": "string" },
     "timestamp": { "type": "string", "format": "date-time" },
-    "capture_method": { "type": "string", "enum": ["browser_manual", "api_authorized", "structured_export"] },
+    "capture_method": {
+      "type": "string",
+      "enum": ["browser_manual", "api_authorized", "structured_export"]
+    },
     "answer": {
       "type": "object",
       "properties": {

@@ -13,9 +13,11 @@ import type { GscMeasuredRecommendation } from "@/lib/types";
 export function PromoteFindingButton({
   projectId,
   recommendation,
+  sourceFilters,
 }: {
   projectId: string;
   recommendation: GscMeasuredRecommendation;
+  sourceFilters: Record<string, string>;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -28,7 +30,13 @@ export function PromoteFindingButton({
       const res = await fetch(`/api/v1/projects/${projectId}/gsc/findings`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(recommendation),
+        body: JSON.stringify({
+          module: recommendation.module,
+          subject: recommendation.subject,
+          datasetWindow: recommendation.datasetWindow,
+          comparisonWindow: recommendation.comparisonWindow,
+          sourceFilters,
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as {
         created?: boolean;

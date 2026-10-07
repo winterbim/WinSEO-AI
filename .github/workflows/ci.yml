@@ -14,7 +14,15 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+
+    env:
+      DATABASE_URL: postgresql://serpvera:serpvera@localhost:5432/serpvera_test
+      PG_SOCKET_DIR: localhost
+      PGPORT: "5432"
+      PGUSER: serpvera
+      PGPASSWORD: serpvera
+      PGDATABASE: serpvera_test
 
     services:
       postgres:
@@ -57,11 +65,16 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Build
+        run: pnpm build
+
+      - name: Prepare PostgreSQL roles and schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/bootstrap.sql
+          pnpm --filter @serpvera/db db:migrate
+
       - name: Test
         run: pnpm test
-        env:
-          DATABASE_URL: postgresql://serpvera:serpvera@localhost:5432/serpvera_test
-          REDIS_URL: redis://localhost:6379
 
   security:
     name: Security Scan
@@ -84,10 +97,8 @@ jobs:
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high
-        continue-on-error: true
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2
         with:
           config-path: .gitleaks.toml
-        continue-on-error: true

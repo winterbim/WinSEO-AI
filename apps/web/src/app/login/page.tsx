@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { authModeFromQuery, safeNextPath } from "./auth-params";
 
 function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">(() =>
+    authModeFromQuery(search.get("mode")),
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -34,7 +37,7 @@ function LoginForm() {
         setError(data.error?.message ?? "Authentication failed. Please try again.");
         return;
       }
-      router.push(search.get("next") ?? "/dashboard");
+      router.push(safeNextPath(search.get("next")));
       router.refresh();
     } catch {
       setError("The service is temporarily unavailable. Please retry.");
@@ -56,6 +59,12 @@ function LoginForm() {
           <p className="mt-2 text-sm text-slate-700">
             Evidence-first search intelligence for your sites.
           </p>
+          {mode === "register" && search.get("plan") && (
+            <p className="mt-2 text-xs text-slate-700" role="status">
+              Plan reference: {search.get("plan")}. Creating an account does not activate a
+              subscription or take payment.
+            </p>
+          )}
         </div>
 
         <form
@@ -77,7 +86,9 @@ function LoginForm() {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); }}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                }}
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 aria-invalid={!!error || undefined}
                 aria-describedby={error ? "auth-error" : undefined}
@@ -95,7 +106,9 @@ function LoginForm() {
                 required
                 minLength={8}
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); }}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                }}
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 aria-invalid={!!error || undefined}
                 aria-describedby={error ? "auth-error" : undefined}
@@ -132,9 +145,7 @@ function LoginForm() {
             }}
             className="mt-4 w-full text-center text-sm text-primary underline underline-offset-2"
           >
-            {mode === "login"
-              ? "No account yet? Create one"
-              : "Already have an account? Sign in"}
+            {mode === "login" ? "No account yet? Create one" : "Already have an account? Sign in"}
           </button>
         </form>
       </div>

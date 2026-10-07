@@ -33,7 +33,7 @@ async function rateLimitAttempt(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<boolean> {
-  const decision = await app.stores.rateLimits.hit(request.ip, ATTEMPT_LIMIT);
+  const decision = await app.stores.rateLimits.hit(request.ip, ATTEMPT_LIMIT, "mfa-ip");
   if (decision.allowed) return true;
   void reply.header("retry-after", String(decision.retryAfterSeconds));
   void reply.status(429).send({

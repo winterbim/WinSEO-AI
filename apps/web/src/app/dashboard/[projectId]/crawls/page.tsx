@@ -22,9 +22,7 @@ export default async function CrawlHistoryPage({
 
   let runs: CrawlRun[] = [];
   try {
-    const res = await apiFetch<{ crawlRuns: CrawlRun[] }>(
-      `/v1/projects/${projectId}/crawl-runs`,
-    );
+    const res = await apiFetch<{ crawlRuns: CrawlRun[] }>(`/v1/projects/${projectId}/crawl-runs`);
     runs = res.crawlRuns;
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
@@ -46,8 +44,8 @@ export default async function CrawlHistoryPage({
         <div>
           <h1 className="text-2xl font-bold">Crawl history</h1>
           <p className="mt-1 text-sm text-slate-700">
-            Each run records when the site was observed and what was fetched — the
-            baseline every later comparison depends on.
+            Each run records when the site was observed and what was fetched — the baseline every
+            later comparison depends on.
           </p>
         </div>
         <Link
@@ -71,13 +69,27 @@ export default async function CrawlHistoryPage({
             <caption className="sr-only">Crawl runs, newest first</caption>
             <thead>
               <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                <th scope="col" className="py-2 pr-4">Run</th>
-                <th scope="col" className="py-2 pr-4">Status</th>
-                <th scope="col" className="py-2 pr-4">Mode</th>
-                <th scope="col" className="py-2 pr-4">Started</th>
-                <th scope="col" className="py-2 pr-4">Completed</th>
-                <th scope="col" className="py-2 pr-4">Pages</th>
-                <th scope="col" className="py-2">Failed</th>
+                <th scope="col" className="py-2 pr-4">
+                  Run
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Status
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Mode
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Started
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Completed
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Pages
+                </th>
+                <th scope="col" className="py-2">
+                  Failed
+                </th>
               </tr>
             </thead>
             <tbody>

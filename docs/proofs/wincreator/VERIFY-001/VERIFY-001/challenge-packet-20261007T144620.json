@@ -1,0 +1,71 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "669b6a0cc45ad65cced74a82e5a9224b86445a922084735273d6dd2589009b5b",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "Meso",
+      "text": "The current branch passes formatting, uncached workspace lint, typecheck, PostgreSQL-backed tests, production build, and high-severity dependency audit using the disposable PostgreSQL database with the migration chain applied.",
+      "gate": "Run the captured final gate script; require correct database identity and migration ledger, format check, diff check, uncached lint/typecheck/test/build, and dependency audit to exit 0.",
+      "row_sha256": "104328243d318c5af543d4801602172a455c1fedec4c1e3ae71c26a2fdeb8d8f",
+      "ledger_sha256_before": "cf56a6a76f72193a8f688f17b64fa208967805c8c1e10f808cea297aa473b915",
+      "status_before": "EVIDENCED"
+    },
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "bash",
+      "scripts/verify-disposable-db-gates.sh"
+    ],
+    "stdout": {
+      "sha256": "755aa8959af088924dcf28d166e8c11387547796dd2835bce140f7c2ded232cf",
+      "original_bytes": 285899,
+      "stored_bytes": 285899,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "ectId]/search-performance                1.44 kB         108 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/changes          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/opportunities    981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/pages            981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/queries          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/security                                      1.76 kB         104 kB\n@serpvera/web:build: ├ ○ /login                                                   1.98 kB         105 kB\n@serpvera/web:build: ├ ○ /methodology                                               147 B         103 kB\n@serpvera/web:build: ├ ○ /pricing                                                   147 B         103 kB\n@serpvera/web:build: ├ ƒ /projects/[projectId]/actions                              147 B         103 kB\n@serpvera/web:build: ├ ƒ /scan/[scanId]                                           2.16 kB         105 kB\n@serpvera/web:build: └ ƒ /signup                                                    147 B         103 kB\n@serpvera/web:build: + First Load JS shared by all                                 103 kB\n@serpvera/web:build:   ├ chunks/812-52aaa9f8a3640ba4.js                           46.5 kB\n@serpvera/web:build:   ├ chunks/9923a0e2-1a45aa5d099bff40.js                      54.2 kB\n@serpvera/web:build:   └ other shared chunks (total)                              1.92 kB\n@serpvera/web:build: \n@serpvera/web:build: \n@serpvera/web:build: ○  (Static)   prerendered as static content\n@serpvera/web:build: ƒ  (Dynamic)  server-rendered on demand\n@serpvera/web:build: \n\n Tasks:    7 successful, 7 total\nCached:    0 cached, 7 total\n  Time:    16.184s \n\nGATE_PASS production build\nGATE_START dependency audit (high severity)\nNo known vulnerabilities found\nGATE_PASS dependency audit (high severity)\n"
+    },
+    "stderr": {
+      "sha256": "4b23a82f4f2d22976ed60f52817a567eec967f91b880a3835f9d40b2598f0bf3",
+      "original_bytes": 3026,
+      "stored_bytes": 3026,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`\n(node:885313) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    },
+    "files": [
+      {
+        "path": "scripts/verify-disposable-db-gates.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "edad28210c2a8293c59ca3cca142798330d88c149109e64e08b1ca55c24b86fa",
+        "bytes": 2521
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "293f8a4b61575f57f0ed81e0d8d1e1ad16f63255813007805deaef35cab8bf0e",
+      "worktree_digest": "e731fa15c77da4b2a4e79076e70f929b50b2b69f0ec01914e3af720050503a60"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "2817abaead669e93471b0aa9547f614cc0e0b03ed5b300e4e5a420172d1ed7cf"
+}

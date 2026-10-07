@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Methodology — SERPVERA",
-  description: "How SERPVERA measures SEO, AI Search visibility, and Search Console data — honestly.",
+  description:
+    "How SERPVERA measures SEO, AI Search visibility, and Search Console data — honestly.",
 };
 
 export default function MethodologyPage() {
@@ -15,9 +16,7 @@ export default function MethodologyPage() {
       </p>
 
       <h2 className="mt-10 text-xl font-semibold">Epistemic Classification</h2>
-      <p className="mt-2 text-slate-700">
-        Every finding is classified by how we know it:
-      </p>
+      <p className="mt-2 text-slate-700">Every finding is classified by how we know it:</p>
       <ul className="mt-4 space-y-2 list-disc pl-6 text-slate-700">
         <li>
           <strong>OBSERVED</strong> — Directly observed in the HTML, HTTP response, or crawl data

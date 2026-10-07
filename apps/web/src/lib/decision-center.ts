@@ -1,11 +1,6 @@
 import type { FindingSummary, GscMeasuredRecommendation } from "./types";
 
-export type DecisionLane =
-  | "FIX_NOW"
-  | "GROW"
-  | "REFRESH"
-  | "CONSOLIDATE_REVIEW"
-  | "WATCH";
+export type DecisionLane = "FIX_NOW" | "GROW" | "REFRESH" | "CONSOLIDATE_REVIEW" | "WATCH";
 
 export interface DecisionItem {
   id: string;
@@ -72,9 +67,15 @@ function gscPriority(rec: GscMeasuredRecommendation, lane: DecisionLane): number
     GROW: 10,
     WATCH: 0,
   };
-  const impressions =
-    typeof rec.observed.impressions === "number" ? rec.observed.impressions : 0;
+  const impressions = typeof rec.observed.impressions === "number" ? rec.observed.impressions : 0;
   return base + laneBoost[lane] + Math.min(20, Math.log10(Math.max(1, impressions)) * 4);
+}
+
+function gscEvidenceHref(projectId: string, module: string): string {
+  const section = ["winners_losers", "page_query_decay", "emerging_queries"].includes(module)
+    ? "changes"
+    : "opportunities";
+  return `/dashboard/${projectId}/search-performance/${section}`;
 }
 
 export function buildDecisionCenter(
@@ -115,7 +116,7 @@ export function buildDecisionCenter(
       source: "gsc",
       severity: rec.severity,
       affectedUrls: rec.subject.page ? [rec.subject.page] : [],
-      href: `/dashboard/${projectId}/search-performance/opportunities`,
+      href: gscEvidenceHref(projectId, rec.module),
       priority: gscPriority(rec, lane),
     };
   });

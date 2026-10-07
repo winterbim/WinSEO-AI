@@ -12,13 +12,13 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "test": "turbo test --concurrency=1",
+    "test": "turbo test --concurrency=1 --env-mode=loose",
     "verify": "pnpm lint && pnpm typecheck && pnpm test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "clean": "turbo clean",
-    "db:migrate": "turbo db:migrate",
-    "db:seed": "turbo db:seed"
+    "db:migrate": "turbo db:migrate --env-mode=loose",
+    "db:seed": "turbo db:seed --env-mode=loose"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -28,5 +28,10 @@
     "turbo": "^2.3.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.71.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "8.5.29"
+    }
   }
 }

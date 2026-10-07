@@ -26,7 +26,10 @@ export interface EvidenceRecord {
 }
 
 export interface EvidenceStore {
-  store(record: Omit<EvidenceRecord, "evidenceId" | "contentHash" | "objectKey">, content: Buffer | string): Promise<EvidenceRecord>;
+  store(
+    record: Omit<EvidenceRecord, "evidenceId" | "contentHash" | "objectKey">,
+    content: Buffer | string,
+  ): Promise<EvidenceRecord>;
   retrieve(objectKey: string): Promise<Buffer | null>;
   delete(objectKey: string): Promise<void>;
 }

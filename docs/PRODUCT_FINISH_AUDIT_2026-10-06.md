@@ -30,14 +30,14 @@ This change does not clone any third-party product. It keeps WinSEO's own doctri
 
 WinSEO classifies statements before acting:
 
-| Class | Meaning | Allowed source |
-| --- | --- | --- |
-| OBSERVED | Direct fact of a fetched/rendered document | Crawl/evidence |
-| MEASURED | Numeric result from persisted first-party or captured data | GSC / repeated AI-answer captures |
-| DOCUMENTED | Supported by a named external primary source | Documentation |
-| INFERRED | Reasoned interpretation of evidence | Analysis layer |
-| HYPOTHESIS | Testable explanation awaiting verification | Decision layer |
-| UNKNOWN | Insufficient evidence | Explicit empty/block state |
+| Class      | Meaning                                                    | Allowed source                    |
+| ---------- | ---------------------------------------------------------- | --------------------------------- |
+| OBSERVED   | Direct fact of a fetched/rendered document                 | Crawl/evidence                    |
+| MEASURED   | Numeric result from persisted first-party or captured data | GSC / repeated AI-answer captures |
+| DOCUMENTED | Supported by a named external primary source               | Documentation                     |
+| INFERRED   | Reasoned interpretation of evidence                        | Analysis layer                    |
+| HYPOTHESIS | Testable explanation awaiting verification                 | Decision layer                    |
+| UNKNOWN    | Insufficient evidence                                      | Explicit empty/block state        |
 
 No surface should silently convert one class into another.
 
@@ -109,6 +109,7 @@ The feature explicitly treats generative answers as stochastic repeated samples.
 ## Ideas intentionally not copied
 
 The implementation does **not** reproduce another tool's:
+
 - page design;
 - wording;
 - pricing;

@@ -69,15 +69,9 @@ export function parseRobotsTxt(content: string): RobotsTxtRules {
  * Check if a URL path is allowed for a given user agent.
  * Follows robots.txt precedence: most specific rule wins, allow overrides disallow for same specificity.
  */
-export function isUrlAllowed(
-  path: string,
-  userAgent: string,
-  rules: RobotsTxtRules,
-): boolean {
+export function isUrlAllowed(path: string, userAgent: string, rules: RobotsTxtRules): boolean {
   // Find matching user-agent (exact match first, then wildcard)
-  const agentRules =
-    rules.userAgents.get(userAgent.toLowerCase()) ??
-    rules.userAgents.get("*");
+  const agentRules = rules.userAgents.get(userAgent.toLowerCase()) ?? rules.userAgents.get("*");
 
   if (!agentRules) return true;
 
@@ -157,10 +151,7 @@ export function parseSitemapXml(xml: string): {
 /**
  * Fetch and parse a sitemap (handles both XML and gzipped).
  */
-export async function fetchSitemap(
-  sitemapUrl: string,
-  traceId: string,
-): Promise<SitemapEntry[]> {
+export async function fetchSitemap(sitemapUrl: string, traceId: string): Promise<SitemapEntry[]> {
   const entries: SitemapEntry[] = [];
   const visited = new Set<string>();
 

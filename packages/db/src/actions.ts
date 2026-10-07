@@ -170,7 +170,7 @@ async function hydrate(client: import("pg").PoolClient, row: DbActionRow): Promi
             e.captured_at, e.metadata_json
        FROM finding_evidence fe
        JOIN evidence_items e ON e.id = fe.evidence_id
-      WHERE fe.finding_id = $1 AND e.organization_id = $2
+      WHERE fe.organization_id = $2 AND fe.finding_id = $1 AND e.organization_id = $2
       ORDER BY e.captured_at DESC, e.id`,
     [row.finding_id, row.organization_id],
   );
@@ -332,6 +332,9 @@ async function gscWindowVerdict(
   const minImpressions = typeof spec.minImpressions === "number" ? spec.minImpressions : 0;
   const filterQuery = typeof spec.query === "string" ? spec.query : null;
   const filterPage = typeof spec.page === "string" ? spec.page : null;
+  const filterDevice = typeof spec.device === "string" ? spec.device : null;
+  const filterCountry = typeof spec.country === "string" ? spec.country : null;
+  const filterConnectionId = typeof spec.connectionId === "string" ? spec.connectionId : null;
 
   // The declared comparison window wins; otherwise MEASURING → now.
   const start = new Date(
@@ -354,17 +357,45 @@ async function gscWindowVerdict(
             CASE WHEN sum(impressions) > 0
                  THEN sum(position * impressions) / sum(impressions) ELSE 0 END AS position,
             count(*)::int AS rows
-       FROM gsc_query_metrics
-      WHERE organization_id = $1
-        AND project_id = $2
-        AND metric_date BETWEEN $3::date AND $4::date
-        AND ($5::text IS NULL OR query = $5)
-        AND ($6::text IS NULL OR page = $6)`,
-    [row.organization_id, row.project_id, startDate, endDate, filterQuery, filterPage],
+       FROM gsc_query_metrics AS metric
+       JOIN gsc_sync_jobs AS job
+         ON job.id = metric.sync_job_id
+        AND job.organization_id = metric.organization_id
+        AND job.project_id = metric.project_id
+      WHERE metric.organization_id = $1
+        AND metric.project_id = $2
+        AND job.status = 'COMPLETED'
+        AND metric.metric_date BETWEEN $3::date AND $4::date
+        AND ($5::text IS NULL OR metric.query = $5)
+        AND ($6::text IS NULL OR metric.page = $6)
+        AND ($7::text IS NULL OR metric.device = $7)
+        AND ($8::text IS NULL OR metric.country = $8)
+        AND ($9::uuid IS NULL OR job.connection_id = $9)`,
+    [
+      row.organization_id,
+      row.project_id,
+      startDate,
+      endDate,
+      filterQuery,
+      filterPage,
+      filterDevice,
+      filterCountry,
+      filterConnectionId,
+    ],
   );
   const stats = aggregate.rows[0];
   const metricRows = stats?.rows ?? 0;
-  const filters = { metric, operator, threshold, query: filterQuery, page: filterPage, minImpressions };
+  const filters = {
+    metric,
+    operator,
+    threshold,
+    query: filterQuery,
+    page: filterPage,
+    device: filterDevice,
+    country: filterCountry,
+    connectionId: filterConnectionId,
+    minImpressions,
+  };
 
   if (metricRows === 0) {
     return {
@@ -564,8 +595,10 @@ export async function transitionAction(
 
     if (toState === "EVIDENCED") {
       const linked = await client.query<{ n: number }>(
-        `SELECT count(*)::int AS n FROM finding_evidence WHERE finding_id = $1`,
-        [row.finding_id],
+        `SELECT count(*)::int AS n
+           FROM finding_evidence
+          WHERE organization_id = $1 AND finding_id = $2`,
+        [row.organization_id, row.finding_id],
       );
       if ((linked.rows[0]?.n ?? 0) === 0) {
         throw new ActionMutationError(
@@ -586,6 +619,32 @@ export async function transitionAction(
         throw new ActionMutationError(
           "RECOMMENDATION_REQUIRED",
           "The recommendation gate must match the finding's persisted gate.",
+        );
+      }
+      const measuredGateMismatch = await client.query<{ mismatch: boolean }>(
+        `WITH latest_gsc_evidence AS (
+           SELECT e.metadata_json
+             FROM finding_evidence fe
+             JOIN evidence_items e
+               ON e.id = fe.evidence_id AND e.organization_id = fe.organization_id
+            WHERE fe.organization_id = $1 AND fe.finding_id = $2
+              AND e.kind = 'gsc_data'
+              AND e.metadata_json ? 'verificationGate'
+            ORDER BY e.captured_at DESC, e.id DESC
+            LIMIT 1
+         )
+         SELECT true AS mismatch FROM latest_gsc_evidence
+          WHERE metadata_json->'verificationGate' IS DISTINCT FROM $3::jsonb`,
+        [
+          row.organization_id,
+          row.finding_id,
+          JSON.stringify(input.recommendation.verificationGate),
+        ],
+      );
+      if (measuredGateMismatch.rows[0]) {
+        throw new ActionMutationError(
+          "RECOMMENDATION_REQUIRED",
+          "A measured GSC proposal must preserve the verification gate recorded in its evidence.",
         );
       }
       recommendation = input.recommendation;

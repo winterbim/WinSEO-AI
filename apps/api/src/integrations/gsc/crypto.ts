@@ -36,9 +36,12 @@ export function encryptSecret(plaintext: string, key: Buffer): string {
   const cipher = createCipheriv(ALGO, key, iv, { authTagLength: TAG_BYTES });
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return [PAYLOAD_VERSION, iv.toString("base64url"), tag.toString("base64url"), ciphertext.toString("base64url")].join(
-    ".",
-  );
+  return [
+    PAYLOAD_VERSION,
+    iv.toString("base64url"),
+    tag.toString("base64url"),
+    ciphertext.toString("base64url"),
+  ].join(".");
 }
 
 /** Decrypt a payload produced by {@link encryptSecret}; throws on any tampering. */
@@ -58,7 +61,10 @@ export function decryptSecret(payload: string, key: Buffer): string {
   decipher.setAuthTag(tag);
   // GCM authentication failure surfaces as a throw — a tampered token row is
   // rejected rather than decoded into attacker-controlled text.
-  return Buffer.concat([decipher.update(Buffer.from(dataB64, "base64url")), decipher.final()]).toString("utf8");
+  return Buffer.concat([
+    decipher.update(Buffer.from(dataB64, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
 }
 
 /**

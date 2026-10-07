@@ -25,11 +25,7 @@ import {
 import { decryptSecret, deriveGscKey, encryptSecret } from "./crypto.ts";
 import { GscApiError, GOOGLE_AUTHORIZE_ENDPOINT } from "./google-transport.ts";
 import { GscCredentialsRequiredError } from "./types.ts";
-import {
-  FakeGscStore,
-  FakeGoogleTransport,
-  invalidGrantError,
-} from "./test-doubles.ts";
+import { FakeGscStore, FakeGoogleTransport, invalidGrantError } from "./test-doubles.ts";
 
 const KEY = deriveGscKey("gsc-oauth-test-master-secret-at-least-32-chars");
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -174,7 +170,12 @@ void describe("GSC-002 token lifecycle", () => {
   void it("returns a fresh token without a refresh round trip", async () => {
     const store = new FakeGscStore();
     const transport = new FakeGoogleTransport();
-    seedCredential(store, "ya29.still-fresh", "1//refresh-A", new Date(NOW + 3_600_000).toISOString());
+    seedCredential(
+      store,
+      "ya29.still-fresh",
+      "1//refresh-A",
+      new Date(NOW + 3_600_000).toISOString(),
+    );
 
     const token = await getValidAccessToken({
       store,
@@ -247,7 +248,10 @@ void describe("GSC-002 token lifecycle", () => {
     const expiresAt = new Date(NOW + ACCESS_TOKEN_SKEW_SECONDS * 1000).toISOString();
     assert.equal(accessTokenNeedsRefresh(expiresAt, NOW), true, "within the skew window");
     assert.equal(
-      accessTokenNeedsRefresh(new Date(NOW + (ACCESS_TOKEN_SKEW_SECONDS + 5) * 1000).toISOString(), NOW),
+      accessTokenNeedsRefresh(
+        new Date(NOW + (ACCESS_TOKEN_SKEW_SECONDS + 5) * 1000).toISOString(),
+        NOW,
+      ),
       false,
     );
     assert.equal(accessTokenNeedsRefresh("not-a-date", NOW), true, "malformed expiry fails closed");
@@ -317,7 +321,9 @@ void describe("GSC-002 token lifecycle", () => {
   void it("erases local material even when Google revocation fails, and surfaces the failure", async () => {
     const store = new FakeGscStore();
     const transport = new FakeGoogleTransport({
-      revokeErrors: [new GscApiError("NETWORK", "revoke endpoint unreachable", { retryable: true })],
+      revokeErrors: [
+        new GscApiError("NETWORK", "revoke endpoint unreachable", { retryable: true }),
+      ],
     });
     seedCredential(store, "ya29.live", "1//refresh-A", new Date(NOW + 3_600_000).toISOString());
 
@@ -396,7 +402,12 @@ void describe("GSC-002 token lifecycle", () => {
 
   void it("describes credentials for logs without ever revealing token material", async () => {
     const store = new FakeGscStore();
-    seedCredential(store, "ya29.super-secret", "1//super-secret-refresh", new Date(NOW + 1000).toISOString());
+    seedCredential(
+      store,
+      "ya29.super-secret",
+      "1//super-secret-refresh",
+      new Date(NOW + 1000).toISOString(),
+    );
     const stored = await store.getCredential(ORG, PROJECT);
     const described = describeCredential(stored);
     assert.ok(!described.includes("ya29.super-secret"));

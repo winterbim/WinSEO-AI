@@ -1,0 +1,141 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "38155e1178a1b15965a3fa6138c6eb9e33f34b96ea2bd6cdbdaa626f3d4e1477",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "",
+      "text": "",
+      "gate": "",
+      "row_sha256": null,
+      "ledger_sha256_before": null,
+      "status_before": null
+    },
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGDATABASE=serpvera_dev",
+      "/bin/bash",
+      "-lc",
+      "pnpm format:check && git diff --check && pnpm verify && pnpm build && pnpm audit --audit-level=high"
+    ],
+    "stdout": {
+      "sha256": "10919cc0990d025f24f5742d96eb9e4c5842f08319343d24b16f51ef21f885a9",
+      "original_bytes": 282823,
+      "stored_bytes": 200000,
+      "truncated": true,
+      "body_stored": true,
+      "tail": "request completed\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634004,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-e\",\"req\":{\"method\":\"POST\",\"url\":\"/v1/auth/login\",\"host\":\"localhost:80\",\"remoteAddress\":\"203.0.113.109\"},\"msg\":\"incoming request\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634030,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-e\",\"res\":{\"statusCode\":401},\"responseTime\":25.906605000000013,\"msg\":\"request completed\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634031,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-f\",\"req\":{\"method\":\"POST\",\"url\":\"/v1/auth/login\",\"host\":\"localhost:80\",\"remoteAddress\":\"203.0.113.109\"},\"msg\":\"incoming request\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634056,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-f\",\"res\":{\"statusCode\":401},\"responseTime\":25.554399999999987,\"msg\":\"request completed\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634057,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-g\",\"req\":{\"method\":\"POST\",\"url\":\"/v1/auth/login\",\"host\":\"localhost:80\",\"remoteAddress\":\"203.0.113.109\"},\"msg\":\"incoming request\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634083,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-g\",\"res\":{\"statusCode\":401},\"responseTime\":26.70252800000003,\"msg\":\"request completed\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634084,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-h\",\"req\":{\"method\":\"POST\",\"url\":\"/v1/auth/login\",\"host\":\"localhost:80\",\"remoteAddress\":\"203.0.113.109\"},\"msg\":\"incoming request\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634110,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-h\",\"res\":{\"statusCode\":401},\"responseTime\":26.370731999999975,\"msg\":\"request completed\"}\n@serpvera/api:test: {\"level\":30,\"time\":1791373634110,\"pid\":774964,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-i\",\"req\":{\"method\":\"POST\",\"url\":\"/v1/auth/login\",\"host\":\"localhost:80\",\"remoteAddress\":\"203.0.113.109\"},\"msg\":\"incoming request\"}\n@se"
+    },
+    "stderr": {
+      "sha256": "fab9f9ec5e3a0673a374d5e9f9e25471cfed6d9b8614b9e82959537165320f45",
+      "original_bytes": 302,
+      "stored_bytes": 302,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "(node:786181) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    },
+    "files": [
+      {
+        "path": ".prettierignore",
+        "optional": false,
+        "missing": false,
+        "sha256": "276ac6c0de8736a4eba2751680438ccd82f9f7a189d2b4a75e6ad4901e0ac509",
+        "bytes": 41
+      },
+      {
+        "path": "package.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "e3b53aa48ce0dd26dbbd23ca833cfdb21f7a58390dafe87cffae0f3cf4d31405",
+        "bytes": 986
+      },
+      {
+        "path": "pnpm-lock.yaml",
+        "optional": false,
+        "missing": false,
+        "sha256": "88a6875500185e01b159e3675f6ce20c222564247f3a403904ba6d6118c27ca5",
+        "bytes": 93520
+      },
+      {
+        "path": "packages/db/src/gsc.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "07040687757c2aa905e363b6ded0389eb3b50efbab97dac162bc08ad5d6fa8e0",
+        "bytes": 33650
+      },
+      {
+        "path": "packages/db/src/gsc-rls.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "463d0425f69a6d36d776f2851f184c49e7cad89bd4ff4ed6735118e4037a0539",
+        "bytes": 33077
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "edf1f80ef03957c8d5ae7786aa3d90011ff839d72552fb938ef44edff6ca57ed",
+        "bytes": 16536
+      },
+      {
+        "path": "packages/db/migrations/0020_gsc_sync_claim_order.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "9f3406bb29e1b7ec18cdbf4674d86ab003d25b936b0fbdba0d4b3631c20f9139",
+        "bytes": 1965
+      },
+      {
+        "path": "apps/api/src/gsc-action-verification.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "4b2183e58190b7a7062bb8d0a0392a7deecf59b1fe5c466277c1e4233c8c205f",
+        "bytes": 44616
+      },
+      {
+        "path": "docs/PROOF_LEDGER_RPLUS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "c4b71acd91ff3ee0435c25ce6d0ba6a95e8e7f99d02a4d53a5b4f05f92f78b42",
+        "bytes": 10407
+      },
+      {
+        "path": "docs/proofs/wincreator/gsc-distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "8d294ff502aaab13939222bdbe451b6967e1833e93c7245f026b4da56e4c606b",
+        "bytes": 7768
+      },
+      {
+        "path": "docs/proofs/wincreator/gsc-distill-report.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "b04e35725c0077e614444a8bbcee309b433d8b731df15947b32175ea6e9a8bd0",
+        "bytes": 1569
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "af6a18b12eebbc8915be76d97ffee99dc06668becb0ac6c8cbf8db2032a6eb26",
+      "worktree_digest": "591d7dcf6eb7ed56015dea228463f9916f44b05cb91b8f4586a2b4377eb9a4d4"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "70f2f10a9df0fc46998158697bcc22c9e5bad492c609000040eab42cfb06f9a5"
+}

@@ -1,11 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  hasPermission,
-  requirePermission,
-  canManageRole,
-  AuthorizationError,
-} from "./index.ts";
+import { hasPermission, requirePermission, canManageRole, AuthorizationError } from "./index.ts";
 
 void describe("authz", () => {
   void describe("hasPermission", () => {
@@ -39,14 +34,15 @@ void describe("authz", () => {
 
   void describe("requirePermission", () => {
     void it("throws AuthorizationError when permission denied", () => {
-      assert.throws(
-        () => { requirePermission("VIEWER", "production.write"); },
-        AuthorizationError,
-      );
+      assert.throws(() => {
+        requirePermission("VIEWER", "production.write");
+      }, AuthorizationError);
     });
 
     void it("does not throw when permission granted", () => {
-      assert.doesNotThrow(() => { requirePermission("ADMIN", "production.write"); });
+      assert.doesNotThrow(() => {
+        requirePermission("ADMIN", "production.write");
+      });
     });
   });
 

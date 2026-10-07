@@ -1,0 +1,170 @@
+{
+  "dependencies": [
+    "npm:@serpvera/contracts",
+    "npm:@serpvera/telemetry",
+    "npm:@types/node",
+    "npm:@types/pg",
+    "npm:eslint",
+    "npm:eslint-config-prettier",
+    "npm:pg",
+    "npm:prettier",
+    "npm:tsx",
+    "npm:turbo",
+    "npm:typescript",
+    "npm:typescript-eslint"
+  ],
+  "digest": "a9c1543b9fffea12fbe1aef7e25d1e327718428ed510e477f312e94d3e8ed835",
+  "duplicates": [
+    {
+      "fingerprint": "652da6d8d537a9b7f118ca9d71f5ee94d9e1090f56eb57c18a63ae4f7cdff8f7",
+      "occurrences": [
+        "packages/db/src/gsc-claim-order-migration.test.ts:184",
+        "packages/db/src/gsc-claim-order-migration.test.ts:197"
+      ]
+    },
+    {
+      "fingerprint": "bd0a8fdc7fcbb9a008daf829eae6961d50edbe43ff84c6de327f3e4797aefed3",
+      "occurrences": [
+        "packages/db/migrations/0019w_gsc_effective_acl_fence.sql:41",
+        "packages/db/src/schema-integrity.test.ts:185"
+      ]
+    },
+    {
+      "fingerprint": "cb7690066805a93e89ba655f534672d3ec701f4f28a9a00b4514ca7a87f1ef25",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:15",
+        "packages/db/src/schema-integrity.test.ts:31"
+      ]
+    },
+    {
+      "fingerprint": "d7af6e9c256b09223b3078e3c227dbd34a20cfe6bce2c7de830fca0a39744816",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:16",
+        "packages/db/src/schema-integrity.test.ts:32"
+      ]
+    },
+    {
+      "fingerprint": "fc3d3eb860c4bf021689389ac9633729ba18f5b2204019ec170efdf626ef7c72",
+      "occurrences": [
+        "packages/db/src/gsc-claim-order-migration.test.ts:183",
+        "packages/db/src/gsc-claim-order-migration.test.ts:196"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "bytes": 4715,
+      "lines": 112,
+      "nonblank_lines": 105,
+      "path": "packages/db/migrations/0019w_gsc_effective_acl_fence.sql",
+      "sha256": "5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab"
+    },
+    {
+      "bytes": 1186,
+      "lines": 39,
+      "nonblank_lines": 34,
+      "path": "packages/db/migrations/0024_restore_gsc_acl_baseline.sql",
+      "sha256": "dc8b495a68fdf8070f6a762018a4dd8e64ce403174d94cd47c4146607f8f6a54"
+    },
+    {
+      "bytes": 19013,
+      "lines": 445,
+      "nonblank_lines": 420,
+      "path": "packages/db/src/gsc-claim-order-migration.test.ts",
+      "sha256": "7a40807960088c1a3830edad4682826d88d54778d51bee755688b33ca7fa1bbc"
+    },
+    {
+      "bytes": 23401,
+      "lines": 606,
+      "nonblank_lines": 581,
+      "path": "packages/db/src/schema-integrity.test.ts",
+      "sha256": "10ea1bf8042a05254f7bb7811e96af242195734b0e550814c4d53fdbe2283e4e"
+    }
+  ],
+  "manifest_files": [
+    {
+      "dependency_parsed": true,
+      "path": "package.json",
+      "sha256": "e3b53aa48ce0dd26dbbd23ca833cfdb21f7a58390dafe87cffae0f3cf4d31405"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "packages/db/package.json",
+      "sha256": "f03b79e21bccf77dd330d90b7aea7370eba71dca7811d1225ce67ce22c9e2ec1"
+    }
+  ],
+  "manifests": [
+    "package.json",
+    "packages/db/package.json"
+  ],
+  "metrics": {
+    "declared_dependencies": 12,
+    "duplicate_fingerprints": 5,
+    "largest_file_lines": 606,
+    "nonblank_lines": 1140,
+    "source_bytes": 48315,
+    "source_files": 4,
+    "source_lines": 1202
+  },
+  "policy": {
+    "duplicate_min_chars": 120,
+    "duplicate_window_lines": 6,
+    "exclude_dirs": [
+      ".git",
+      ".hg",
+      ".svn",
+      ".venv",
+      ".wincreator",
+      "__pycache__",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules",
+      "target",
+      "vendor",
+      "venv"
+    ],
+    "exclude_globs": [
+      "*.map",
+      "*.min.css",
+      "*.min.js"
+    ],
+    "schema": "wincreator.distill-policy/v1",
+    "source_extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cs",
+      ".css",
+      ".dart",
+      ".go",
+      ".h",
+      ".hpp",
+      ".html",
+      ".java",
+      ".js",
+      ".jsx",
+      ".kt",
+      ".php",
+      ".py",
+      ".rb",
+      ".rs",
+      ".sh",
+      ".sql",
+      ".svelte",
+      ".swift",
+      ".ts",
+      ".tsx",
+      ".vue"
+    ]
+  },
+  "policy_digest": "78eef27d5de49a0d903f94956f3d1233fd682325ea5c97b0a4cb3bacfee1cda3",
+  "schema": "wincreator.distill-snapshot/v1",
+  "scopes": [
+    "packages/db/migrations/0019w_gsc_effective_acl_fence.sql",
+    "packages/db/migrations/0024_restore_gsc_acl_baseline.sql",
+    "packages/db/src/gsc-claim-order-migration.test.ts",
+    "packages/db/src/schema-integrity.test.ts"
+  ],
+  "warnings": []
+}

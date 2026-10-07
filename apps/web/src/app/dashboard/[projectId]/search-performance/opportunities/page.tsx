@@ -64,8 +64,8 @@ export default async function GscOpportunitiesPage({
         <div>
           <h1 className="text-2xl font-bold">Opportunities</h1>
           <p className="mt-1 text-sm text-slate-700">
-            Deterministic findings over measured Search Analytics rows. Every recommendation can
-            be promoted into the Action Center, where its gate is re-measured after the change.
+            Deterministic findings over measured Search Analytics rows. Every recommendation can be
+            promoted into the Action Center, where its gate is re-measured after the change.
           </p>
           <div className="mt-2">
             <GscSubNav projectId={projectId} current="/opportunities" />
@@ -84,6 +84,7 @@ export default async function GscOpportunitiesPage({
               key={`${rec.module}:${JSON.stringify(rec.subject)}`}
               projectId={projectId}
               recommendation={rec}
+              sourceFilters={intelligence.filters}
             />
           ))}
         </div>

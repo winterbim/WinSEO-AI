@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "Meso",
+      "text": "The current branch passes formatting, complete workspace verification, production build, and high-severity dependency audit using the disposable PostgreSQL database with the migration chain applied.",
+      "gate": "Run the captured final gate script; require correct database identity and migration ledger, format check, diff check, workspace verify, production build, and dependency audit to exit 0.",
+      "row_sha256": "57e37366a1e8f3fe0eed3782c58e544c3f4e4c451ca50d07bf9267c340b77757",
+      "ledger_sha256_before": "d9080a4022bdea7e6ab57526287ff904d37803a8a901a7b2df203b80af71a920",
+      "status_before": "CLAIMED"
+    },
+    "capture_digest": "3934ea4b9421fbd05c92749013f4b4294537b0631e05dc8b8a21d467bcb80ad7",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "INSUFFICIENT",
+    "reviewer": "audit_product_ux",
+    "challenge": "The captured stdout has no explicit git diff --check command/result, and the reviewer packet contains only the gate script hash, not its body.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "072f240dae0978bf73fb172672e3c7c069fae619f1c5ebca814c02e0a80d2a89"
+    },
+    "reviewed_at": "2026-10-07T14:34:29.491370Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "4c871e7c27ca24f9bd43e3edaa6e0d52f88a4c24ff94748ce447589f0467552f"
+  }
+}

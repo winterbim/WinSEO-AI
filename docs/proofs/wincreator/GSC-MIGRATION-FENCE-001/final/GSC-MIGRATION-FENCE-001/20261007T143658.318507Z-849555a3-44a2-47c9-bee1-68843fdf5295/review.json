@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "GSC-MIGRATION-FENCE-001",
+      "level": "Meso",
+      "text": "The migration chain disables runtime table/column DML on organizations, projects, GSC connections/jobs/metrics during the cleanup barrier, blocks parent cascades, then restores those five tables' runtime DML after guards are removed without PUBLIC write ACLs. Credential and OAuth-state direct writes are outside this fence.",
+      "gate": "Run the full DB package suite against disposable PostgreSQL after applying migrations; inspect the targeted malicious PUBLIC-ACL fixture, migration order, parent-cascade tests, and effective privilege/schema assertions for the five protected tables.",
+      "row_sha256": "fa2fad63a89ed291d14364c8373382d264a7fb6eabe6762467474cd671f588ea",
+      "ledger_sha256_before": "8070f445b0df9caeea358afb3d1590721ab2046f5032e28fc4b81eca03950ec1",
+      "status_before": "PENDING"
+    },
+    "capture_digest": "fec6c07b1084200ef32cceac6affcac4c17368e1dae46968a6edae3664fe5244",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "audit_security_ci",
+    "challenge": "Verified the exact five-table scope against captured migrations, adversarial PostgreSQL fixtures, parent cascade cases, effective ACL assertions, and 75/75 uncached DB tests. Confirmed credentials and OAuth-state direct writes are outside this fence as stated.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "aa92f332b0f3c37c341f5db1c5f243c462c7f62d2ff0d430a316db68b9821932"
+    },
+    "reviewed_at": "2026-10-07T14:40:43.179530Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "289b2dc584d5091cbae9ec11689306f2d2ce9395f60b9f9b06b1adabb163ec38"
+  }
+}

@@ -6,15 +6,28 @@
 import type { ApiStores } from "./types.ts";
 import { createMemoryStores } from "./memory.ts";
 import { createDbStores, initDbStores } from "./db.ts";
+import { parseNodeEnv } from "@serpvera/config";
 
 export type StoreDriver = "postgres" | "memory";
 
-export function resolveStoreDriver(): StoreDriver {
-  const raw = (process.env.STORE_DRIVER ?? "").toLowerCase();
-  if (raw === "memory") return "memory";
-  if (raw === "postgres") return "postgres";
-  // Default: if a real DB is reachable config exists, use postgres in production.
-  return process.env.NODE_ENV === "production" ? "postgres" : "memory";
+export function resolveStoreDriver(env: NodeJS.ProcessEnv = process.env): StoreDriver {
+  const raw = (env.STORE_DRIVER ?? "").toLowerCase();
+  const nodeEnv = parseNodeEnv(env.NODE_ENV);
+
+  if (raw && raw !== "memory" && raw !== "postgres") {
+    throw new Error("STORE_DRIVER must be postgres or memory.");
+  }
+
+  const driver = raw ? (raw as StoreDriver) : nodeEnv === "production" ? "postgres" : "memory";
+  assertStoreDriverAllowed(driver, nodeEnv);
+  return driver;
+}
+
+export function assertStoreDriverAllowed(driver: StoreDriver, nodeEnv: string): void {
+  const validatedNodeEnv = parseNodeEnv(nodeEnv);
+  if (validatedNodeEnv === "production" && driver !== "postgres") {
+    throw new Error("The memory store is not allowed in production.");
+  }
 }
 
 export interface CreateStoresOptions {
@@ -28,7 +41,9 @@ export interface CreateStoresOptions {
 }
 
 export function createStores(opts: CreateStoresOptions = {}): ApiStores {
+  const nodeEnv = parseNodeEnv(process.env.NODE_ENV);
   const driver = opts.driver ?? resolveStoreDriver();
+  assertStoreDriverAllowed(driver, nodeEnv);
   if (driver === "postgres") {
     const connectionString = opts.pgConnectionString ?? process.env.DATABASE_URL;
     // Local dev/CI: no DATABASE_URL → unix-socket peer auth (no password, so no
@@ -38,8 +53,7 @@ export function createStores(opts: CreateStoresOptions = {}): ApiStores {
       connectionString,
       host: opts.pgSocketDir ?? process.env.PG_SOCKET_DIR ?? "/var/run/postgresql",
       database: opts.pgDatabase ?? process.env.PGDATABASE ?? "serpvera_dev",
-      runtimeRole:
-        opts.runtimeRole ?? process.env.DB_RUNTIME_ROLE ?? "serpvera_app",
+      runtimeRole: opts.runtimeRole ?? process.env.DB_RUNTIME_ROLE ?? "serpvera_app",
       maxPool: opts.maxPool ?? 10,
     });
     return createDbStores();

@@ -44,7 +44,9 @@ export async function runGscSync(
     throw new Error("GSC sync window is invalid.");
   }
   const rows = await adapter.fetchSearchAnalytics(property, window);
-  rows.forEach((row) => { validateGscRow(row, window); });
+  rows.forEach((row) => {
+    validateGscRow(row, window);
+  });
   await sink.persist(rows);
   return { property, window, rowCount: rows.length, adapterKind: adapter.kind };
 }

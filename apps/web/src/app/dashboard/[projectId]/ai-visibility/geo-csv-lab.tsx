@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { computeGeoStats, parseGeoCsv, type GeoStats } from "@/lib/geo-stats";
+import {
+  computeGeoStats,
+  geoCaptureProvenanceLabel,
+  parseGeoCsv,
+  type GeoCaptureProvenance,
+  type GeoStats,
+} from "@/lib/geo-stats";
 
 const EXAMPLE = [
   "engine,prompt_id,brand_mentioned,client_cited,citation_domains",
@@ -20,6 +26,7 @@ function pct(value: number): string {
 export function GeoCsvLab() {
   const [csv, setCsv] = useState("");
   const [stats, setStats] = useState<GeoStats | null>(null);
+  const [provenance, setProvenance] = useState<GeoCaptureProvenance>("user_supplied");
   const [error, setError] = useState("");
 
   const canAnalyze = useMemo(() => csv.trim().length > 0, [csv]);
@@ -40,19 +47,21 @@ export function GeoCsvLab() {
     if (!file) return;
     const text = await file.text();
     setCsv(text);
+    setProvenance("user_supplied");
     setStats(null);
     setError("");
   }
 
   function loadExample() {
     setCsv(EXAMPLE);
+    setProvenance("illustrative");
     setStats(null);
     setError("");
   }
 
   function downloadJson() {
     if (!stats) return;
-    const blob = new Blob([JSON.stringify(stats, null, 2)], {
+    const blob = new Blob([JSON.stringify({ provenance, stats }, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -70,8 +79,8 @@ export function GeoCsvLab() {
           <div>
             <h2 className="font-semibold">Import captured AI-answer samples</h2>
             <p className="mt-1 text-sm text-slate-700">
-              Paste CSV or choose a file. The calculation runs in this browser.
-              This lab does not call an AI provider or invent missing captures.
+              Paste CSV or choose a file. The calculation runs in this browser. This lab does not
+              call an AI provider or invent missing captures.
             </p>
           </div>
           <button
@@ -87,6 +96,7 @@ export function GeoCsvLab() {
           value={csv}
           onChange={(event) => {
             setCsv(event.target.value);
+            setProvenance("user_supplied");
             setStats(null);
             setError("");
           }}
@@ -124,6 +134,12 @@ export function GeoCsvLab() {
           <section className="rounded-lg border border-warning/50 bg-panel p-4">
             <p className="text-sm font-medium">Measurement note</p>
             <p className="mt-1 text-sm text-slate-700">{stats.warning}</p>
+            <p className="mt-2 text-xs font-semibold tracking-wide text-slate-700">
+              {geoCaptureProvenanceLabel(provenance)}
+            </p>
+            <p className="mt-1 text-xs text-slate-700">
+              Imports are user supplied and are not independently verified or saved to WinSEO.
+            </p>
             <p className="mt-1 text-xs text-slate-700">
               Sample rows: <span className="font-mono">{stats.inputRows}</span>
             </p>
@@ -139,8 +155,8 @@ export function GeoCsvLab() {
                       {engine.runs} captured run{engine.runs === 1 ? "" : "s"}
                     </p>
                   </div>
-                  <span className="rounded bg-verified/10 px-2 py-1 text-xs font-medium text-verified">
-                    MEASURED SAMPLE
+                  <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                    {geoCaptureProvenanceLabel(provenance)}
                   </span>
                 </div>
 
@@ -149,9 +165,7 @@ export function GeoCsvLab() {
                     <dt className="text-xs uppercase tracking-wide text-slate-700">
                       Brand mention
                     </dt>
-                    <dd className="mt-1 font-mono text-xl font-bold">
-                      {pct(engine.mentionRate)}
-                    </dd>
+                    <dd className="mt-1 font-mono text-xl font-bold">{pct(engine.mentionRate)}</dd>
                     <dd className="text-xs text-slate-700">
                       95% Wilson {pct(engine.mentionWilson95[0])}–{pct(engine.mentionWilson95[1])}
                     </dd>
@@ -160,9 +174,7 @@ export function GeoCsvLab() {
                     <dt className="text-xs uppercase tracking-wide text-slate-700">
                       Client citation
                     </dt>
-                    <dd className="mt-1 font-mono text-xl font-bold">
-                      {pct(engine.citationRate)}
-                    </dd>
+                    <dd className="mt-1 font-mono text-xl font-bold">{pct(engine.citationRate)}</dd>
                     <dd className="text-xs text-slate-700">
                       95% Wilson {pct(engine.citationWilson95[0])}–{pct(engine.citationWilson95[1])}
                     </dd>
@@ -173,9 +185,7 @@ export function GeoCsvLab() {
                   <p className="text-xs uppercase tracking-wide text-slate-700">
                     Citation-domain diversity
                   </p>
-                  <p className="mt-1 font-mono text-lg">
-                    {engine.uniqueCitationDomains}
-                  </p>
+                  <p className="mt-1 font-mono text-lg">{engine.uniqueCitationDomains}</p>
                   {engine.topCitationDomains.length > 0 && (
                     <ul className="mt-2 space-y-1 text-xs text-slate-700">
                       {engine.topCitationDomains.slice(0, 5).map(([domain, count]) => (

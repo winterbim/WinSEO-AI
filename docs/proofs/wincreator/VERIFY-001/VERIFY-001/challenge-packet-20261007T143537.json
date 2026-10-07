@@ -1,0 +1,71 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "046d94ac9348631737d10eed81452e4db44a139204dc4a251bf71506fe623ada",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "Meso",
+      "text": "The current branch passes formatting, complete workspace verification, production build, and high-severity dependency audit using the disposable PostgreSQL database with the migration chain applied.",
+      "gate": "Run the captured final gate script; require correct database identity and migration ledger, format check, diff check, workspace verify, production build, and dependency audit to exit 0.",
+      "row_sha256": "57e37366a1e8f3fe0eed3782c58e544c3f4e4c451ca50d07bf9267c340b77757",
+      "ledger_sha256_before": "124e11582de1279d7a0196dee76ed0e69a0b58c693031882062ea774b8664282",
+      "status_before": "BLOCKED"
+    },
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "bash",
+      "scripts/verify-disposable-db-gates.sh"
+    ],
+    "stdout": {
+      "sha256": "826803768132a30fb5f460dd2001c3c718c5aee1c84b5f95bc99cf9902d8fcda",
+      "original_bytes": 285855,
+      "stored_bytes": 285855,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "h-performance                1.44 kB         108 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/changes          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/opportunities    981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/pages            981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/queries          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/security                                      1.76 kB         104 kB\n@serpvera/web:build: ├ ○ /login                                                   1.98 kB         105 kB\n@serpvera/web:build: ├ ○ /methodology                                               147 B         103 kB\n@serpvera/web:build: ├ ○ /pricing                                                   147 B         103 kB\n@serpvera/web:build: ├ ƒ /projects/[projectId]/actions                              147 B         103 kB\n@serpvera/web:build: ├ ƒ /scan/[scanId]                                           2.16 kB         105 kB\n@serpvera/web:build: └ ƒ /signup                                                    147 B         103 kB\n@serpvera/web:build: + First Load JS shared by all                                 103 kB\n@serpvera/web:build:   ├ chunks/812-52aaa9f8a3640ba4.js                           46.5 kB\n@serpvera/web:build:   ├ chunks/9923a0e2-1a45aa5d099bff40.js                      54.2 kB\n@serpvera/web:build:   └ other shared chunks (total)                              1.92 kB\n@serpvera/web:build: \n@serpvera/web:build: \n@serpvera/web:build: ○  (Static)   prerendered as static content\n@serpvera/web:build: ƒ  (Dynamic)  server-rendered on demand\n@serpvera/web:build: \n\n Tasks:    7 successful, 7 total\nCached:    7 cached, 7 total\n  Time:    103ms >>> FULL TURBO\n\nGATE_PASS production build\nGATE_START dependency audit (high severity)\nNo known vulnerabilities found\nGATE_PASS dependency audit (high severity)\n"
+    },
+    "stderr": {
+      "sha256": "e4cb52d2a7cd1caf9ebc615676fce049beb1fe52ae9b23daf8a1717451415af8",
+      "original_bytes": 302,
+      "stored_bytes": 302,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "(node:867571) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    },
+    "files": [
+      {
+        "path": "scripts/verify-disposable-db-gates.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "67bcf761780f19876fa8c0d5fbcc99e041d3a00205a7d8ed7f519f5cbd63baab",
+        "bytes": 2145
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "0169f022cb757cc2d1b32fdbcb5ff748f7bb1ff3c82c28c931054da8b12f7a93",
+      "worktree_digest": "a2971f6f9a94da8c10607f3c13a88aefb9ce0e298d284db6e43723cb209be580"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "c8ec22a1a244bf299c8ccccb89ed48f7eb01bec3f5ca67ce435f129e553b9c27"
+}

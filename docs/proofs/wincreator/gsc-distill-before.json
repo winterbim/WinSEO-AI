@@ -1,0 +1,277 @@
+{
+  "dependencies": [
+    "npm:@serpvera/contracts",
+    "npm:@serpvera/telemetry",
+    "npm:@types/node",
+    "npm:@types/pg",
+    "npm:eslint",
+    "npm:eslint-config-prettier",
+    "npm:pg",
+    "npm:prettier",
+    "npm:tsx",
+    "npm:turbo",
+    "npm:typescript",
+    "npm:typescript-eslint"
+  ],
+  "digest": "fe96854e3c15c36db885d503d2e496f8b8e992e29f5373ba44bcc7bba7c5f562",
+  "duplicates": [
+    {
+      "fingerprint": "057ff13f42dedf835ed6af8f9a9f39438edca996f0b0c782d7c186cf554616df",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:107",
+        "packages/db/src/gsc-rls.test.ts:575",
+        "packages/db/src/gsc-rls.test.ts:640"
+      ]
+    },
+    {
+      "fingerprint": "06c8a49fc78d7b2410b64e1e296625540da2250dfff2746b68d81f8b96226ed4",
+      "occurrences": [
+        "packages/db/src/gsc.ts:576",
+        "packages/db/src/gsc.ts:610"
+      ]
+    },
+    {
+      "fingerprint": "080f0e247382808faa7b3e9db52625613ad463d3d19718ce3471b721ed9de21f",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:109",
+        "packages/db/src/gsc-rls.test.ts:642"
+      ]
+    },
+    {
+      "fingerprint": "2e26c2b0584578a7c793c4386be4b3a8fca9b371b4691b5abf094518f45d7844",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:108",
+        "packages/db/src/gsc-rls.test.ts:641"
+      ]
+    },
+    {
+      "fingerprint": "3db5896f918174d525aae193d82e195c9cbaa19de100ee24dc68cd18be974cc2",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:115",
+        "packages/db/src/gsc-rls.test.ts:648"
+      ]
+    },
+    {
+      "fingerprint": "4d787ea88b0609da0a21e254d7939c38ce384b7ed5bc607e744035628cdc2232",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:118",
+        "packages/db/src/gsc-rls.test.ts:651"
+      ]
+    },
+    {
+      "fingerprint": "4ee189a0eb22cc6d38ceecccafd5b6683f5f7d4ca8c7ae41914d9636cd16f890",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:117",
+        "packages/db/src/gsc-rls.test.ts:650"
+      ]
+    },
+    {
+      "fingerprint": "621de12a5736fc5b859304b13298b7b832553aeff103bec48a030ddeec47d8e1",
+      "occurrences": [
+        "packages/db/src/gsc.ts:579",
+        "packages/db/src/gsc.ts:613"
+      ]
+    },
+    {
+      "fingerprint": "6e3c443c4dcd66bc7161d6a35b9a3ca24c3583d57c66615c5304f0d96df1197b",
+      "occurrences": [
+        "packages/db/src/gsc.ts:577",
+        "packages/db/src/gsc.ts:611"
+      ]
+    },
+    {
+      "fingerprint": "8730ba033e2960c2128c4c4e683be6ec6e3fd4e66411481179fd2e9639e7455f",
+      "occurrences": [
+        "packages/db/src/gsc.ts:580",
+        "packages/db/src/gsc.ts:614"
+      ]
+    },
+    {
+      "fingerprint": "9ea396d5cdb3c2b46aad8d008c78096821ebea161913a6e87b377cb5636b1f8b",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:105",
+        "packages/db/src/gsc-rls.test.ts:573",
+        "packages/db/src/gsc-rls.test.ts:638"
+      ]
+    },
+    {
+      "fingerprint": "b5b33ea02883ad71d2349afa2f95b175514c77ff36c8d5bc265b0bd2090acf29",
+      "occurrences": [
+        "packages/db/src/gsc.ts:575",
+        "packages/db/src/gsc.ts:609"
+      ]
+    },
+    {
+      "fingerprint": "b65399a130a8c326deca21b6a97d3ce5435856f36d6ad43fa3c948039d93ffa4",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:106",
+        "packages/db/src/gsc-rls.test.ts:574",
+        "packages/db/src/gsc-rls.test.ts:639"
+      ]
+    },
+    {
+      "fingerprint": "bd867d0a10dfdad437b1991d1b2a282b1375a2a1944e60570745d0805357d148",
+      "occurrences": [
+        "packages/db/src/gsc.ts:578",
+        "packages/db/src/gsc.ts:612"
+      ]
+    },
+    {
+      "fingerprint": "c92b037902722410d3a81b110c04dfd136f85822ec76cdc52059c19357a232aa",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:114",
+        "packages/db/src/gsc-rls.test.ts:647"
+      ]
+    },
+    {
+      "fingerprint": "cb7690066805a93e89ba655f534672d3ec701f4f28a9a00b4514ca7a87f1ef25",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:15",
+        "packages/db/src/schema-integrity.test.ts:31"
+      ]
+    },
+    {
+      "fingerprint": "d22b3e21a8d38aed1a99aefbe74dc871361e277f319f64acfd13d1793dfc509b",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:116",
+        "packages/db/src/gsc-rls.test.ts:649"
+      ]
+    },
+    {
+      "fingerprint": "d7af6e9c256b09223b3078e3c227dbd34a20cfe6bce2c7de830fca0a39744816",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:16",
+        "packages/db/src/schema-integrity.test.ts:32"
+      ]
+    },
+    {
+      "fingerprint": "f0976c7cd31e4a28a015a9ff733a0027090201c26f361db956a37afdf632c379",
+      "occurrences": [
+        "packages/db/src/gsc-rls.test.ts:216",
+        "packages/db/src/gsc-rls.test.ts:225",
+        "packages/db/src/gsc-rls.test.ts:272",
+        "packages/db/src/gsc-rls.test.ts:304",
+        "packages/db/src/gsc-rls.test.ts:561",
+        "packages/db/src/gsc-rls.test.ts:598",
+        "packages/db/src/gsc-rls.test.ts:626",
+        "packages/db/src/gsc-rls.test.ts:696"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "bytes": 1965,
+      "lines": 50,
+      "nonblank_lines": 43,
+      "path": "packages/db/migrations/0020_gsc_sync_claim_order.sql",
+      "sha256": "9f3406bb29e1b7ec18cdbf4674d86ab003d25b936b0fbdba0d4b3631c20f9139"
+    },
+    {
+      "bytes": 33077,
+      "lines": 991,
+      "nonblank_lines": 946,
+      "path": "packages/db/src/gsc-rls.test.ts",
+      "sha256": "463d0425f69a6d36d776f2851f184c49e7cad89bd4ff4ed6735118e4037a0539"
+    },
+    {
+      "bytes": 33650,
+      "lines": 930,
+      "nonblank_lines": 886,
+      "path": "packages/db/src/gsc.ts",
+      "sha256": "07040687757c2aa905e363b6ded0389eb3b50efbab97dac162bc08ad5d6fa8e0"
+    },
+    {
+      "bytes": 16536,
+      "lines": 447,
+      "nonblank_lines": 426,
+      "path": "packages/db/src/schema-integrity.test.ts",
+      "sha256": "edf1f80ef03957c8d5ae7786aa3d90011ff839d72552fb938ef44edff6ca57ed"
+    }
+  ],
+  "manifest_files": [
+    {
+      "dependency_parsed": true,
+      "path": "package.json",
+      "sha256": "9a3a60f58604ad003b69cf53cff1bb43985668e6dc29253b9a0c1bad60e28b9e"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "packages/db/package.json",
+      "sha256": "f03b79e21bccf77dd330d90b7aea7370eba71dca7811d1225ce67ce22c9e2ec1"
+    }
+  ],
+  "manifests": [
+    "package.json",
+    "packages/db/package.json"
+  ],
+  "metrics": {
+    "declared_dependencies": 12,
+    "duplicate_fingerprints": 19,
+    "largest_file_lines": 991,
+    "nonblank_lines": 2301,
+    "source_bytes": 85228,
+    "source_files": 4,
+    "source_lines": 2418
+  },
+  "policy": {
+    "duplicate_min_chars": 120,
+    "duplicate_window_lines": 6,
+    "exclude_dirs": [
+      ".git",
+      ".hg",
+      ".svn",
+      ".venv",
+      ".wincreator",
+      "__pycache__",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules",
+      "target",
+      "vendor",
+      "venv"
+    ],
+    "exclude_globs": [
+      "*.map",
+      "*.min.css",
+      "*.min.js"
+    ],
+    "schema": "wincreator.distill-policy/v1",
+    "source_extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cs",
+      ".css",
+      ".dart",
+      ".go",
+      ".h",
+      ".hpp",
+      ".html",
+      ".java",
+      ".js",
+      ".jsx",
+      ".kt",
+      ".php",
+      ".py",
+      ".rb",
+      ".rs",
+      ".sh",
+      ".sql",
+      ".svelte",
+      ".swift",
+      ".ts",
+      ".tsx",
+      ".vue"
+    ]
+  },
+  "policy_digest": "78eef27d5de49a0d903f94956f3d1233fd682325ea5c97b0a4cb3bacfee1cda3",
+  "schema": "wincreator.distill-snapshot/v1",
+  "scopes": [
+    "packages/db/src/gsc.ts",
+    "packages/db/src/gsc-rls.test.ts",
+    "packages/db/src/schema-integrity.test.ts",
+    "packages/db/migrations/0020_gsc_sync_claim_order.sql"
+  ],
+  "warnings": []
+}

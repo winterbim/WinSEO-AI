@@ -109,6 +109,12 @@ export default async function ProjectOverviewPage({
             >
               Crawl history
             </Link>
+            <Link
+              href={`/dashboard/${projectId}/reports`}
+              className="text-slate-700 hover:text-ink-950"
+            >
+              Reports
+            </Link>
           </nav>
         </div>
         <StartCrawlButton projectId={projectId} />

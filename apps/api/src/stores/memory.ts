@@ -19,8 +19,8 @@ import type {
   MfaRecord,
 } from "./types.ts";
 import { DuplicateEmailError, DuplicateSlugError } from "./types.ts";
-import { ActionMutationError } from "@serpvera/db";
-import { createRateLimiter } from "../rate-limit.ts";
+import { ActionMutationError, GscMeasurementWorkflowAdvancedError } from "@serpvera/db";
+import { createRateLimiter, type RateLimitScope } from "../rate-limit.ts";
 import type { PatchProposal } from "../autofix/workflow.ts";
 
 export function createMemoryStores(): ApiStores {
@@ -29,10 +29,14 @@ export function createMemoryStores(): ApiStores {
   // `${userId}:${orgId}` -> role
   const memberships = new Map<string, OrgRole>();
   const projects = new Map<string, StoredProject>();
+  const projectIdempotency = new Map<
+    string,
+    { name: string; primaryDomain: string; project: StoredProject }
+  >();
   const scans = new Map<string, StoredPublicScan>();
   const sessionRecords = new Map<string, StoredSession & { revokedAt: Date | null }>();
   const mfaRecords = new Map<string, MfaRecord>();
-  const rateLimiters = new Map<number, ReturnType<typeof createRateLimiter>>();
+  const rateLimiters = new Map<string, ReturnType<typeof createRateLimiter>>();
   // P-GAP-04: tenant-scoped crawl state (memory adapter = test driver only)
   const crawlRuns = new Map<
     string,
@@ -133,6 +137,26 @@ export function createMemoryStores(): ApiStores {
         projects.set(project.id, project);
         return Promise.resolve(project);
       },
+      createProjectWithIdempotencyKey(organizationId, name, primaryDomain, idempotencyKey) {
+        const idempotencyScope = `${organizationId}:${idempotencyKey}`;
+        const existing = projectIdempotency.get(idempotencyScope);
+        if (existing) {
+          if (existing.name !== name || existing.primaryDomain !== primaryDomain) {
+            return Promise.resolve({ kind: "conflict" as const });
+          }
+          return Promise.resolve({ kind: "replayed" as const, project: existing.project });
+        }
+
+        const project: StoredProject = {
+          id: randomUUID(),
+          organizationId,
+          name,
+          primaryDomain,
+        };
+        projects.set(project.id, project);
+        projectIdempotency.set(idempotencyScope, { name, primaryDomain, project });
+        return Promise.resolve({ kind: "created" as const, project });
+      },
       getProject(organizationId, projectId) {
         const p = projects.get(projectId);
         // Emulate RLS: foreign-tenant read yields null (no existence leak).
@@ -182,13 +206,14 @@ export function createMemoryStores(): ApiStores {
     },
 
     rateLimits: {
-      hit(ip, limitPerWindow) {
-        let limiter = rateLimiters.get(limitPerWindow);
+      hit(ip, limitPerWindow, scope: RateLimitScope = "public-scan-ip") {
+        const key = `${scope}:${limitPerWindow}`;
+        let limiter = rateLimiters.get(key);
         if (!limiter) {
           limiter = createRateLimiter(limitPerWindow);
-          rateLimiters.set(limitPerWindow, limiter);
+          rateLimiters.set(key, limiter);
         }
-        return Promise.resolve(limiter.hit(ip));
+        return Promise.resolve(limiter.hit(ip, scope));
       },
     },
 
@@ -363,6 +388,96 @@ export function createMemoryStores(): ApiStores {
           ...evidence,
         });
         return Promise.resolve({ id });
+      },
+      createMeasuredGscWorkflow(organizationId, projectId, finding, evidence) {
+        let storedFinding = crawlFindings.find(
+          (row) =>
+            row.organizationId === organizationId &&
+            row.projectId === projectId &&
+            row.ruleId === finding.ruleId &&
+            row.status !== "resolved",
+        );
+        const created = !storedFinding;
+        if (!storedFinding) {
+          storedFinding = {
+            id: randomUUID(),
+            organizationId,
+            projectId,
+            ruleId: finding.ruleId,
+            ruleVersion: finding.ruleVersion,
+            title: finding.title,
+            epistemicClass: finding.epistemicClass,
+            severity: finding.severity,
+            status: "open",
+            confidence: 1,
+            explanation: finding.explanation,
+            recommendation: finding.recommendation,
+            firstSeenAt: new Date().toISOString(),
+            affectedUrls: finding.affectedUrls,
+            verificationGate: finding.verificationGate,
+          };
+          crawlFindings.push(storedFinding);
+        }
+
+        let action = [...actionRecords.values()].find(
+          (row) =>
+            row.organizationId === organizationId &&
+            row.projectId === projectId &&
+            row.findingId === storedFinding.id,
+        );
+        let storedEvidence = findingEvidenceLinks
+          .filter((link) => link.findingId === storedFinding.id)
+          .map((link) => crawlEvidence.find((row) => row.id === link.evidenceId))
+          .find((row) => row?.kind === "gsc_data");
+        const updated = Boolean(
+          storedEvidence && storedEvidence.contentHash !== evidence.contentHash,
+        );
+        if (updated && action && action.state !== "DETECTED" && action.state !== "EVIDENCED") {
+          throw new GscMeasurementWorkflowAdvancedError();
+        }
+        if (!storedEvidence || updated) {
+          const id = randomUUID();
+          storedEvidence = {
+            id,
+            organizationId,
+            projectId,
+            createdAt: new Date().toISOString(),
+            ...evidence,
+          };
+          crawlEvidence.push(storedEvidence);
+          findingEvidenceLinks.push({ findingId: storedFinding.id, evidenceId: id });
+          if (updated) {
+            Object.assign(storedFinding, {
+              ruleVersion: finding.ruleVersion,
+              title: finding.title,
+              epistemicClass: finding.epistemicClass,
+              severity: finding.severity,
+              explanation: finding.explanation,
+              recommendation: finding.recommendation,
+              affectedUrls: finding.affectedUrls,
+              verificationGate: finding.verificationGate,
+            });
+          }
+        }
+
+        if (!action) {
+          const id = randomUUID();
+          action = {
+            id,
+            organizationId,
+            projectId,
+            findingId: storedFinding.id,
+            state: "DETECTED",
+          };
+          actionRecords.set(id, action);
+        }
+        return Promise.resolve({
+          created,
+          updated,
+          findingId: storedFinding.id,
+          evidenceId: storedEvidence.id,
+          actionId: action.id,
+        });
       },
       listFindings(organizationId, projectId) {
         return Promise.resolve(

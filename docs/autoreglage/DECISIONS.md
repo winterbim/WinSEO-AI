@@ -137,3 +137,113 @@ Sources utilisées pour le benchmark : documentation officielle de Google et de 
 **Retour arrière :** retirer les lignes et REQ ajoutées si elles ne sont pas confirmées; la portée produit existante n’est pas modifiée par le benchmark.
 
 **Résultat attendu :** les écarts à Semrush deviennent traçables et testables, sans gonfler les capacités WinSEO ni attribuer à Semrush une absence de fonctionnalité non démontrée.
+
+## D-019 — L’ordre d’autorité des mesures GSC vient de PostgreSQL
+
+**Décision :** chaque revendication de synchronisation reçoit un `claim_order` monotone par propriété, alloué sous le verrou transactionnel de la propriété. Pour les dates couvertes par plusieurs jobs terminés, le job revendiqué en dernier est l'unique source autoritaire, même si son worker termine avant ou après l'ancien.
+
+**Raison :** `started_at` fourni par le processus applicatif peut avoir la même précision à la milliseconde sur deux workers ou diverger à cause d'horloges décalées. Trier les mesures par cet horodatage ne prouve donc pas l'ordre réel des fetchs. L’ordre PostgreSQL ne dépend ni de l'horloge d'un client ni de l'ordre d'achèvement.
+
+**Preuve :** migration additive `0020_gsc_sync_claim_order.sql` rétroclasse les jobs historiques, crée une unicité partielle tenant/projet/propriété et nettoie les recouvrements historiques. Les tests PostgreSQL couvrent les deux ordres d'achèvement et des horodatages applicatifs inversés/identiques; les tests de schéma vérifient la colonne, l'index et le ledger.
+
+**Risque :** le `claim_order` reflète l'ordre de revendication et non l'horodatage de réponse côté Google; deux fetchs démarrés dans cet ordre peuvent encore recevoir des réponses de fraîcheur différente. Les jobs affichent leur fenêtre et statut; les mesures n'affirment pas une causalité.
+
+**Retour arrière :** migration en avant seulement; désactiver le remplacement des fenêtres nécessiterait une migration explicite après analyse des données. Ne pas supprimer la colonne ni réduire le statut d'une sync à `COMPLETED` sans preuve.
+
+**Résultat attendu :** aucune fenêtre partielle ou terminée plus ancienne ne peut effacer une mesure d'un fetch revendiqué plus récemment, indépendamment des horloges applicatives et du scheduling des workers.
+
+## D-020 — Conserver la configuration PostgreSQL dans les commandes Turbo
+
+**Décision :** les scripts racine `test`, `db:migrate` et `db:seed` utilisent explicitement le mode d'environnement `loose` de Turbo afin de transmettre `PG_SOCKET_DIR`, `PGDATABASE`, `PGPORT` et les variables de connexion nécessaires aux tâches ciblées.
+
+**Raison :** Turbo en mode strict a supprimé les variables fournies au shell pour la commande de migration, qui a alors utilisé `/var/run/postgresql` au lieu du cluster jetable. Le contrôle des comptes de la base par défaut a trouvé zéro ligne GSC avant 0020; la migration additive y est néanmoins enregistrée. Le mode explicite empêche les commandes futures de viser silencieusement la mauvaise base.
+
+**Preuve :** migration 0020 appliquée avec `node packages/db/src/migrate.ts` et `PG_SOCKET_DIR=/tmp/winseo-pgsocket`; les tests PostgreSQL sont exécutés directement avec les mêmes variables et les tâches Turbo de `pnpm verify` seront relancées en mode loose.
+
+**Risque :** mode loose transmet l'environnement complet aux tâches lancées par ces scripts; les secrets ne doivent pas être imprimés par les scripts. Cette configuration est limitée aux commandes de test, migration et seed.
+
+**Retour arrière :** retirer l'option des commandes racine après définition d'une allowlist Turbo explicite et testée pour toutes les variables PostgreSQL nécessaires.
+
+**Résultat attendu :** une migration ou une suite de tests lancée avec des variables PostgreSQL explicites se connecte à la base demandée, pas à une valeur par défaut.
+
+## D-021 — Préflight des horloges historiques avant nettoyage GSC
+
+**Décision :** conserver 0020 comme migration appliquée et ajouter `0019z_gsc_claim_order_preflight.sql`, exécutée avant elle. Si deux jobs terminés ont des données sur des jours chevauchants et que l'ordre obtenu avec `started_at` client contredit l'ordre `requested_at` stocké par PostgreSQL, l'upgrade s'arrête avant le nettoyage. Les lignes historiques restent intactes pour revue manuelle.
+
+**Raison :** le rattrapage de 0020 ne dispose pas d'un ordre de claim monotone préexistant. Un horodatage client peut être décalé; deviner l'ordre et supprimer les lignes serait irréversible. Le préflight bloque uniquement les cas contradictoires observables; il ne prétend pas reconstruire une chronologie qui n'a pas été enregistrée.
+
+**Preuve :** test d'intégration PostgreSQL `packages/db/src/gsc-claim-order-migration.test.ts` (3 cas): fichier trié avant 0020, horloges contradictoires -> échec et ligne conservée sans entrée de migration, horloges cohérentes -> migration inscrite. Résultats finaux capturés et revus séparément avant tout statut `EVIDENCED`.
+
+**Risque ouvert :** un historique comportant un décalage de client qui conserve par hasard le même ordre que les dates `requested_at` n'est pas détectable après coup; l'ordre DB reste le meilleur proxy stable disponible. Les installations avec conflit détecté doivent résoudre manuellement les lignes avant migration.
+
+**Retour arrière :** migration additive uniquement; aucun effacement ni correction automatique des fenêtres ambiguës. L'opérateur peut résoudre les données et relancer les migrations après analyse des jobs concernés.
+
+## D-022 — Bloquer les mutations GSC pendant le nettoyage des anciennes fenêtres
+
+**Décision :** placer un garde temporaire de maintenance dans une migration forward-only ordonnée après le préflight et avant 0020, puis le retirer dans 0021 après le nettoyage. Les déclencheurs bloquent les écritures GSC des connexions applicatives pendant la fenêtre; le runner signale explicitement sa propre connexion et la conserve jusqu'à la fin de chaîne.
+
+**Raison :** le préflight seul laisse une fenêtre entre le commit de son contrôle et le commit de 0020. Sans barrière, un nouveau job aux horodatages inversés peut apparaître après le contrôle et avant la suppression irréversible. Un garde durable entre migrations rend l'interruption fail-closed; 0021 réouvre les écritures seulement après l'opération.
+
+**Preuve :** test PostgreSQL adversarial requis : mutations applicatives refusées pendant le garde, mutations du runner autorisées, reprise après suppression du garde, et migration à risque refusée avant le nettoyage si une ambiguïté est détectée. Aucune revendication de réussite avant les résultats capturés et l'avis du Skeptic.
+
+**Risque :** si la chaîne de migration est interrompue après l'activation du garde, les nouvelles synchronisations GSC renvoient une erreur jusqu'au redémarrage réussi du runner. Aucune donnée n'est supprimée par le garde.
+
+**Retour arrière :** 0021 désactive et supprime le garde atomiquement. Une migration ultérieure dédiée peut restaurer le service si la migration est partiellement déployée; ne jamais contourner le déclencheur manuellement.
+
+## D-023 — Le bypass de migration GSC ne repose pas sur un GUC modifiable
+
+**Décision :** ajouter la migration forward-only `0019y_gsc_sync_write_fence.sql` avant le préflight. Elle retire temporairement à `serpvera_app` les privilèges `INSERT`, `UPDATE`, `DELETE` et `TRUNCATE` sur les deux tables GSC. Elle échoue si le rôle est propriétaire, membre d'un autre rôle, ou conserve un privilège d'écriture effectif. Après suppression du déclencheur par 0021, `0022_restore_gsc_runtime_writes.sql` vérifie l'absence du garde puis restaure les droits de lecture/écriture.
+
+**Raison :** le reviewer a démontré qu'un rôle pouvait définir lui-même `app.winseo_gsc_migration='on'`; un GUC personnalisé n'est donc pas un secret et ne peut pas constituer une frontière de sécurité. Le runner peut encore définir ce signal pour l'ancien déclencheur, mais les écritures runtime restent impossibles pendant toute la chaîne, même si l'application tente le même réglage.
+
+**Preuve attendue :** PostgreSQL réel vérifie qu'un `SET ROLE serpvera_app` avec GUC forgé ne peut pas modifier les jobs pendant la barrière, que le rôle de migration peut effectuer le nettoyage, et que les écritures runtime reprennent après 0021/0022. Le schéma final doit montrer les droits restaurés et aucun garde temporaire.
+
+**Risque :** toute interruption après 0019y laisse les écritures GSC désactivées jusqu'à la reprise réussie de la chaîne. La migration échoue fermée si le modèle de rôles observé n'est pas celui attendu; aucune mesure n'est supprimée par le fence lui-même.
+
+**Retour arrière :** 0022 rétablit les droits uniquement après confirmation que le garde a été retiré. Si la chaîne est interrompue, ne pas accorder manuellement ces privilèges avant l'inspection du ledger et des triggers; corriger la cause puis relancer le runner.
+
+## D-024 — Couvrir les suppressions parentes qui cascade vers les mesures GSC
+
+**Décision :** `0019x_gsc_parent_delete_fence.sql`, exécutée avant les autres fences GSC, révoque temporairement `DELETE` et `TRUNCATE` sur `gsc_connections`, `projects` et `organizations`. Ces tables parentes peuvent supprimer en cascade des jobs et leurs métriques. `0023_restore_gsc_parent_deletes.sql` restitue `DELETE` après la chaîne et laisse `TRUNCATE` non accordé.
+
+**Raison :** la revue adversariale a montré qu'un `DELETE` permis sur `gsc_connections` contournait la révocation DML posée uniquement sur les tables enfants; `projects` et `organizations` sont aussi des ancêtres de la même chaîne FK. La protection doit couvrir tout chemin SQL autorisé au rôle runtime, pas seulement les mutations directes.
+
+**Preuve attendue :** PostgreSQL réel crée les FK `ON DELETE CASCADE`, forge le GUC sous `SET ROLE serpvera_app`, puis tente de supprimer chacun des trois parents. Chaque suppression doit échouer par privilège avant de toucher aux enfants; après 0021–0023, les droits `DELETE` historiques sont restaurés et aucun droit `TRUNCATE` n'est accordé.
+
+**Risque :** les suppressions de connexion, projet et organisation sont indisponibles pendant la fenêtre de migration; une interruption maintient ce blocage jusqu'à reprise. La migration échoue fermée si le rôle applicatif possède les parents ou a des privilèges résiduels.
+
+**Retour arrière :** 0023 restaure `DELETE` après vérification que le trigger guard et sa table ont disparu. Aucun `TRUNCATE` n'est restauré; les données sont conservées par le fence.
+
+## D-025 — Fermer les privilèges effectifs de colonne accordés à PUBLIC
+
+**Décision :** placer `0019w_gsc_effective_acl_fence.sql` avant les autres fences GSC. La migration retire les privilèges de mutation au niveau table et colonne de `PUBLIC` et de `serpvera_app` sur cinq tables : `organizations`, `projects`, `gsc_connections`, `gsc_sync_jobs` et `gsc_metrics`. Elle vérifie les privilèges effectifs après révocation. `0024_restore_gsc_acl_baseline.sql` restaure le DML applicatif sur ces cinq tables uniquement après retrait de tous les gardes. Les écritures directes sur les tables de credentials et d'états OAuth restent hors de cette barrière et ne sont pas couvertes par cette preuve.
+
+**Raison :** PostgreSQL conserve des ACL de colonnes distinctes des ACL de tables. `REVOKE UPDATE ON table` ne neutralise pas forcément `GRANT UPDATE(status) TO PUBLIC`; un contrôle limité à `has_table_privilege` peut donc accepter une migration alors que le rôle runtime peut encore écrire.
+
+**Preuve attendue :** fixture PostgreSQL accorde à `PUBLIC` `UPDATE(status)` et `INSERT(...)` avant le fence, puis exécute les deux opérations sous `SET ROLE serpvera_app` avec le GUC falsifié. Les opérations doivent être refusées et `has_any_column_privilege` doit confirmer l'absence d'accès effectif durant la barrière. Après retrait du garde, le DML applicatif revient; aucun grant d'écriture à `PUBLIC` ne subsiste dans les catalogues.
+
+**Risque :** les tests et contrôles de migration doivent inclure les cinq tables et les chemins de privilèges hérités. La migration échoue si le runtime possède une table protégée ou est membre d'un autre rôle.
+
+**Retour arrière :** migrations forward-only `0019w`/`0024`; les ACL métier restent inchangées et seul le DML de `serpvera_app` est rétabli. Ne pas réaccorder de droits pendant une chaîne interrompue avant l'inspection du ledger et des triggers.
+
+## D-027 — Désactiver le cache pour les gates de preuve finale
+
+**Décision :** `scripts/verify-disposable-db-gates.sh` lance lint, typecheck, tests et build avec Turbo `--force`. La sortie doit montrer `Cached: 0` pour chaque étape; le script affiche des marqueurs de début et de réussite pour toutes les gates, y compris le contrôle PostgreSQL et `git diff --check`.
+
+**Raison :** une revue indépendante a relevé que les totaux de tests provenaient d'un cache Turbo. Un cache valide pour la productivité ne prouve pas qu'une suite PostgreSQL a été exécutée sur la base jetable nommée dans le rapport.
+
+**Preuve :** capture WinCreator `VERIFY-001` du 2026-10-07, sortie complète non tronquée, tests et build avec zéro tâche cachée, base `serpvera_dev` au port 55432, DB 75/75, crawler 124/124, API 119/119, authz 23/23, web 25/25, audit sans vulnérabilité connue; revue indépendante `EVIDENCED`.
+
+**Risque :** cette porte dure environ 105 secondes et consomme plus de ressources que les commandes locales mises en cache.
+
+**Retour arrière :** la porte de preuve demeure indépendante des commandes développeur; retirer `--force` uniquement si la CI conserve les résultats bruts et démontre l'exécution fraîche sur la bonne base.
+
+## D-026 — Ne pas modifier une migration après son application, même sur la base jetable
+
+**Décision :** après application d'une migration sur le PostgreSQL jetable, son fichier source est immuable. Toute correction future exige une nouvelle migration forward-only; le test de comportement peut évoluer séparément.
+
+**Raison :** modifier le fichier après application rend l'état du dépôt différent de l'état effectivement vérifié par le runner, même si aucune base de production n'est concernée. L'essai de simplification de `0019w` a été annulé et son hash restauré au contenu déjà appliqué.
+
+**Preuve :** le SHA-256 actuel de `0019w_gsc_effective_acl_fence.sql` est `5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab`, identique à celui capturé avant l'essai de simplification. Le test PostgreSQL ajoute des cas de refus pour la propriété et l'héritage de rôle sans changer la migration.
+
+**Risque :** une migration historique répétitive peut rester plus longue qu'une réécriture souhaitée; la lisibilité ne justifie pas de changer le contenu déjà appliqué.

@@ -1,4 +1,4 @@
-// ─── Shared public-scan rate limit storage ───
+// ─── Shared API rate-limit storage ───
 // The API passes an HMAC fingerprint of the requester IP. Raw IP addresses
 // are never persisted. The single UPSERT serializes concurrent hits across
 // API instances and preserves the first-hit fixed-window semantics.
@@ -10,7 +10,7 @@ export interface RateLimitWindowHit {
   retryAfterSeconds: number;
 }
 
-export async function consumePublicScanRateLimit(
+export async function consumeRateLimitWindow(
   bucketKey: string,
   limitPerWindow: number,
 ): Promise<RateLimitWindowHit> {

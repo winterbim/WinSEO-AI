@@ -63,7 +63,10 @@ const syncBody = z
     message: "provide both startDate and endDate, or neither (incremental)",
   });
 
-interface WindowPair { startDate: string; endDate: string }
+interface WindowPair {
+  startDate: string;
+  endDate: string;
+}
 
 function windowError(window: WindowPair): string | null {
   const start = Date.parse(`${window.startDate}T00:00:00Z`);
@@ -149,8 +152,10 @@ export function gscRoutes(app: FastifyInstance) {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
     if (!requirePermission(request, reply, "integration.manage")) return;
-    const gscCfg = requireGscConfig(reply); if (!gscCfg) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gscCfg = requireGscConfig(reply);
+    if (!gscCfg) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const parsed = authorizeBody.safeParse(request.body);
     if (!parsed.success) {
@@ -182,8 +187,10 @@ export function gscRoutes(app: FastifyInstance) {
 
   // ─── 2. OAuth callback (state + PKCE validated; no session required) ───
   app.get("/gsc/oauth/callback", async (request, reply) => {
-    const gscCfg = requireGscConfig(reply); if (!gscCfg) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gscCfg = requireGscConfig(reply);
+    if (!gscCfg) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const parsed = callbackQuery.safeParse(request.query);
     if (!parsed.success) {
@@ -194,7 +201,12 @@ export function gscRoutes(app: FastifyInstance) {
       return await sendError(reply, 400, "GSC_ACCESS_DENIED", "Google did not grant access.");
     }
     if (!code || !state) {
-      return await sendError(reply, 400, "INVALID_CALLBACK", "Missing authorization code or state.");
+      return await sendError(
+        reply,
+        400,
+        "INVALID_CALLBACK",
+        "Missing authorization code or state.",
+      );
     }
 
     const organizationId = parseStateOrganization(state);
@@ -246,8 +258,10 @@ export function gscRoutes(app: FastifyInstance) {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
     if (!requirePermission(request, reply, "project.read")) return;
-    const gscCfg = requireGscConfig(reply); if (!gscCfg) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gscCfg = requireGscConfig(reply);
+    if (!gscCfg) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const params = z.object({ projectId: z.uuid() }).safeParse(request.params);
     if (!params.success) return await sendError(reply, 404, "NOT_FOUND", "Project not found.");
@@ -276,14 +290,21 @@ export function gscRoutes(app: FastifyInstance) {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
     if (!requirePermission(request, reply, "integration.manage")) return;
-    const gscCfg = requireGscConfig(reply); if (!gscCfg) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gscCfg = requireGscConfig(reply);
+    if (!gscCfg) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const params = z.object({ projectId: z.uuid() }).safeParse(request.params);
     if (!params.success) return await sendError(reply, 404, "NOT_FOUND", "Project not found.");
     const body = connectBody.safeParse(request.body);
     if (!body.success) {
-      return await sendError(reply, 400, "VALIDATION_ERROR", "externalProperty is not a Google property.");
+      return await sendError(
+        reply,
+        400,
+        "VALIDATION_ERROR",
+        "externalProperty is not a Google property.",
+      );
     }
     const project = await requireProject(organizationId, params.data.projectId, reply);
     if (!project) return;
@@ -328,8 +349,21 @@ export function gscRoutes(app: FastifyInstance) {
       });
       return await reply.status(201).send({ connection });
     } catch (err) {
-      if (isUniqueViolation(err) || err instanceof GscAlreadyConnectedError) {
-        return await sendError(reply, 409, "GSC_ALREADY_CONNECTED", "Property already connected.");
+      if (err instanceof GscAlreadyConnectedError) {
+        return await sendError(
+          reply,
+          409,
+          "GSC_ALREADY_CONNECTED",
+          "This Search Console property is already connected to the project.",
+        );
+      }
+      if (isUniqueViolation(err)) {
+        return await sendError(
+          reply,
+          409,
+          "GSC_PROPERTY_CONFLICT",
+          "Disconnect the active Search Console property before connecting a different property to this project.",
+        );
       }
       return await sendGscFailure(reply, err);
     }
@@ -340,8 +374,10 @@ export function gscRoutes(app: FastifyInstance) {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
     if (!requirePermission(request, reply, "integration.manage")) return;
-    const gscCfg = requireGscConfig(reply); if (!gscCfg) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gscCfg = requireGscConfig(reply);
+    if (!gscCfg) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const params = z.object({ connectionId: z.uuid() }).safeParse(request.params);
     if (!params.success) return await sendError(reply, 404, "NOT_FOUND", "Connection not found.");
@@ -384,8 +420,10 @@ export function gscRoutes(app: FastifyInstance) {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
     if (!requirePermission(request, reply, "integration.manage")) return;
-    const gscCfg = requireGscConfig(reply); if (!gscCfg) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gscCfg = requireGscConfig(reply);
+    if (!gscCfg) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const params = z.object({ projectId: z.uuid() }).safeParse(request.params);
     if (!params.success) return await sendError(reply, 404, "NOT_FOUND", "Project not found.");
@@ -444,8 +482,10 @@ export function gscRoutes(app: FastifyInstance) {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
     if (!requirePermission(request, reply, "integration.manage")) return;
-    const gscCfg = requireGscConfig(reply); if (!gscCfg) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gscCfg = requireGscConfig(reply);
+    if (!gscCfg) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const params = z.object({ jobId: z.uuid() }).safeParse(request.params);
     if (!params.success) return await sendError(reply, 404, "NOT_FOUND", "Job not found.");
@@ -455,7 +495,12 @@ export function gscRoutes(app: FastifyInstance) {
     const connection = await gsc.getConnection(organizationId, job.connectionId);
     if (!connection) return await sendError(reply, 404, "NOT_FOUND", "Connection not found.");
     if (!canRetryJob(job, Date.now())) {
-      return await sendError(reply, 409, "GSC_JOB_NOT_RETRYABLE", "This job cannot be retried now.");
+      return await sendError(
+        reply,
+        409,
+        "GSC_JOB_NOT_RETRYABLE",
+        "This job cannot be retried now.",
+      );
     }
 
     try {
@@ -484,7 +529,8 @@ export function gscRoutes(app: FastifyInstance) {
     const organizationId = activeOrg(request, reply);
     if (!organizationId) return;
     if (!requirePermission(request, reply, "project.read")) return;
-    const gsc = requireStore(reply); if (!gsc) return;
+    const gsc = requireStore(reply);
+    if (!gsc) return;
 
     const params = z.object({ projectId: z.uuid() }).safeParse(request.params);
     if (!params.success) return await sendError(reply, 404, "NOT_FOUND", "Project not found.");

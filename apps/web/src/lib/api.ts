@@ -49,8 +49,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!res.ok) {
     const message =
       body && typeof body === "object" && "error" in body
-        ? ((body as { error: { message?: string } | null }).error?.message ??
-          res.statusText)
+        ? ((body as { error: { message?: string } | null }).error?.message ?? res.statusText)
         : res.statusText;
     throw new ApiError(res.status, message);
   }

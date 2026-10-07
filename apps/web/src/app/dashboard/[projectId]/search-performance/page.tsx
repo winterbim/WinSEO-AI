@@ -107,7 +107,9 @@ export default async function SearchPerformancePage({
                 >
                   {c.status}
                 </span>
-                <span className="text-xs text-slate-700">last sync {fmtDateTime(c.lastSyncAt)}</span>
+                <span className="text-xs text-slate-700">
+                  last sync {fmtDateTime(c.lastSyncAt)}
+                </span>
               </li>
             ))}
           </ul>
@@ -143,24 +145,40 @@ export default async function SearchPerformancePage({
               impressions.
             </p>
             <div className="mt-3">
-              <MetricTable rows={summary.series} label="Daily clicks, impressions, CTR and average position" />
+              <MetricTable
+                rows={summary.series}
+                label="Daily clicks, impressions, CTR and average position"
+              />
             </div>
           </section>
         </>
       )}
 
       {jobs.length > 0 && (
-        <section className="rounded-lg border border-line bg-panel p-5" aria-label="Synchronization jobs">
+        <section
+          className="rounded-lg border border-line bg-panel p-5"
+          aria-label="Synchronization jobs"
+        >
           <h2 className="font-semibold">Synchronization jobs</h2>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                  <th scope="col" className="py-2 pr-4">Window</th>
-                  <th scope="col" className="py-2 pr-4">Status</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Rows</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Attempt</th>
-                  <th scope="col" className="py-2">Detail</th>
+                  <th scope="col" className="py-2 pr-4">
+                    Window
+                  </th>
+                  <th scope="col" className="py-2 pr-4">
+                    Status
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Rows
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Attempt
+                  </th>
+                  <th scope="col" className="py-2">
+                    Detail
+                  </th>
                 </tr>
               </thead>
               <tbody>

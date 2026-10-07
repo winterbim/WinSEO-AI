@@ -33,8 +33,7 @@ export function getPool(): pg.Pool {
         max: cfg.maxPool ?? 10,
         // Force TLS in production only
         ssl:
-          cfg.connectionString.includes("localhost") ||
-          cfg.connectionString.includes("127.0.0.1")
+          cfg.connectionString.includes("localhost") || cfg.connectionString.includes("127.0.0.1")
             ? false
             : { rejectUnauthorized: true },
       });
@@ -77,9 +76,7 @@ export async function query<T extends pg.QueryResultRow = Record<string, unknown
   return getPool().query<T>(text, params);
 }
 
-export async function withTransaction<T>(
-  fn: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> {
+export async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
@@ -117,10 +114,9 @@ export async function withTenant<T>(
       // Fail loudly if something tries to use a bypass-capable runtime role.
       await client.query(`SET LOCAL ROLE ${pg_escape_ident(cfg.runtimeRole)}`);
     }
-    await client.query(
-      "SELECT set_config('app.current_organization_id', $1, true)",
-      [organizationId],
-    );
+    await client.query("SELECT set_config('app.current_organization_id', $1, true)", [
+      organizationId,
+    ]);
     const result = await fn(client);
     await client.query("COMMIT");
     await client.query("RESET ROLE");
@@ -147,9 +143,7 @@ export async function withTenant<T>(
  * cross-tenant bootstrap work (creating organizations, migrations).
  * The runtime role is deliberately NOT applied here.
  */
-export async function withAdmin<T>(
-  fn: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> {
+export async function withAdmin<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   return withTransaction(fn);
 }
 

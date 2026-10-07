@@ -7,7 +7,7 @@
 
 import type { OrgRole } from "@serpvera/contracts";
 import type { ActionActor, ActionRecord, ActionTransitionInput } from "@serpvera/db";
-import type { RateLimitDecision } from "../rate-limit.ts";
+import type { RateLimitDecision, RateLimitScope } from "../rate-limit.ts";
 import type { PatchActor, PatchProposal } from "../autofix/workflow.ts";
 
 export interface StoredUser {
@@ -29,6 +29,9 @@ export interface StoredProject {
   name: string;
   primaryDomain: string;
 }
+
+export type IdempotentProjectCreation =
+  { kind: "created" | "replayed"; project: StoredProject } | { kind: "conflict" };
 
 export interface StoredPublicScan {
   id: string;
@@ -78,6 +81,12 @@ export interface ProjectStore {
     name: string,
     primaryDomain: string,
   ): Promise<StoredProject>;
+  createProjectWithIdempotencyKey(
+    organizationId: string,
+    name: string,
+    primaryDomain: string,
+    idempotencyKey: string,
+  ): Promise<IdempotentProjectCreation>;
   /** RLS/tenant-scoped: returns null when the project belongs to another org. */
   getProject(organizationId: string, projectId: string): Promise<StoredProject | null>;
   /** All projects of the active org (RLS-filtered). */
@@ -98,8 +107,8 @@ export interface ScanStore {
 }
 
 export interface RateLimitStore {
-  /** Atomically consume one IP quota unit in the shared backing store. */
-  hit(ip: string, limitPerWindow: number): Promise<RateLimitDecision>;
+  /** Atomically consume one IP quota unit in an operation-specific shared window. */
+  hit(ip: string, limitPerWindow: number, scope?: RateLimitScope): Promise<RateLimitDecision>;
 }
 
 // ─── Server-side sessions (P-GAP-05) ───
@@ -291,6 +300,18 @@ export interface CrawlStore {
     projectId: string,
     evidence: EvidenceInput,
   ): Promise<{ id: string }>;
+  createMeasuredGscWorkflow(
+    organizationId: string,
+    projectId: string,
+    finding: FindingInput,
+    evidence: EvidenceInput,
+  ): Promise<{
+    created: boolean;
+    updated: boolean;
+    findingId: string;
+    evidenceId: string;
+    actionId: string;
+  }>;
   listFindings(organizationId: string, projectId: string): Promise<StoredFinding[]>;
   /** Finding detail incl. linked evidence (RLS-scoped; null when foreign). */
   getFinding(organizationId: string, findingId: string): Promise<StoredFindingDetail | null>;
@@ -402,6 +423,7 @@ export interface GscMetricFilter {
   page?: string;
   device?: string;
   country?: string;
+  connectionId?: string;
 }
 
 export interface GscCredentialInput {
@@ -461,6 +483,8 @@ export interface GscStore {
   }): Promise<StoredGscJob>;
   getJob(organizationId: string, jobId: string): Promise<StoredGscJob | null>;
   listJobs(organizationId: string, projectId: string): Promise<StoredGscJob[]>;
+  /** Atomically claims a PENDING job and returns its fencing attempt. */
+  claimJob(organizationId: string, jobId: string, startedAt: string): Promise<number | null>;
   updateJob(
     organizationId: string,
     jobId: string,
@@ -473,6 +497,7 @@ export interface GscStore {
       errorMessage?: string | null;
       attempt?: number;
       nextRetryAt?: string | null;
+      expectedAttempt: number;
     },
   ): Promise<boolean>;
 
@@ -480,6 +505,7 @@ export interface GscStore {
     organizationId: string;
     projectId: string;
     syncJobId: string;
+    expectedAttempt: number;
     window: GscWindowRange;
     rows: readonly GscMetricPoint[];
   }): Promise<number>;
@@ -495,5 +521,9 @@ export interface GscStore {
     window: GscWindowRange,
     filters?: GscMetricFilter,
   ): Promise<GscDailyPoint[]>;
-  metricFreshness(organizationId: string, projectId: string): Promise<GscFreshness>;
+  metricFreshness(
+    organizationId: string,
+    projectId: string,
+    connectionId?: string,
+  ): Promise<GscFreshness>;
 }

@@ -209,6 +209,7 @@ export interface GscTotals {
 
 export interface GscSummary {
   window: GscWindow;
+  property?: string | null;
   filters: Record<string, string>;
   totals: GscTotals;
   series: GscDailyPoint[];

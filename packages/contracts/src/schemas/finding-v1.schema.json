@@ -65,7 +65,14 @@
     "affected_urls_count": { "type": "integer", "minimum": 0 },
     "source_class": {
       "type": "string",
-      "enum": ["A1_FIRST_PARTY_CLIENT", "A2_OFFICIAL_ENGINE", "B_RESEARCH", "C_REPRO_VENDOR", "D_PRACTITIONER", "E_ANECDOTAL"]
+      "enum": [
+        "A1_FIRST_PARTY_CLIENT",
+        "A2_OFFICIAL_ENGINE",
+        "B_RESEARCH",
+        "C_REPRO_VENDOR",
+        "D_PRACTITIONER",
+        "E_ANECDOTAL"
+      ]
     },
     "limitations": {
       "type": "array",

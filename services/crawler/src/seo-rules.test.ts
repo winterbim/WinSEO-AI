@@ -71,7 +71,8 @@ void describe("seo-rules (deterministic, no network)", () => {
 
   void it("no finding claims engine behaviour (no penalty/ranking assertions)", () => {
     const r = rulesFor("<html><body></body></html>");
-    const banned = /google (vous )?p[ée]nalise|will rank|ranking factor|guarantee|penali[sz]ed you/i;
+    const banned =
+      /google (vous )?p[ée]nalise|will rank|ranking factor|guarantee|penali[sz]ed you/i;
     for (const f of r.findings) {
       const text = `${f.title} ${f.explanation}`;
       assert.ok(!banned.test(text), `${f.ruleId} asserts engine behaviour: ${text}`);
@@ -147,16 +148,17 @@ void describe("seo-rules (deterministic, no network)", () => {
   });
 
   void it("flags invalid JSON-LD but accepts valid JSON-LD", () => {
-    const bad = ruleIds(CLEAN_HTML.replace(
-      "</head>",
-      `<script type="application/ld+json">{not json</script></head>`,
-    ));
+    const bad = ruleIds(
+      CLEAN_HTML.replace("</head>", `<script type="application/ld+json">{not json</script></head>`),
+    );
     assert.ok(bad.includes("STRUCTURED_DATA.INVALID_JSON"));
 
-    const good = ruleIds(CLEAN_HTML.replace(
-      "</head>",
-      `<script type="application/ld+json">{"@type":"Organization"}</script></head>`,
-    ));
+    const good = ruleIds(
+      CLEAN_HTML.replace(
+        "</head>",
+        `<script type="application/ld+json">{"@type":"Organization"}</script></head>`,
+      ),
+    );
     assert.ok(!good.includes("STRUCTURED_DATA.INVALID_JSON"));
   });
 

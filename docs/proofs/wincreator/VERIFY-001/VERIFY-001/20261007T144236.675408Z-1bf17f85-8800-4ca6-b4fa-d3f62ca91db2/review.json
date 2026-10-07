@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "Meso",
+      "text": "The current branch passes formatting, uncached workspace lint, typecheck, PostgreSQL-backed tests, production build, and high-severity dependency audit using the disposable PostgreSQL database with the migration chain applied.",
+      "gate": "Run the captured final gate script; require correct database identity and migration ledger, format check, diff check, uncached lint/typecheck/test/build, and dependency audit to exit 0.",
+      "row_sha256": "104328243d318c5af543d4801602172a455c1fedec4c1e3ae71c26a2fdeb8d8f",
+      "ledger_sha256_before": "62cf0c182280e584ec432b13c2b245413e0bab3a487df9656d1e7739ae7c8182",
+      "status_before": "EVIDENCED"
+    },
+    "capture_digest": "38e3ef6a38ea0c464532132b6c5ea52473da856186731054a6637d205078cf10",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "audit_product_ux",
+    "challenge": "Verified the fresh 2026-10-07 capture binds the exact gate and documentation files; stdout hash and byte count match, is untruncated, every marker passes, all Turbo tasks are uncached, PostgreSQL identity/migration ledger and test totals are visible, and audit passes.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "9c2228979f1e1cea9e9f480118f1dcb1aad0d797ad8ed5357e40bf035d8e2a18"
+    },
+    "reviewed_at": "2026-10-07T14:44:58.224269Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "3acfd05b8d366b01cff320c8d1d15cf366c97dc11ae42856b42d11616fd70ef6"
+  }
+}

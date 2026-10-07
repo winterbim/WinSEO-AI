@@ -18,6 +18,7 @@ import type {
   StoredGscCredential,
   StoredGscJob,
 } from "../../stores/types.ts";
+import { GSC_SYNC_JOB_LEASE_MS, GscSyncAttemptLostError } from "@serpvera/db";
 import { GscApiError } from "./google-transport.ts";
 import type {
   GoogleTokenResponse,
@@ -124,10 +125,7 @@ export class FakeGscStore implements GscStore {
     return Promise.resolve(record.id);
   }
 
-  getCredential(
-    organizationId: string,
-    projectId: string,
-  ): Promise<StoredGscCredential | null> {
+  getCredential(organizationId: string, projectId: string): Promise<StoredGscCredential | null> {
     const row = this.credentials.get(this.key(organizationId, projectId));
     return Promise.resolve(row ? { ...row } : null);
   }
@@ -161,10 +159,7 @@ export class FakeGscStore implements GscStore {
     credentialRef: string;
   }): Promise<StoredGscConnection> {
     for (const row of this.connections.values()) {
-      if (
-        row.projectId === input.projectId &&
-        row.externalProperty === input.externalProperty
-      ) {
+      if (row.projectId === input.projectId && row.externalProperty === input.externalProperty) {
         if (row.status !== "DISCONNECTED") {
           // Mirrors the UNIQUE (project_id, external_property) constraint.
           const err = new Error("duplicate connection") as Error & { code?: string };
@@ -202,10 +197,7 @@ export class FakeGscStore implements GscStore {
     );
   }
 
-  getConnection(
-    organizationId: string,
-    connectionId: string,
-  ): Promise<StoredGscConnection | null> {
+  getConnection(organizationId: string, connectionId: string): Promise<StoredGscConnection | null> {
     const row = this.connections.get(connectionId);
     if (row?.organizationId !== organizationId) return Promise.resolve(null);
     const { organizationId: _org, ...rest } = row;
@@ -233,21 +225,31 @@ export class FakeGscStore implements GscStore {
     windowEnd: string;
     idempotencyKey: string;
   }): Promise<StoredGscJob> {
-    const reuseKey = `${input.connectionId}:${input.idempotencyKey}`;
-    const existingId = [...this.jobs.values()].find(
-      (j) => `${j.connectionId}:${j.idempotencyKey}` === reuseKey,
-    )?.id;
-    if (existingId) {
-      // Retries re-arm the same row: one job per (connection, window), ever.
-      const row = this.jobs.get(existingId);
-      if (row) {
-        row.status = "PENDING";
-        row.errorCode = null;
-        row.errorMessage = null;
-        row.nextRetryAt = null;
-        const { organizationId: _org, idempotencyKey: _ik, ...rest } = row;
-        return Promise.resolve({ ...rest });
-      }
+    const previous = [...this.jobs.values()].filter(
+      (job) =>
+        job.connectionId === input.connectionId &&
+        (job.idempotencyKey === input.idempotencyKey ||
+          job.idempotencyKey?.startsWith(`${input.idempotencyKey}:attempt:`)),
+    );
+    const latest = previous.at(-1);
+    const staleRunning =
+      latest?.status === "RUNNING" &&
+      latest.startedAt !== null &&
+      Date.now() - Date.parse(latest.startedAt) >= GSC_SYNC_JOB_LEASE_MS;
+    if (latest && (latest.status === "PENDING" || (latest.status === "RUNNING" && !staleRunning))) {
+      const { organizationId: _org, idempotencyKey: _ik, ...rest } = latest;
+      return Promise.resolve({ ...rest });
+    }
+    if (latest && latest.status !== "COMPLETED") {
+      latest.status = "PENDING";
+      latest.startedAt = null;
+      latest.completedAt = null;
+      latest.rowCount = 0;
+      latest.errorCode = null;
+      latest.errorMessage = null;
+      latest.nextRetryAt = null;
+      const { organizationId: _org, idempotencyKey: _ik, ...rest } = latest;
+      return Promise.resolve({ ...rest });
     }
     const row = {
       id: id("job"),
@@ -265,7 +267,9 @@ export class FakeGscStore implements GscStore {
       startedAt: null,
       completedAt: null,
       nextRetryAt: null,
-      idempotencyKey: input.idempotencyKey,
+      idempotencyKey: latest
+        ? `${input.idempotencyKey}:attempt:${id("attempt")}`
+        : input.idempotencyKey,
     };
     this.jobs.set(row.id, row);
     const { organizationId: _org, idempotencyKey: _ik, ...rest } = row;
@@ -299,10 +303,17 @@ export class FakeGscStore implements GscStore {
       errorMessage?: string | null;
       attempt?: number;
       nextRetryAt?: string | null;
+      expectedAttempt: number;
     },
   ): Promise<boolean> {
     const row = this.jobs.get(jobId);
-    if (row?.organizationId !== organizationId) return Promise.resolve(false);
+    if (
+      row?.organizationId !== organizationId ||
+      row.status !== "RUNNING" ||
+      row.attempt !== patch.expectedAttempt
+    ) {
+      return Promise.resolve(false);
+    }
     if (patch.status !== undefined) row.status = patch.status;
     if (patch.startedAt !== undefined) row.startedAt = patch.startedAt;
     if (patch.completedAt !== undefined) row.completedAt = patch.completedAt;
@@ -311,17 +322,56 @@ export class FakeGscStore implements GscStore {
     if (patch.errorMessage !== undefined) row.errorMessage = patch.errorMessage;
     if (patch.attempt !== undefined) row.attempt = patch.attempt;
     if (patch.nextRetryAt !== undefined) row.nextRetryAt = patch.nextRetryAt;
+    if (patch.status === "COMPLETED") {
+      for (let i = this.metrics.length - 1; i >= 0; i--) {
+        const metric = this.metrics[i];
+        const previousJob = metric ? this.jobs.get(metric.syncJobId) : undefined;
+        if (
+          metric?.organizationId === organizationId &&
+          metric.projectId === row.projectId &&
+          metric.date >= row.windowStart &&
+          metric.date <= row.windowEnd &&
+          previousJob?.connectionId === row.connectionId &&
+          previousJob.status === "COMPLETED" &&
+          previousJob.id !== row.id
+        ) {
+          this.metrics.splice(i, 1);
+        }
+      }
+    }
     return Promise.resolve(true);
+  }
+
+  claimJob(organizationId: string, jobId: string, startedAt: string): Promise<number | null> {
+    const row = this.jobs.get(jobId);
+    if (row?.organizationId !== organizationId || row.status !== "PENDING") {
+      return Promise.resolve(null);
+    }
+    row.status = "RUNNING";
+    row.startedAt = startedAt;
+    row.completedAt = null;
+    row.attempt += 1;
+    return Promise.resolve(row.attempt);
   }
 
   persistMetricWindow(input: {
     organizationId: string;
     projectId: string;
     syncJobId: string;
+    expectedAttempt: number;
     window: GscWindowRange;
     rows: readonly GscMetricPoint[];
   }): Promise<number> {
-    // Atomic window replacement, like the SQL implementation.
+    const job = this.jobs.get(input.syncJobId);
+    if (
+      job?.organizationId !== input.organizationId ||
+      job.projectId !== input.projectId ||
+      job.status !== "RUNNING" ||
+      job.attempt !== input.expectedAttempt
+    ) {
+      return Promise.reject(new GscSyncAttemptLostError());
+    }
+    // Preserve completed rows until the replacement attempt commits.
     this.persistCalls.push({ ...input.window });
     const inWindow = (p: GscMetricPoint): boolean =>
       p.date >= input.window.startDate && p.date <= input.window.endDate;
@@ -330,7 +380,8 @@ export class FakeGscStore implements GscStore {
       if (
         row?.organizationId === input.organizationId &&
         row.projectId === input.projectId &&
-        inWindow(row)
+        inWindow(row) &&
+        (row.syncJobId === input.syncJobId || this.jobs.get(row.syncJobId)?.status !== "COMPLETED")
       ) {
         this.metrics.splice(i, 1);
       }
@@ -360,6 +411,7 @@ export class FakeGscStore implements GscStore {
             r.projectId === projectId &&
             r.date >= window.startDate &&
             r.date <= window.endDate &&
+            this.jobs.get(r.syncJobId)?.status === "COMPLETED" &&
             (!filters?.query || r.query === filters.query) &&
             (!filters?.page || r.page === filters.page) &&
             (!filters?.device || r.device === filters.device) &&
@@ -398,7 +450,10 @@ export class FakeGscStore implements GscStore {
 
   metricFreshness(organizationId: string, projectId: string): Promise<GscFreshness> {
     const rows = this.metrics.filter(
-      (r) => r.organizationId === organizationId && r.projectId === projectId,
+      (r) =>
+        r.organizationId === organizationId &&
+        r.projectId === projectId &&
+        this.jobs.get(r.syncJobId)?.status === "COMPLETED",
     );
     const dates = rows.map((r) => r.date).sort();
     const syncs = [...this.connections.values()]
@@ -485,11 +540,7 @@ export class FakeGoogleTransport implements GoogleTransport {
     });
   }
 
-  revokeToken(input: {
-    token: string;
-    clientId: string;
-    clientSecret: string;
-  }): Promise<void> {
+  revokeToken(input: { token: string; clientId: string; clientSecret: string }): Promise<void> {
     this.revokedTokens.push(input.token);
     const failure = this.take(this.script.revokeErrors);
     if (failure) return Promise.reject(failure);

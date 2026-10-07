@@ -9,11 +9,7 @@ import { FindingsTable } from "./findings-filter";
 
 export const dynamic = "force-dynamic";
 
-export default async function FindingsPage({
-  params,
-}: {
-  params: Promise<{ projectId: string }>;
-}) {
+export default async function FindingsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
 
   let findings: FindingSummary[] = [];
@@ -42,8 +38,8 @@ export default async function FindingsPage({
         <div>
           <h1 className="text-2xl font-bold">Findings</h1>
           <p className="mt-1 text-sm text-slate-700">
-            Every row is an observed fact of a fetched document, with rule provenance and
-            a declared verification gate.
+            Every row is an observed fact of a fetched document, with rule provenance and a declared
+            verification gate.
           </p>
         </div>
         <Link

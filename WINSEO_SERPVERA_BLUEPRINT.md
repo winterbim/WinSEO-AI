@@ -39,20 +39,20 @@ Le dépôt NEXUS possède déjà la partie la plus difficile à inventer correct
 
 ## 1.1 Capacités déjà identifiées dans NEXUS
 
-| Domaine | Ce qui existe | Transformation SaaS requise |
-|---|---|---|
-| Doctrine de preuve | `Claim → Gate → Capture → Review → Verdict` | Entités `Finding`, `Evidence`, `Gate`, `Verdict`, UI Evidence Ledger |
-| Classification épistémique | OBSERVED / MEASURED / DOCUMENTED / INFERRED / HYPOTHESIS / UNKNOWN | Badge + filtre + règle de propagation dans les rapports |
-| SEO technique | HTTP probe, robots, canonical, sitemap, source/render distinction | crawler distribué + Playwright + historique + diff |
-| Business intent | objectifs, marchés, conversions, langues | onboarding guidé + configuration projet |
-| Content/topic authority | graphe sujets/entités, cannibalisation, intent | analyse sémantique + GSC + graphe interne |
-| Local search | cohérence NAP, pages locales, signaux locaux | module optionnel, connecteurs et preuves publiques |
-| AI discovery | robots et bot access | crawler-policy matrix par moteur |
-| GEO Lab | prompts répétés, locale/langue, citations, stabilité | scheduler, capture browser/API autorisée, distributions |
-| Citation graph | sélection vs absorption | tables citations/source pages + evidence viewer |
-| Opportunity portfolio | valeur, preuve, impact, confiance, effort, risque | Action Center et priorisation transparente |
-| Experiment plan | baseline, change, control, confounders, rollback | Experiment Ledger et verification jobs |
-| Skeptic | revue adverse séparée | second-pass validator + règles déterministes + tests |
+| Domaine                    | Ce qui existe                                                      | Transformation SaaS requise                                          |
+| -------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Doctrine de preuve         | `Claim → Gate → Capture → Review → Verdict`                        | Entités `Finding`, `Evidence`, `Gate`, `Verdict`, UI Evidence Ledger |
+| Classification épistémique | OBSERVED / MEASURED / DOCUMENTED / INFERRED / HYPOTHESIS / UNKNOWN | Badge + filtre + règle de propagation dans les rapports              |
+| SEO technique              | HTTP probe, robots, canonical, sitemap, source/render distinction  | crawler distribué + Playwright + historique + diff                   |
+| Business intent            | objectifs, marchés, conversions, langues                           | onboarding guidé + configuration projet                              |
+| Content/topic authority    | graphe sujets/entités, cannibalisation, intent                     | analyse sémantique + GSC + graphe interne                            |
+| Local search               | cohérence NAP, pages locales, signaux locaux                       | module optionnel, connecteurs et preuves publiques                   |
+| AI discovery               | robots et bot access                                               | crawler-policy matrix par moteur                                     |
+| GEO Lab                    | prompts répétés, locale/langue, citations, stabilité               | scheduler, capture browser/API autorisée, distributions              |
+| Citation graph             | sélection vs absorption                                            | tables citations/source pages + evidence viewer                      |
+| Opportunity portfolio      | valeur, preuve, impact, confiance, effort, risque                  | Action Center et priorisation transparente                           |
+| Experiment plan            | baseline, change, control, confounders, rollback                   | Experiment Ledger et verification jobs                               |
+| Skeptic                    | revue adverse séparée                                              | second-pass validator + règles déterministes + tests                 |
 
 **Décision d'architecture :** le code NEXUS reste un package métier versionné. L'application l'appelle via une interface stable. L'UI ne doit pas implémenter les règles SEO elle-même.
 
@@ -79,24 +79,24 @@ Le marché 2026 s'est scindé en quatre familles : suites SEO historiques, crawl
 
 ## 2.1 Matrice concurrentielle vérifiée
 
-| Produit | Force méthodologique à récupérer | Limite/opportunité pour notre produit | Indication tarifaire observée | Source |
-|---|---|---|---:|---|
-| Semrush | profondeur de suite, Site Audit structuré, prompts IA quotidiens, benchmark concurrence | coût élevé et surface fonctionnelle très large ; transformer la donnée en plan court reste un enjeu | AI Visibility Base **$99/mo/domain** annuel | [S01] |
-| Ahrefs | index propriétaire, Site Audit, Brand Radar, modèle de coût par check explicite | impossible/inutile de répliquer l'index backlinks au MVP ; acheter les données si besoin | Brand Radar dès **$199/mo**, custom checks **$50/2,500** | [S02][S03] |
-| Screaming Frog | rendu Chromium, source-vs-render, intégration GSC/PageSpeed, crawl technique très précis | UX expert et desktop ; notre avantage = cloud + explication + verification loop | licence séparée, pas cible pricing directe | [S04] |
-| Sitebulb | **Hints** explicatifs et priorisés, Chrome crawler, visualisations pédagogiques | forte inspiration pour les cartes « pourquoi / preuve / correction » | selon plan | [S05] |
-| SE Ranking | audit + monitoring de changements + AI Overviews + API | bonne couverture générale ; différencier par preuve et expérimentation | plan/add-ons selon usage | [S06] |
-| Sitechecker | to-do list priorisée, alertes nouveaux/fixed, GSC/GA4, monitoring | excellente simplicité SMB à dépasser avec causalité et evidence ledger | selon plan | [S07] |
-| Ubersuggest | prix accessible, onboarding simple, all-in-one | profondeur moindre = fenêtre de marché sur 10–60 €/mois | individuel autour de **$29/mo** | [S08] |
-| Surfer | workflow page-level, GSC + SERP, éditeur orienté action | centré contenu ; notre produit doit diagnostiquer avant de réécrire | selon plan | [S09] |
-| MarketMuse | Topic Authority + Personalized Difficulty, priorisation par autorité propre au site | très bon concept de contextualisation, à réinterpréter avec données explicables | selon plan | [S10] |
-| OtterlyAI | tracking AI simple, quotas de prompts très lisibles, quotidien | bon modèle d'entrée mais peu de profondeur technique SEO | Lite **$29/mo / 15 prompts** | [S11][S12] |
-| Peec AI | capture multi-engines, sources/citations, gap concurrents, actions | très bon AEO spécialisé ; notre avantage = SEO technique + post-change verification | vendor methodology | [S13] |
-| Profound | Answer Engine Insights, FactCheck, citations, browser capture, Agent Analytics | référence enterprise AI visibility ; trop lourd/coûteux pour SMB | enterprise-led | [S14][S15][S16] |
-| Search Intelligence AI | **boucle très proche** : domaine → facts → prompts → fanouts → citations → briefs → contenu → GSC | concurrent stratégique direct ; il faut aller plus loin sur la preuve technique et les gates | plan brand indiqué autour de **£199/mo** lors de l'analyse | [S17] |
-| CiteRank | score fondé sur de vrais checks, texte de réponse conservé, mention ≠ citation, historique quotidien | modèle de mesure clair ; ne pas réduire le produit à un pourcentage de visibilité | private/beta selon offre | [S18] |
-| SearchProof AI | audit SEO/AEO/GEO public fondé sur preuves et validation hebdomadaire | preuve que « evidence-first » devient un axe concurrentiel : il faut rendre la boucle d'action plus forte | pricing local | [S19] |
-| Oscar AI | audit → production d'articles → publication CMS ; simplicité pour TPE | ne pas concurrencer sur volume d'articles ; diagnostiquer avant de produire | **95 € HT/mo** pour 7 articles, annuel | [S20] |
+| Produit                | Force méthodologique à récupérer                                                                     | Limite/opportunité pour notre produit                                                                     |                              Indication tarifaire observée | Source          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------: | --------------- |
+| Semrush                | profondeur de suite, Site Audit structuré, prompts IA quotidiens, benchmark concurrence              | coût élevé et surface fonctionnelle très large ; transformer la donnée en plan court reste un enjeu       |                AI Visibility Base **$99/mo/domain** annuel | [S01]           |
+| Ahrefs                 | index propriétaire, Site Audit, Brand Radar, modèle de coût par check explicite                      | impossible/inutile de répliquer l'index backlinks au MVP ; acheter les données si besoin                  |   Brand Radar dès **$199/mo**, custom checks **$50/2,500** | [S02][S03]      |
+| Screaming Frog         | rendu Chromium, source-vs-render, intégration GSC/PageSpeed, crawl technique très précis             | UX expert et desktop ; notre avantage = cloud + explication + verification loop                           |                 licence séparée, pas cible pricing directe | [S04]           |
+| Sitebulb               | **Hints** explicatifs et priorisés, Chrome crawler, visualisations pédagogiques                      | forte inspiration pour les cartes « pourquoi / preuve / correction »                                      |                                                 selon plan | [S05]           |
+| SE Ranking             | audit + monitoring de changements + AI Overviews + API                                               | bonne couverture générale ; différencier par preuve et expérimentation                                    |                                   plan/add-ons selon usage | [S06]           |
+| Sitechecker            | to-do list priorisée, alertes nouveaux/fixed, GSC/GA4, monitoring                                    | excellente simplicité SMB à dépasser avec causalité et evidence ledger                                    |                                                 selon plan | [S07]           |
+| Ubersuggest            | prix accessible, onboarding simple, all-in-one                                                       | profondeur moindre = fenêtre de marché sur 10–60 €/mois                                                   |                            individuel autour de **$29/mo** | [S08]           |
+| Surfer                 | workflow page-level, GSC + SERP, éditeur orienté action                                              | centré contenu ; notre produit doit diagnostiquer avant de réécrire                                       |                                                 selon plan | [S09]           |
+| MarketMuse             | Topic Authority + Personalized Difficulty, priorisation par autorité propre au site                  | très bon concept de contextualisation, à réinterpréter avec données explicables                           |                                                 selon plan | [S10]           |
+| OtterlyAI              | tracking AI simple, quotas de prompts très lisibles, quotidien                                       | bon modèle d'entrée mais peu de profondeur technique SEO                                                  |                               Lite **$29/mo / 15 prompts** | [S11][S12]      |
+| Peec AI                | capture multi-engines, sources/citations, gap concurrents, actions                                   | très bon AEO spécialisé ; notre avantage = SEO technique + post-change verification                       |                                         vendor methodology | [S13]           |
+| Profound               | Answer Engine Insights, FactCheck, citations, browser capture, Agent Analytics                       | référence enterprise AI visibility ; trop lourd/coûteux pour SMB                                          |                                             enterprise-led | [S14][S15][S16] |
+| Search Intelligence AI | **boucle très proche** : domaine → facts → prompts → fanouts → citations → briefs → contenu → GSC    | concurrent stratégique direct ; il faut aller plus loin sur la preuve technique et les gates              | plan brand indiqué autour de **£199/mo** lors de l'analyse | [S17]           |
+| CiteRank               | score fondé sur de vrais checks, texte de réponse conservé, mention ≠ citation, historique quotidien | modèle de mesure clair ; ne pas réduire le produit à un pourcentage de visibilité                         |                                   private/beta selon offre | [S18]           |
+| SearchProof AI         | audit SEO/AEO/GEO public fondé sur preuves et validation hebdomadaire                                | preuve que « evidence-first » devient un axe concurrentiel : il faut rendre la boucle d'action plus forte |                                              pricing local | [S19]           |
+| Oscar AI               | audit → production d'articles → publication CMS ; simplicité pour TPE                                | ne pas concurrencer sur volume d'articles ; diagnostiquer avant de produire                               |                     **95 € HT/mo** pour 7 articles, annuel | [S20]           |
 
 ## 2.2 Les meilleurs patterns observés
 
@@ -171,14 +171,14 @@ Le produit ne doit pas viser au départ les équipes enterprise qui exigent un i
 
 ## 4.2 Proposition de valeur par couche
 
-| Couche | Promesse |
-|---|---|
-| Observe | Crawl, GSC, analytics, changements, AI answers et citations au même endroit |
+| Couche  | Promesse                                                                                            |
+| ------- | --------------------------------------------------------------------------------------------------- |
+| Observe | Crawl, GSC, analytics, changements, AI answers et citations au même endroit                         |
 | Explain | « ce qui a changé, pourquoi c'est important, ce que les preuves permettent réellement de conclure » |
-| Decide | top actions ordonnées par valeur / preuve / impact / confiance / effort / risque |
-| Execute | diff, PR GitHub ou brouillon CMS ; jamais une mutation opaque |
-| Verify | re-crawl + re-query + GSC window + verdict du gate |
-| Learn | historique des actions efficaces/inefficaces par projet, sans réécrire le passé |
+| Decide  | top actions ordonnées par valeur / preuve / impact / confiance / effort / risque                    |
+| Execute | diff, PR GitHub ou brouillon CMS ; jamais une mutation opaque                                       |
+| Verify  | re-crawl + re-query + GSC window + verdict du gate                                                  |
+| Learn   | historique des actions efficaces/inefficaces par projet, sans réécrire le passé                     |
 
 ## 4.3 Signature fonctionnelle
 
@@ -199,7 +199,7 @@ Une recherche préliminaire montre que `WinSEO` est déjà utilisé par plusieur
 
 **Codename interne : `WinSEO`.**
 
-**Candidat externe prioritaire de travail : `SERPVERA`.** Le nom associe SERP + *vera* (vrai/vérifiable) et colle à l'ADN evidence-first. Au moment de cette étude, une recherche web exacte n'a pas fait ressortir de marque SEO évidente portant ce nom ; ce constat n'est **pas** une recherche d'antériorité juridique et ne garantit ni domaine ni marque.
+**Candidat externe prioritaire de travail : `SERPVERA`.** Le nom associe SERP + _vera_ (vrai/vérifiable) et colle à l'ADN evidence-first. Au moment de cette étude, une recherche web exacte n'a pas fait ressortir de marque SEO évidente portant ce nom ; ce constat n'est **pas** une recherche d'antériorité juridique et ne garantit ni domaine ni marque.
 
 Alternatives à tester juridiquement : `VeriSERP`, `ProofCrawl`, `SearchVera` et une marque totalement inventée sans « SEO ». Certains noms intuitifs sont déjà occupés (`RankLedger`, `SearchLedger`, `RankVera`, `SearchProof AI`) et doivent être évités. [S36][S37][S38][S19]
 
@@ -217,19 +217,19 @@ Alternatives à tester juridiquement : `VeriSERP`, `ProofCrawl`, `SearchVera` et
 
 La navigation doit rester stable et courte :
 
-| Entrée | Question utilisateur |
-|---|---|
-| Overview | Que se passe-t-il ? |
-| Actions | Qu'est-ce que je fais maintenant ? |
-| SEO | Quels obstacles techniques/search classiques ? |
-| AI Search | Où ma marque apparaît-elle dans les réponses IA ? |
+| Entrée             | Question utilisateur                                          |
+| ------------------ | ------------------------------------------------------------- |
+| Overview           | Que se passe-t-il ?                                           |
+| Actions            | Qu'est-ce que je fais maintenant ?                            |
+| SEO                | Quels obstacles techniques/search classiques ?                |
+| AI Search          | Où ma marque apparaît-elle dans les réponses IA ?             |
 | Content & Entities | Quels sujets, entités et pages manquent ou se cannibalisent ? |
-| Competitors | Où sont les écarts observables ? |
-| Changes | Qu'est-ce qui a changé sur le site ou dans les métriques ? |
-| Experiments | Qu'avons-nous modifié et quel est le verdict ? |
-| Evidence | Puis-je vérifier le constat ? |
-| Integrations | Quelles données sont connectées ? |
-| Settings | Marchés, limites, membres, sécurité, billing |
+| Competitors        | Où sont les écarts observables ?                              |
+| Changes            | Qu'est-ce qui a changé sur le site ou dans les métriques ?    |
+| Experiments        | Qu'avons-nous modifié et quel est le verdict ?                |
+| Evidence           | Puis-je vérifier le constat ?                                 |
+| Integrations       | Quelles données sont connectées ?                             |
+| Settings           | Marchés, limites, membres, sécurité, billing                  |
 
 ## 6.1 Page Overview
 
@@ -277,18 +277,18 @@ L'identité doit inspirer contrôle, clarté et mesure. Éviter le gradient viol
 
 ## 7.1 Palette recommandée
 
-| Token | Valeur | Usage |
-|---|---|---|
-| `ink-950` | `#0B1220` | navigation, texte principal, confiance |
-| `slate-700` | `#334155` | texte secondaire |
-| `surface` | `#F7F9FC` | fond général |
-| `panel` | `#FFFFFF` | cartes |
-| `line` | `#E2E8F0` | frontières |
-| `primary` | `#5B5CE2` | actions, séries principales |
-| `verified` | `#0F9F7A` | preuve/gate validé |
-| `geo` | `#7C3AED` | AI Search uniquement, en accent |
-| `warning` | `#D97706` | hypothèse/attention |
-| `critical` | `#DC2626` | erreur bloquante, jamais décoration |
+| Token       | Valeur    | Usage                                  |
+| ----------- | --------- | -------------------------------------- |
+| `ink-950`   | `#0B1220` | navigation, texte principal, confiance |
+| `slate-700` | `#334155` | texte secondaire                       |
+| `surface`   | `#F7F9FC` | fond général                           |
+| `panel`     | `#FFFFFF` | cartes                                 |
+| `line`      | `#E2E8F0` | frontières                             |
+| `primary`   | `#5B5CE2` | actions, séries principales            |
+| `verified`  | `#0F9F7A` | preuve/gate validé                     |
+| `geo`       | `#7C3AED` | AI Search uniquement, en accent        |
+| `warning`   | `#D97706` | hypothèse/attention                    |
+| `critical`  | `#DC2626` | erreur bloquante, jamais décoration    |
 
 Le statut ne doit jamais dépendre de la couleur seule : icône + texte + couleur.
 
@@ -364,29 +364,29 @@ Le site doit être son propre cas de démonstration. La stratégie ne repose pas
 
 ## 9.1 Architecture publique cible
 
-| Route | Intention |
-|---|---|
-| `/` | marque + proposition |
-| `/seo-audit` | audit SEO actionnable |
-| `/technical-seo-audit` | crawl/indexabilité/JS |
-| `/google-search-console-analyzer` | diagnostic GSC |
-| `/seo-monitoring` | changement/régression |
-| `/ai-search-visibility` | catégorie AI visibility |
-| `/geo-audit` | Generative Engine Optimization |
-| `/aeo-audit` | Answer Engine Optimization |
-| `/chatgpt-visibility` | moteur spécifique |
-| `/google-ai-mode-tracker` | moteur spécifique |
-| `/perplexity-visibility` | moteur spécifique |
-| `/methodology` | preuve + mesure + définitions |
-| `/security` | sécurité et traitement des données |
-| `/pricing` | plans, quotas et checks |
-| `/integrations/google-search-console` | intégration |
-| `/integrations/github` | corrections via PR |
-| `/integrations/wordpress` | drafts CMS |
-| `/for/small-business` | ICP |
-| `/for/agencies` | ICP |
-| `/compare/semrush-alternative` | comparaison factuelle et maintenue |
-| `/compare/ahrefs-alternative` | comparaison factuelle et maintenue |
+| Route                                 | Intention                          |
+| ------------------------------------- | ---------------------------------- |
+| `/`                                   | marque + proposition               |
+| `/seo-audit`                          | audit SEO actionnable              |
+| `/technical-seo-audit`                | crawl/indexabilité/JS              |
+| `/google-search-console-analyzer`     | diagnostic GSC                     |
+| `/seo-monitoring`                     | changement/régression              |
+| `/ai-search-visibility`               | catégorie AI visibility            |
+| `/geo-audit`                          | Generative Engine Optimization     |
+| `/aeo-audit`                          | Answer Engine Optimization         |
+| `/chatgpt-visibility`                 | moteur spécifique                  |
+| `/google-ai-mode-tracker`             | moteur spécifique                  |
+| `/perplexity-visibility`              | moteur spécifique                  |
+| `/methodology`                        | preuve + mesure + définitions      |
+| `/security`                           | sécurité et traitement des données |
+| `/pricing`                            | plans, quotas et checks            |
+| `/integrations/google-search-console` | intégration                        |
+| `/integrations/github`                | corrections via PR                 |
+| `/integrations/wordpress`             | drafts CMS                         |
+| `/for/small-business`                 | ICP                                |
+| `/for/agencies`                       | ICP                                |
+| `/compare/semrush-alternative`        | comparaison factuelle et maintenue |
+| `/compare/ahrefs-alternative`         | comparaison factuelle et maintenue |
 
 Les pages de comparaison doivent être factuelles, datées et mises à jour automatiquement via un contenu éditorial validé ; ne jamais inventer des fonctionnalités concurrentes.
 
@@ -404,22 +404,22 @@ L'architecture doit être **modulaire, event-driven et séparée entre control p
 
 ## 10.1 Stack de référence
 
-| Couche | Choix recommandé | Raison |
-|---|---|---|
-| Marketing + App | Next.js App Router, TypeScript, React | SSR/SEO, product web mature, partage types |
-| UI | Tailwind + Radix/shadcn primitives, TanStack Table | accessibilité + vitesse sans look template par défaut |
-| Charts | ECharts ou Recharts selon besoin | séries, heatmaps, interactions |
-| API/BFF | TypeScript (Fastify/Nest léger ou routes dédiées) | auth, tenancy, orchestration API |
-| Domain engine | Python 3.12 package NEXUS | réutiliser les règles/scripts existants |
-| Async workflow | queue durable au MVP, Temporal à l'échelle | retries/idempotence/long jobs |
-| DB | PostgreSQL 16+ | modèle relationnel + RLS + JSONB |
-| Cache/queue | Redis/Valkey | jobs courts, rate limit, dedup |
-| Evidence store | S3-compatible object storage | HTML/DOM/captures compressées |
-| Browser workers | Playwright/Chromium en conteneurs isolés | rendu JS et AI UI lorsque autorisé |
-| Search vector | pgvector optionnel | similarité sujets/pages, pas source de vérité |
-| Observability | OpenTelemetry + logs structurés + error tracking | preuve d'exploitation |
-| Billing | Stripe Checkout/Customer Portal | ne pas stocker de carte |
-| Email | provider transactionnel | verification, alerts, billing |
+| Couche          | Choix recommandé                                   | Raison                                                |
+| --------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| Marketing + App | Next.js App Router, TypeScript, React              | SSR/SEO, product web mature, partage types            |
+| UI              | Tailwind + Radix/shadcn primitives, TanStack Table | accessibilité + vitesse sans look template par défaut |
+| Charts          | ECharts ou Recharts selon besoin                   | séries, heatmaps, interactions                        |
+| API/BFF         | TypeScript (Fastify/Nest léger ou routes dédiées)  | auth, tenancy, orchestration API                      |
+| Domain engine   | Python 3.12 package NEXUS                          | réutiliser les règles/scripts existants               |
+| Async workflow  | queue durable au MVP, Temporal à l'échelle         | retries/idempotence/long jobs                         |
+| DB              | PostgreSQL 16+                                     | modèle relationnel + RLS + JSONB                      |
+| Cache/queue     | Redis/Valkey                                       | jobs courts, rate limit, dedup                        |
+| Evidence store  | S3-compatible object storage                       | HTML/DOM/captures compressées                         |
+| Browser workers | Playwright/Chromium en conteneurs isolés           | rendu JS et AI UI lorsque autorisé                    |
+| Search vector   | pgvector optionnel                                 | similarité sujets/pages, pas source de vérité         |
+| Observability   | OpenTelemetry + logs structurés + error tracking   | preuve d'exploitation                                 |
+| Billing         | Stripe Checkout/Customer Portal                    | ne pas stocker de carte                               |
+| Email           | provider transactionnel                            | verification, alerts, billing                         |
 
 **Règle :** ne pas introduire Kubernetes au MVP. Conteneurs managés + autoscaling suffisent tant que les SLOs et coûts le permettent.
 
@@ -815,13 +815,13 @@ Le pricing doit vendre la simplicité et protéger la marge. Les coûts variable
 
 ## 20.1 Plans de lancement proposés
 
-| Plan | Prix cible | Sites | Crawl/mois | GSC | AI checks | Usage principal |
-|---|---:|---:|---:|---|---:|---|
-| Free | 0 € | 1 snapshot | 50 URLs ponctuel | non | 0–échantillon | acquisition |
-| Solo | **12 €/mois** | 1 | 3k URLs | oui | 100/mois | indépendant/TPE |
-| Growth | **29 €/mois** | 3 | 20k URLs | oui | 500/mois | PME/consultant |
-| Studio | **59 €/mois** | 10 | 75k URLs | oui | 2,000/mois | consultant/agence légère |
-| Agency | **119 €/mois** | 25 | 250k URLs | oui | 5,000/mois | agence + white label |
+| Plan   |     Prix cible |      Sites |       Crawl/mois | GSC |     AI checks | Usage principal          |
+| ------ | -------------: | ---------: | ---------------: | --- | ------------: | ------------------------ |
+| Free   |            0 € | 1 snapshot | 50 URLs ponctuel | non | 0–échantillon | acquisition              |
+| Solo   |  **12 €/mois** |          1 |          3k URLs | oui |      100/mois | indépendant/TPE          |
+| Growth |  **29 €/mois** |          3 |         20k URLs | oui |      500/mois | PME/consultant           |
+| Studio |  **59 €/mois** |         10 |         75k URLs | oui |    2,000/mois | consultant/agence légère |
+| Agency | **119 €/mois** |         25 |        250k URLs | oui |    5,000/mois | agence + white label     |
 
 Ces prix sont **hypothèses de test**, pas engagement final. Le modèle doit conserver l'unité `AI check` visible, avec top-up si nécessaire. La proposition reste nettement sous les offres AI visibility autour de $99–$199/mois observées chez Semrush/Ahrefs, tout en protégeant les coûts par quotas. [S01][S02]
 

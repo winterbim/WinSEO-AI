@@ -44,31 +44,62 @@ const rec = (
   ...overrides,
 });
 
-describe("buildDecisionCenter", () => {
-  it("puts severe observed crawl defects in FIX_NOW", () => {
+void describe("buildDecisionCenter", () => {
+  void it("puts severe observed crawl defects in FIX_NOW", () => {
     const result = buildDecisionCenter("p1", [finding()], []);
-    assert.equal(result.items[0]?.lane, "FIX_NOW");
-    assert.equal(result.items[0]?.evidenceClass, "OBSERVED");
+    const item = result.items.at(0);
+    assert.ok(item);
+    assert.equal(item.lane, "FIX_NOW");
+    assert.equal(item.evidenceClass, "OBSERVED");
   });
 
-  it("routes measured decay to REFRESH and cannibalization to review", () => {
-    const result = buildDecisionCenter("p1", [], [
-      rec("page_query_decay"),
-      rec("query_cannibalization"),
-    ]);
+  void it("routes measured decay to REFRESH and cannibalization to review", () => {
+    const result = buildDecisionCenter(
+      "p1",
+      [],
+      [rec("page_query_decay"), rec("query_cannibalization")],
+    );
     assert.equal(result.counts.REFRESH, 1);
     assert.equal(result.counts.CONSOLIDATE_REVIEW, 1);
     assert.ok(result.items.every((item) => item.evidenceClass === "MEASURED"));
   });
 
-  it("never upgrades a positive winner into a refresh task", () => {
-    const result = buildDecisionCenter("p1", [], [
-      rec("winners_losers", { delta: { clicks: 0.25 } }),
-    ]);
+  void it("links each GSC decision to the view that actually renders its module", () => {
+    const result = buildDecisionCenter(
+      "p1",
+      [],
+      [
+        rec("page_query_decay"),
+        rec("winners_losers"),
+        rec("emerging_queries"),
+        rec("high_impressions_low_ctr"),
+        rec("query_cannibalization"),
+      ],
+    );
+    const byModule = new Map(result.items.map((item) => [item.id.split(":")[1], item.href]));
+    assert.equal(byModule.get("page_query_decay"), "/dashboard/p1/search-performance/changes");
+    assert.equal(byModule.get("winners_losers"), "/dashboard/p1/search-performance/changes");
+    assert.equal(byModule.get("emerging_queries"), "/dashboard/p1/search-performance/changes");
+    assert.equal(
+      byModule.get("high_impressions_low_ctr"),
+      "/dashboard/p1/search-performance/opportunities",
+    );
+    assert.equal(
+      byModule.get("query_cannibalization"),
+      "/dashboard/p1/search-performance/opportunities",
+    );
+  });
+
+  void it("never upgrades a positive winner into a refresh task", () => {
+    const result = buildDecisionCenter(
+      "p1",
+      [],
+      [rec("winners_losers", { delta: { clicks: 0.25 } })],
+    );
     assert.equal(result.items[0]?.lane, "GROW");
   });
 
-  it("ignores resolved findings", () => {
+  void it("ignores resolved findings", () => {
     const result = buildDecisionCenter("p1", [finding({ status: "resolved" })], []);
     assert.equal(result.items.length, 0);
   });

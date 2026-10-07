@@ -22,6 +22,7 @@ export {
   getMembershipRole,
   listOrganizationsForUser,
   createProject,
+  createProjectWithIdempotencyKey,
   getProject,
   listProjects,
   createPublicScan,
@@ -38,11 +39,15 @@ export {
   listEvidence,
   listCrawlRuns,
   createDetectedAction,
+  createMeasuredGscWorkflow,
+  GscMeasurementSnapshotChangedError,
+  GscMeasurementWorkflowAdvancedError,
 } from "./repositories.ts";
 export type {
   UserRow,
   OrganizationRow,
   ProjectRow,
+  IdempotentProjectCreation,
   PublicScanRow,
   FindingInsert,
   FindingRow,
@@ -76,6 +81,7 @@ export {
   createOrReuseJob,
   getJob,
   listJobs,
+  claimJob,
   updateJob,
   persistMetricWindow,
   loadMetricRows,
@@ -83,6 +89,9 @@ export {
   metricFreshness,
   GscTenantScopeError,
   GscAlreadyConnectedError,
+  GscMeasurementWindowTooLargeError,
+  GscSyncAttemptLostError,
+  GSC_SYNC_JOB_LEASE_MS,
 } from "./gsc.ts";
 export type {
   GscCredentialRow,
@@ -97,7 +106,7 @@ export type {
   GscOauthStateInput,
 } from "./gsc.ts";
 
-export { consumePublicScanRateLimit } from "./rate-limit.ts";
+export { consumeRateLimitWindow } from "./rate-limit.ts";
 export type { RateLimitWindowHit } from "./rate-limit.ts";
 
 export { createPatch, getPatch, listPatches, updatePatch } from "./patches.ts";

@@ -5,7 +5,11 @@ import type { NormalizedUrl } from "./url-normalizer.ts";
 import { normalizeUrl } from "./url-normalizer.ts";
 import { createHttpFetcher, type FetcherOptions } from "./http-fetcher.ts";
 import { parseHtmlPage } from "./html-parser.ts";
-import { createMemoryEvidenceStore, type EvidenceStore, type EvidenceRecord } from "./evidence-store.ts";
+import {
+  createMemoryEvidenceStore,
+  type EvidenceStore,
+  type EvidenceRecord,
+} from "./evidence-store.ts";
 import { logger, generateTraceId } from "@serpvera/telemetry";
 
 export interface CrawlOptions {

@@ -76,10 +76,7 @@ export class WordPressRestAdapter {
     try {
       parsed = new URL(input.siteUrl);
     } catch {
-      throw new WordPressAdapterError(
-        "INVALID_CONFIGURATION",
-        "WordPress site URL is invalid.",
-      );
+      throw new WordPressAdapterError("INVALID_CONFIGURATION", "WordPress site URL is invalid.");
     }
     if (
       parsed.protocol !== "https:" ||
@@ -102,8 +99,7 @@ export class WordPressRestAdapter {
 
   async read(target: WordPressPatchTarget): Promise<WordPressSnapshot> {
     const endpoint = this.#endpoint(target);
-    if (target.kind === "post_meta")
-      await this.#assertMetaWritable(endpoint, target.metaKey);
+    if (target.kind === "post_meta") await this.#assertMetaWritable(endpoint, target.metaKey);
     const response = await this.#request(`${endpoint}?context=edit`, "GET");
     const json = await this.#json(response);
     const value = this.#readValue(json, target);
@@ -216,10 +212,7 @@ export class WordPressRestAdapter {
   #endpoint(target: WordPressPatchTarget): string {
     validateTarget(target);
     const collection = target.kind === "media" ? "media" : target.postType;
-    return new URL(
-      `wp-json/wp/v2/${collection}/${target.id}`,
-      this.#origin,
-    ).toString();
+    return new URL(`wp-json/wp/v2/${collection}/${target.id}`, this.#origin).toString();
   }
 
   async #request(
@@ -244,10 +237,7 @@ export class WordPressRestAdapter {
       );
     }
     if (response.status === 404) {
-      throw new WordPressAdapterError(
-        "NOT_FOUND",
-        "WordPress resource was not found.",
-      );
+      throw new WordPressAdapterError("NOT_FOUND", "WordPress resource was not found.");
     }
     if (!response.ok) {
       throw new WordPressAdapterError(
@@ -258,9 +248,7 @@ export class WordPressRestAdapter {
     return response;
   }
 
-  async #json(
-    response: WordPressFetchResponse,
-  ): Promise<Record<string, unknown>> {
+  async #json(response: WordPressFetchResponse): Promise<Record<string, unknown>> {
     const data = await response.json();
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       throw new WordPressAdapterError(
@@ -271,10 +259,7 @@ export class WordPressRestAdapter {
     return data as Record<string, unknown>;
   }
 
-  #readValue(
-    data: Record<string, unknown>,
-    target: WordPressPatchTarget,
-  ): string {
+  #readValue(data: Record<string, unknown>, target: WordPressPatchTarget): string {
     if (target.kind === "media") {
       if (typeof data.alt_text !== "string") {
         throw new WordPressAdapterError(
@@ -327,37 +312,21 @@ export class WordPressRestAdapter {
     }
   }
 
-  async #writeValue(
-    target: WordPressPatchTarget,
-    value: string,
-  ): Promise<void> {
+  async #writeValue(target: WordPressPatchTarget, value: string): Promise<void> {
     const endpoint = this.#endpoint(target);
     const body =
-      target.kind === "media"
-        ? { alt_text: value }
-        : { meta: { [target.metaKey]: value } };
+      target.kind === "media" ? { alt_text: value } : { meta: { [target.metaKey]: value } };
     await this.#request(endpoint, "POST", body);
   }
 }
 
-function readMetaProperties(
-  schema: Record<string, unknown>,
-): Record<string, unknown> | null {
+function readMetaProperties(schema: Record<string, unknown>): Record<string, unknown> | null {
   const properties = schema.properties;
-  if (
-    !properties ||
-    typeof properties !== "object" ||
-    Array.isArray(properties)
-  )
-    return null;
+  if (!properties || typeof properties !== "object" || Array.isArray(properties)) return null;
   const meta = (properties as Record<string, unknown>).meta;
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
   const metaProperties = (meta as Record<string, unknown>).properties;
-  if (
-    !metaProperties ||
-    typeof metaProperties !== "object" ||
-    Array.isArray(metaProperties)
-  )
+  if (!metaProperties || typeof metaProperties !== "object" || Array.isArray(metaProperties))
     return null;
   return metaProperties as Record<string, unknown>;
 }
@@ -369,14 +338,8 @@ function validateTarget(target: WordPressPatchTarget): void {
       "WordPress resource id must be a positive integer.",
     );
   }
-  if (
-    target.kind === "post_meta" &&
-    (!target.metaKey.trim() || target.metaKey.length > 200)
-  ) {
-    throw new WordPressAdapterError(
-      "INVALID_TARGET",
-      "WordPress meta key is invalid.",
-    );
+  if (target.kind === "post_meta" && (!target.metaKey.trim() || target.metaKey.length > 200)) {
+    throw new WordPressAdapterError("INVALID_TARGET", "WordPress meta key is invalid.");
   }
 }
 

@@ -18,11 +18,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function GscPagesPage({
-  params,
-}: {
-  params: Promise<{ projectId: string }>;
-}) {
+export default async function GscPagesPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const window = defaultWindow();
 
@@ -78,12 +74,24 @@ export default async function GscPagesPage({
               <caption className="sr-only">Clicks, impressions, CTR and position per page</caption>
               <thead>
                 <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                  <th scope="col" className="py-2 pr-4">Page</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Clicks</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Impressions</th>
-                  <th scope="col" className="py-2 pr-4 text-right">CTR</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Avg. position</th>
-                  <th scope="col" className="py-2 text-right">Days</th>
+                  <th scope="col" className="py-2 pr-4">
+                    Page
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Clicks
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Impressions
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    CTR
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Avg. position
+                  </th>
+                  <th scope="col" className="py-2 text-right">
+                    Days
+                  </th>
                 </tr>
               </thead>
               <tbody>
