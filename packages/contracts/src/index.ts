@@ -167,6 +167,8 @@ export interface CrawlRun {
   completedAt?: string;
   pagesCrawled: number;
   pagesFailed: number;
+  pageLimit?: number | null;
+  stopReason?: string | null;
 }
 
 // ─── GSC ───

@@ -1,17 +1,74 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { startProjectCrawl } from "../crawl-kickoff";
+import type { CrawlRun } from "@/lib/types";
+import { crawlCoverageLabel } from "@/lib/crawl-coverage";
 
 /**
  * Triggers a fresh crawl of the project's domain through the control plane.
  * The audit runs asynchronously; the page refreshes to show new rows.
  */
-export function StartCrawlButton({ projectId }: { projectId: string }) {
+export function StartCrawlButton({
+  projectId,
+  initialRun,
+}: {
+  projectId: string;
+  initialRun: CrawlRun | null;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [runId, setRunId] = useState(
+    initialRun && (initialRun.status === "running" || initialRun.status === "pending")
+      ? initialRun.id
+      : null,
+  );
+  const [runStatus, setRunStatus] = useState(initialRun?.status ?? "");
+  const [pages, setPages] = useState(initialRun?.pagesCrawled ?? 0);
+  const [failedPages, setFailedPages] = useState(initialRun?.pagesFailed ?? 0);
+  const [pageLimit, setPageLimit] = useState<number | null>(initialRun?.pageLimit ?? null);
+  const [stopReason, setStopReason] = useState(initialRun?.stopReason ?? null);
+
+  useEffect(() => {
+    if (!runId) return;
+    let active = true;
+
+    async function refreshStatus() {
+      try {
+        const response = await fetch(`/api/v1/projects/${projectId}/crawl-runs`, {
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Could not refresh crawl status.");
+        const body = (await response.json()) as { crawlRuns?: CrawlRun[] };
+        const run = body.crawlRuns?.find((item) => item.id === runId);
+        if (!run || !active) return;
+        setRunStatus(run.status);
+        setPages(run.pagesCrawled);
+        setFailedPages(run.pagesFailed);
+        setPageLimit(run.pageLimit);
+        setStopReason(run.stopReason ?? null);
+        if (run.status === "completed" || run.status === "failed") {
+          setRunId(null);
+          router.refresh();
+        }
+      } catch {
+        if (active)
+          setError(
+            "Crawl status could not be refreshed. The saved run remains available in history.",
+          );
+      }
+    }
+
+    void refreshStatus();
+    const timer = setInterval(() => void refreshStatus(), 1_500);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [projectId, router, runId]);
 
   // Named handler + `void` at the call site: React attributes expect void
   // returns, and the async work is intentionally fire-and-forget with its own
@@ -26,25 +83,41 @@ export function StartCrawlButton({ projectId }: { projectId: string }) {
       return;
     }
 
-    // Give the worker a head start, then reload the real rows.
-    setTimeout(() => {
-      router.refresh();
-      setBusy(false);
-    }, 2500);
+    setError("");
+    setRunId(result.crawlRun.id);
+    setRunStatus(result.crawlRun.status);
+    setPages(0);
+    setFailedPages(0);
+    setPageLimit(50);
+    setStopReason(null);
+    setBusy(false);
+    router.refresh();
   }
 
   return (
     <div className="text-right">
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || runId !== null}
         onClick={() => {
           void runCrawl();
         }}
         className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-60"
       >
-        {busy ? "Crawling…" : "Run crawl"}
+        {busy ? "Starting…" : runId ? "Crawl running…" : "Run crawl"}
       </button>
+      {runStatus && (
+        <p className="mt-2 text-xs text-slate-700" aria-live="polite">
+          {runStatus === "running" || runStatus === "pending"
+            ? "Crawl running"
+            : `Crawl ${runStatus}`}{" "}
+          · {pages} pages observed · {failedPages} failed ·{" "}
+          {crawlCoverageLabel(runStatus, stopReason, pageLimit)}{" "}
+          <Link className="text-primary underline" href={`/dashboard/${projectId}/crawls`}>
+            History
+          </Link>
+        </p>
+      )}
       {error && (
         <p role="alert" className="mt-2 text-xs text-critical">
           {error}

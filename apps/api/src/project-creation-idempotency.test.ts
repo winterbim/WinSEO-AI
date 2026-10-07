@@ -65,6 +65,17 @@ void describe("project creation idempotency (memory adapter)", () => {
         payload,
       });
 
+    const invalidUrl = await create(
+      { ...projectPayload, primaryDomain: "https://example.test/private/page" },
+      "a770d242-9700-4cd0-824e-2e798b2a67d7",
+    );
+    assert.equal(invalidUrl.statusCode, 400, invalidUrl.body);
+    assert.equal(
+      (await app.stores.projects.listProjects(organizationId)).length,
+      0,
+      "invalid page URLs must be rejected before a project is persisted",
+    );
+
     const original = await create(projectPayload, key);
     assert.equal(original.statusCode, 201, original.body);
     const originalId = (JSON.parse(original.body) as { project: { id: string } }).project.id;

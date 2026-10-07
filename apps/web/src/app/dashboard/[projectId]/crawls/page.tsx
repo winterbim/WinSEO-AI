@@ -45,7 +45,8 @@ export default async function CrawlHistoryPage({
           <h1 className="text-2xl font-bold">Crawl history</h1>
           <p className="mt-1 text-sm text-slate-700">
             Each run records when the site was observed and what was fetched — the baseline every
-            later comparison depends on.
+            later comparison depends on. A project run inspects at most 50 pages per run; the count
+            is observed coverage, not proof that every URL on the site was discovered.
           </p>
         </div>
         <Link
@@ -90,6 +91,9 @@ export default async function CrawlHistoryPage({
                 <th scope="col" className="py-2">
                   Failed
                 </th>
+                <th scope="col" className="py-2">
+                  Coverage
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -118,6 +122,25 @@ export default async function CrawlHistoryPage({
                   </td>
                   <td className="py-3 pr-4">{r.pagesCrawled}</td>
                   <td className="py-3">{r.pagesFailed}</td>
+                  <td className="py-3 text-xs text-slate-700">
+                    {r.stopReason === "page_limit"
+                      ? r.pageLimit === null
+                        ? "Partial · recorded page limit reached"
+                        : `Partial · ${r.pageLimit}-page limit reached`
+                      : r.stopReason === "time_budget"
+                        ? "Partial · time budget reached"
+                        : r.stopReason === "server_throttled"
+                          ? "Partial · site throttled crawl"
+                          : r.stopReason === "robots_unavailable"
+                            ? "Stopped · robots.txt unavailable"
+                            : r.stopReason === "robots_blocked"
+                              ? "Stopped · page disallowed by robots.txt"
+                              : r.status === "completed"
+                                ? r.pageLimit === null
+                                  ? "Coverage details unavailable for this historical crawl"
+                                  : `Discovery queue exhausted · max ${r.pageLimit} pages; not a full site inventory`
+                                : "Coverage unavailable"}
+                  </td>
                 </tr>
               ))}
             </tbody>

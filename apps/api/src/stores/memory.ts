@@ -85,6 +85,8 @@ export function createMemoryStores(): ApiStores {
       status: string;
       pagesCrawled: number;
       pagesFailed: number;
+      pageLimit: number | null;
+      stopReason: string | null;
       mode: string;
       startedAt: string;
       completedAt: string | null;
@@ -259,6 +261,12 @@ export function createMemoryStores(): ApiStores {
         }
         return Promise.resolve(limiter.hit(ip, scope));
       },
+      release(ip, limitPerWindow, scope: RateLimitScope = "public-scan-ip") {
+        const key = `${scope}:${limitPerWindow}`;
+        const limiter = rateLimiters.get(key);
+        limiter?.release(ip, scope);
+        return Promise.resolve();
+      },
     },
 
     sessions: {
@@ -361,6 +369,16 @@ export function createMemoryStores(): ApiStores {
 
     crawl: {
       createCrawlRun(organizationId, projectId, mode) {
+        if (
+          [...crawlRuns.values()].some(
+            (run) =>
+              run.organizationId === organizationId &&
+              run.projectId === projectId &&
+              run.status === "running",
+          )
+        ) {
+          return Promise.resolve(null);
+        }
         const id = randomUUID();
         crawlRuns.set(id, {
           organizationId,
@@ -368,19 +386,31 @@ export function createMemoryStores(): ApiStores {
           status: "running",
           pagesCrawled: 0,
           pagesFailed: 0,
+          pageLimit: null,
+          stopReason: null,
           mode,
           startedAt: new Date().toISOString(),
           completedAt: null,
         });
         return Promise.resolve({ id });
       },
-      finishCrawlRun(organizationId, runId, status, pagesCrawled, pagesFailed) {
+      finishCrawlRun(
+        organizationId,
+        runId,
+        status,
+        pagesCrawled,
+        pagesFailed,
+        pageLimit,
+        stopReason,
+      ) {
         const run = crawlRuns.get(runId);
         // Emulate RLS: a foreign tenant cannot update (or even see) the run.
         if (run?.organizationId === organizationId) {
           run.status = status;
           run.pagesCrawled = pagesCrawled;
           run.pagesFailed = pagesFailed;
+          run.pageLimit = pageLimit ?? null;
+          run.stopReason = stopReason ?? null;
           run.completedAt = new Date().toISOString();
         }
         return Promise.resolve();
@@ -398,6 +428,8 @@ export function createMemoryStores(): ApiStores {
               completedAt: r.completedAt,
               pagesCrawled: r.pagesCrawled,
               pagesFailed: r.pagesFailed,
+              pageLimit: r.pageLimit,
+              stopReason: r.stopReason,
             })),
         );
       },

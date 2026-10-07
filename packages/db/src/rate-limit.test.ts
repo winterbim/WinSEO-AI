@@ -1,8 +1,15 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { closePool, configurePool, consumeRateLimitWindow, withAdmin } from "./index.ts";
+import {
+  closePool,
+  configurePool,
+  consumeRateLimitWindow,
+  releaseRateLimitWindow,
+  withAdmin,
+} from "./index.ts";
 
 const key = `rate-limit-test-${process.pid}-${Date.now()}`;
+const releaseKey = `${key}-release`;
 
 void describe("shared PostgreSQL rate-limit windows", () => {
   before(() => {
@@ -17,6 +24,7 @@ void describe("shared PostgreSQL rate-limit windows", () => {
     try {
       await withAdmin(async (client) => {
         await client.query(`DELETE FROM rate_limit_windows WHERE bucket_key = $1`, [key]);
+        await client.query(`DELETE FROM rate_limit_windows WHERE bucket_key = $1`, [releaseKey]);
       });
     } finally {
       await closePool();
@@ -29,5 +37,11 @@ void describe("shared PostgreSQL rate-limit windows", () => {
 
     assert.deepEqual(observedCounts, [1, 2, 3, 4, 5, 6, 6, 6]);
     assert.ok(hits.every((hit) => hit.retryAfterSeconds > 0));
+  });
+
+  void it("returns a reserved unit after a downstream operation rejects admission", async () => {
+    assert.equal((await consumeRateLimitWindow(releaseKey, 3)).count, 1);
+    await releaseRateLimitWindow(releaseKey);
+    assert.equal((await consumeRateLimitWindow(releaseKey, 3)).count, 1);
   });
 });

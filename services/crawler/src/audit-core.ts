@@ -7,6 +7,8 @@ export { createHttpFetcher, fetchPage } from "./http-fetcher.ts";
 export type { FetcherOptions, FetchResult } from "./http-fetcher.ts";
 export { parseHtmlPage, stripTags } from "./html-parser.ts";
 export type { ParsedPage } from "./html-parser.ts";
+export { parseRobotsTxt, isUrlAllowed, getCrawlDelay, parseSitemapXml } from "./sitemap-parser.ts";
+export type { RobotsTxtRules, SitemapEntry } from "./sitemap-parser.ts";
 export {
   evaluatePageRules,
   RULES_VERSION,

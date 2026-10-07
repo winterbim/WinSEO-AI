@@ -117,7 +117,7 @@ export default async function ProjectOverviewPage({
             </Link>
           </nav>
         </div>
-        <StartCrawlButton projectId={projectId} />
+        <StartCrawlButton projectId={projectId} initialRun={overview.crawls.latest} />
       </div>
 
       {/* ── Q1: What changed? ── */}

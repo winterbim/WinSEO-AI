@@ -110,6 +110,8 @@ export interface ScanStore {
 export interface RateLimitStore {
   /** Atomically consume one IP quota unit in an operation-specific shared window. */
   hit(ip: string, limitPerWindow: number, scope?: RateLimitScope): Promise<RateLimitDecision>;
+  /** Return a consumed unit when the operation is rejected by a later admission gate. */
+  release(ip: string, limitPerWindow: number, scope?: RateLimitScope): Promise<void>;
 }
 
 // ─── Server-side sessions (P-GAP-05) ───
@@ -324,6 +326,8 @@ export interface StoredCrawlRun {
   completedAt: string | null;
   pagesCrawled: number;
   pagesFailed: number;
+  pageLimit: number | null;
+  stopReason: string | null;
 }
 
 export interface StoredFindingDetail extends StoredFinding {
@@ -333,13 +337,20 @@ export interface StoredFindingDetail extends StoredFinding {
 }
 
 export interface CrawlStore {
-  createCrawlRun(organizationId: string, projectId: string, mode: string): Promise<{ id: string }>;
+  /** Atomically enforce one active crawl per project; null means one is already running. */
+  createCrawlRun(
+    organizationId: string,
+    projectId: string,
+    mode: string,
+  ): Promise<{ id: string } | null>;
   finishCrawlRun(
     organizationId: string,
     runId: string,
     status: "completed" | "failed",
     pagesCrawled: number,
     pagesFailed: number,
+    pageLimit?: number | null,
+    stopReason?: string | null,
   ): Promise<void>;
   listCrawlRuns(organizationId: string, projectId: string): Promise<StoredCrawlRun[]>;
   addFinding(

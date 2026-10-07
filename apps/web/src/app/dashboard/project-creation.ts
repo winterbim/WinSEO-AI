@@ -8,6 +8,41 @@ export interface PendingProjectCreation extends ProjectCreationPayload {
   idempotencyKey: string;
 }
 
+export type ProjectDomainResult =
+  { ok: true; primaryDomain: string } | { ok: false; message: string };
+
+/** A project represents a site origin; page-level audits accept full URLs elsewhere. */
+export function normalizeProjectDomain(value: string): ProjectDomainResult {
+  const input = value.trim();
+  if (!input) return { ok: false, message: "Enter the domain of the site you want to audit." };
+  if (input.length > 2_048) return { ok: false, message: "The address is too long." };
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(input) && !/^https?:\/\//i.test(input)) {
+    return { ok: false, message: "Only public HTTP and HTTPS site addresses are supported." };
+  }
+
+  try {
+    const url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`);
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search
+    ) {
+      return {
+        ok: false,
+        message: "Enter a site domain or homepage URL without a page path or query string.",
+      };
+    }
+    if (!url.hostname || url.host.length > 253) {
+      return { ok: false, message: "Enter a valid site domain." };
+    }
+    return { ok: true, primaryDomain: url.host.toLowerCase() };
+  } catch {
+    return { ok: false, message: "Enter a valid HTTP(S) site address." };
+  }
+}
+
 const PENDING_PROJECT_STORAGE_KEY = "serpvera.pending-project-creation.v1";
 
 export function readPendingProjectCreation(

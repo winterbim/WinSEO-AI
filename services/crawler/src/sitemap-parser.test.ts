@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseRobotsTxt, isUrlAllowed, parseSitemapXml } from "./sitemap-parser.ts";
+import { getCrawlDelay, isUrlAllowed, parseRobotsTxt, parseSitemapXml } from "./sitemap-parser.ts";
 
 void describe("sitemap-parser", () => {
   void describe("parseRobotsTxt", () => {
@@ -26,6 +26,27 @@ Disallow: /`;
       assert.ok(rules.userAgents.has("googlebot"));
       assert.ok(rules.userAgents.has("*"));
     });
+
+    void it("applies one rule block to consecutive user-agent lines", () => {
+      const rules = parseRobotsTxt(
+        `User-agent: SERPVERA-Crawler\nUser-agent: Googlebot\nDisallow: /shared/`,
+      );
+      assert.deepEqual(rules.userAgents.get("serpvera-crawler")?.disallowed, ["/shared/"]);
+      assert.deepEqual(rules.userAgents.get("googlebot")?.disallowed, ["/shared/"]);
+    });
+
+    void it("treats an empty disallow value as no restriction", () => {
+      const rules = parseRobotsTxt("User-agent: *\nDisallow:");
+      assert.ok(isUrlAllowed("/private", "mybot", rules));
+    });
+
+    void it("keeps crawl-delay scoped to the matching user-agent group", () => {
+      const rules = parseRobotsTxt(
+        "User-agent: SERPVERA-Crawler\nCrawl-delay: 4\n\nUser-agent: *\nCrawl-delay: 30",
+      );
+      assert.equal(getCrawlDelay("SERPVERA-Crawler/0.1", rules), 4);
+      assert.equal(getCrawlDelay("another-bot", rules), 30);
+    });
   });
 
   void describe("isUrlAllowed", () => {
@@ -44,6 +65,28 @@ Disallow: /secret`);
 
     void it("allow overrides disallow", () => {
       assert.ok(isUrlAllowed("/admin/public", "mybot", rules));
+    });
+
+    void it("matches versioned crawler user agents to versioned and product-token groups", () => {
+      const versionedRules = parseRobotsTxt(
+        "User-agent: SERPVERA-Crawler/0.1\nDisallow: /versioned",
+      );
+      const productRules = parseRobotsTxt("User-agent: SERPVERA-Crawler\nDisallow: /product");
+      assert.equal(isUrlAllowed("/versioned/page", "SERPVERA-Crawler/0.1", versionedRules), false);
+      assert.equal(isUrlAllowed("/product/page", "SERPVERA-Crawler/0.1", productRules), false);
+    });
+
+    void it("honors the robots end-of-path anchor", () => {
+      const rules = parseRobotsTxt("User-agent: *\nDisallow: /private$");
+      assert.equal(isUrlAllowed("/private", "mybot", rules), false);
+      assert.equal(isUrlAllowed("/private/page", "mybot", rules), true);
+    });
+
+    void it("treats Disallow: / as blocking the complete site", () => {
+      const denyAll = parseRobotsTxt("User-agent: *\nDisallow: /");
+      assert.equal(isUrlAllowed("/", "mybot", denyAll), false);
+      assert.equal(isUrlAllowed("/page", "mybot", denyAll), false);
+      assert.equal(isUrlAllowed("/nested/page?x=1", "mybot", denyAll), false);
     });
   });
 

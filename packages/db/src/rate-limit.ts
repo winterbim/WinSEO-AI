@@ -3,7 +3,7 @@
 // are never persisted. The single UPSERT serializes concurrent hits across
 // API instances and preserves the first-hit fixed-window semantics.
 
-import { query } from "./client.ts";
+import { query, withTransaction } from "./client.ts";
 
 export interface RateLimitWindowHit {
   count: number;
@@ -69,4 +69,29 @@ export async function consumeRateLimitWindow(
     count: row.request_count,
     retryAfterSeconds: row.retry_after_seconds,
   };
+}
+
+/** Return one reserved quota unit when a downstream admission rejects a request. */
+export async function releaseRateLimitWindow(bucketKey: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const result = await client.query<{ request_count: number }>(
+      `SELECT request_count
+         FROM rate_limit_windows
+        WHERE bucket_key = $1 AND expires_at > now()
+        FOR UPDATE`,
+      [bucketKey],
+    );
+    const count = result.rows[0]?.request_count;
+    if (count === undefined) return;
+    if (count === 1) {
+      await client.query(`DELETE FROM rate_limit_windows WHERE bucket_key = $1`, [bucketKey]);
+    } else {
+      await client.query(
+        `UPDATE rate_limit_windows
+            SET request_count = request_count - 1
+          WHERE bucket_key = $1 AND expires_at > now()`,
+        [bucketKey],
+      );
+    }
+  });
 }

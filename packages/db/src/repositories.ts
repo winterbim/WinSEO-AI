@@ -386,6 +386,8 @@ export interface CrawlRunRow {
   completed_at: Date | null;
   pages_crawled: number;
   pages_failed: number;
+  page_limit: number | null;
+  stop_reason: string | null;
 }
 
 export interface EvidenceInsert {
@@ -404,8 +406,21 @@ export async function createCrawlRun(
   organizationId: string,
   projectId: string,
   mode: string,
-): Promise<{ id: string }> {
+): Promise<{ id: string } | null> {
   return withTenant(organizationId, async (client) => {
+    // Serialize admissions by tenant/project across API instances, then refuse
+    // another active crawl before creating a durable run record.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      `crawl:${organizationId}:${projectId}`,
+    ]);
+    const active = await client.query(
+      `SELECT id FROM crawl_runs
+        WHERE organization_id = $1 AND project_id = $2 AND status = 'running'
+        LIMIT 1`,
+      [organizationId, projectId],
+    );
+    if (active.rows.length > 0) return null;
+
     const res = await client.query<{ id: string }>(
       `INSERT INTO crawl_runs (organization_id, project_id, mode, seed_strategy, status, started_at)
        VALUES ($1, $2, $3, 'SITEMAP', 'running', now())
@@ -423,14 +438,25 @@ export async function finishCrawlRun(
   status: "completed" | "failed",
   pagesCrawled: number,
   pagesFailed: number,
+  pageLimit?: number | null,
+  stopReason?: string | null,
 ): Promise<void> {
   await withTenant(organizationId, async (client) => {
     await client.query(
       `UPDATE crawl_runs
           SET status = $3, completed_at = now(),
-              pages_crawled = $4, pages_failed = $5
+              pages_crawled = $4, pages_failed = $5,
+              page_limit = $6, stop_reason = $7
         WHERE id = $2 AND organization_id = $1`,
-      [organizationId, runId, status, pagesCrawled, pagesFailed],
+      [
+        organizationId,
+        runId,
+        status,
+        pagesCrawled,
+        pagesFailed,
+        pageLimit ?? null,
+        stopReason ?? null,
+      ],
     );
   });
 }
@@ -600,7 +626,8 @@ export async function listCrawlRuns(
 ): Promise<CrawlRunRow[]> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<CrawlRunRow>(
-      `SELECT id, status, mode, started_at, completed_at, pages_crawled, pages_failed
+      `SELECT id, status, mode, started_at, completed_at, pages_crawled, pages_failed,
+              page_limit, stop_reason
          FROM crawl_runs
         WHERE organization_id = $1 AND project_id = $2
         ORDER BY started_at DESC NULLS LAST, id DESC`,

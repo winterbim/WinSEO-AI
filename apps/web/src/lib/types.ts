@@ -33,6 +33,8 @@ export interface Overview {
       completedAt: string | null;
       pagesCrawled: number;
       pagesFailed: number;
+      pageLimit: number | null;
+      stopReason: string | null;
     } | null;
   };
   interventions: { verified: number; pending: number; note: string };
@@ -80,6 +82,8 @@ export interface CrawlRun {
   completedAt: string | null;
   pagesCrawled: number;
   pagesFailed: number;
+  pageLimit: number | null;
+  stopReason: string | null;
 }
 
 export type ActionState =

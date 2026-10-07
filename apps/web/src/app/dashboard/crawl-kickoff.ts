@@ -1,6 +1,14 @@
-export type CrawlKickoffResult = { ok: true } | { ok: false; message: string };
+export interface StartedCrawl {
+  id: string;
+  projectId: string;
+  status: string;
+}
 
-interface CrawlErrorResponse {
+export type CrawlKickoffResult =
+  { ok: true; crawlRun: StartedCrawl } | { ok: false; message: string };
+
+interface CrawlKickoffResponse {
+  crawlRun?: Partial<StartedCrawl>;
   error?: { message?: string };
 }
 
@@ -12,9 +20,20 @@ export async function startProjectCrawl(
     const response = await fetcher(`/api/v1/projects/${projectId}/crawl-runs`, {
       method: "POST",
     });
-    if (response.ok) return { ok: true };
+    const body = (await response.json().catch(() => ({}))) as CrawlKickoffResponse;
+    if (response.ok) {
+      const run = body.crawlRun;
+      if (
+        run &&
+        typeof run.id === "string" &&
+        typeof run.projectId === "string" &&
+        typeof run.status === "string"
+      ) {
+        return { ok: true, crawlRun: run as StartedCrawl };
+      }
+      return { ok: false, message: "The service accepted no verifiable crawl run." };
+    }
 
-    const body = (await response.json().catch(() => ({}))) as CrawlErrorResponse;
     return {
       ok: false,
       message: body.error?.message ?? "Could not start the crawl.",

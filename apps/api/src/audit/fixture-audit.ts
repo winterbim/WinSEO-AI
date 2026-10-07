@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FetchResult, NormalizedUrl, RenderResult } from "@serpvera/crawler";
 import { auditDomain } from "./domain-audit.ts";
+import { auditSite, type SiteAuditOptions } from "./site-audit.ts";
 
 const FIXTURE_BODY =
   "This deterministic fixture explains a local product, how its public documentation works, " +
@@ -52,4 +53,33 @@ export function createFixtureAuditRunner(): typeof auditDomain {
       fetchPage: fixtureFetch,
       render: fixtureRender,
     });
+}
+
+/** Route fixture adapter: retain real deterministic rules without network I/O. */
+export function createFixtureSiteAuditRunner(): typeof auditSite {
+  const runFixture = createFixtureAuditRunner();
+  return async (target, traceId, options?: SiteAuditOptions) => {
+    const result = await runFixture(target, traceId);
+    const secondUrl = new URL("/about", target).href;
+    return {
+      status: result.status,
+      ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
+      pagesCrawled: result.status === "completed" ? 2 : 0,
+      pagesFailed: result.status === "failed" ? 1 : 0,
+      pageLimit: options?.maxPages ?? 50,
+      findings: [
+        ...result.findings,
+        ...result.findings.map((finding) => ({ ...finding, affectedUrls: [secondUrl] })),
+      ],
+      evidence: [
+        ...result.evidence,
+        ...result.evidence.map((item) => ({
+          ...item,
+          sourceRef: secondUrl,
+          finalUrl: secondUrl,
+          summary: item.summary.replace(target, secondUrl),
+        })),
+      ],
+    };
+  };
 }

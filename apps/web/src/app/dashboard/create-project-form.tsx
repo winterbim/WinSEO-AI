@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { startProjectCrawl } from "./crawl-kickoff";
 import {
   clearPendingProjectCreation,
+  normalizeProjectDomain,
   postProjectCreation,
   readPendingProjectCreation,
   savePendingProjectCreation,
@@ -128,14 +129,13 @@ export function CreateProjectForm({
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    const clean = domain
-      .trim()
-      .replace(/^https?:\/\//, "")
-      .replace(/\/+$/, "");
-    if (!clean) {
-      setError("Enter the domain of the site you want to audit.");
+    const normalizedDomain = normalizeProjectDomain(domain);
+    if (!normalizedDomain.ok) {
+      setError(normalizedDomain.message);
       return;
     }
+    const clean = normalizedDomain.primaryDomain;
+    setDomain(clean);
     setLoading(true);
     try {
       // 1) Resolve the workspace from the caller's server-verified memberships.
@@ -357,8 +357,8 @@ export function CreateProjectForm({
       >
         <h2 className="text-lg font-semibold">Add a site</h2>
         <p className="mt-1 text-sm text-slate-700">
-          We’ll start a homepage crawl after the site is created. Findings are persisted with
-          evidence you can inspect.
+          We’ll start a bounded site crawl after the site is created. Public pages are checked under
+          robots.txt and findings keep their source URL and evidence. Search Console is optional.
         </p>
         {organizations.length > 1 && (
           <label className="mt-4 block text-sm font-medium" htmlFor="project-workspace">
@@ -395,7 +395,7 @@ export function CreateProjectForm({
             onChange={(e) => {
               setDomain(e.target.value);
             }}
-            placeholder="example.com"
+            placeholder="https://example.com"
             className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <button

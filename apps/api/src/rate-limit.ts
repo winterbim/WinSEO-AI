@@ -23,7 +23,8 @@ export interface RateLimitDecision {
   retryAfterSeconds: number;
 }
 
-export type RateLimitScope = "public-scan-ip" | "mfa-ip" | "auth-login-ip" | "auth-register-ip";
+export type RateLimitScope =
+  "public-scan-ip" | "mfa-ip" | "auth-login-ip" | "auth-register-ip" | "project-crawl-org";
 
 interface WindowEntry {
   count: number;
@@ -40,6 +41,8 @@ export function isLoopback(ip: string): boolean {
 export interface RateLimiter {
   /** Record an attempt from `ip` in one operation-specific window. */
   hit(ip: string, scope?: RateLimitScope): RateLimitDecision;
+  /** Return one quota unit when admission fails after a successful hit. */
+  release(ip: string, scope?: RateLimitScope): void;
   /** Current remaining quota without consuming (for headers). */
   peek(ip: string, scope?: RateLimitScope): number;
   /** Test helper: drop all state. */
@@ -93,6 +96,11 @@ export function createRateLimiter(
         remaining: limitPerWindow - entry.count,
         retryAfterSeconds: 0,
       };
+    },
+    release(ip, scope = "public-scan-ip") {
+      if (isLoopback(ip)) return;
+      const entry = current(ip, scope);
+      entry.count = Math.max(0, entry.count - 1);
     },
     peek(ip, scope = "public-scan-ip") {
       if (isLoopback(ip)) return limitPerWindow;

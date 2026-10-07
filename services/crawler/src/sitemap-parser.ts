@@ -11,8 +11,13 @@ export interface SitemapEntry {
 }
 
 export interface RobotsTxtRules {
-  userAgents: Map<string, { allowed: string[]; disallowed: string[] }>;
+  userAgents: Map<string, RobotsAgentRules>;
   sitemaps: string[];
+}
+
+export interface RobotsAgentRules {
+  allowed: string[];
+  disallowed: string[];
   crawlDelay?: number;
 }
 
@@ -25,7 +30,19 @@ export function parseRobotsTxt(content: string): RobotsTxtRules {
     sitemaps: [],
   };
 
-  let currentAgent = "*";
+  let currentAgents: string[] = [];
+  let currentGroupHasRules = false;
+
+  const ensureAgent = (agent: string) => {
+    if (!rules.userAgents.has(agent)) {
+      rules.userAgents.set(agent, { allowed: [], disallowed: [] });
+    }
+  };
+
+  const ensureCurrentAgents = () => {
+    if (currentAgents.length === 0) currentAgents = ["*"];
+    for (const agent of currentAgents) ensureAgent(agent);
+  };
   const lines = content.split("\n");
 
   for (const line of lines) {
@@ -38,26 +55,48 @@ export function parseRobotsTxt(content: string): RobotsTxtRules {
     if (colonIdx === -1) continue;
 
     const field = trimmed.slice(0, colonIdx).trim().toLowerCase();
-    const value = trimmed.slice(colonIdx + 1).trim();
+    const value =
+      trimmed
+        .slice(colonIdx + 1)
+        .split("#", 1)[0]
+        ?.trim() ?? "";
 
     switch (field) {
       case "user-agent":
-        currentAgent = value.toLowerCase();
-        if (!rules.userAgents.has(currentAgent)) {
-          rules.userAgents.set(currentAgent, { allowed: [], disallowed: [] });
+        if (currentGroupHasRules) {
+          currentAgents = [];
+          currentGroupHasRules = false;
         }
+        currentAgents.push(value.toLowerCase());
+        ensureCurrentAgents();
         break;
       case "allow":
-        rules.userAgents.get(currentAgent)?.allowed.push(value);
+        if (!value) break;
+        ensureCurrentAgents();
+        for (const agent of currentAgents) rules.userAgents.get(agent)?.allowed.push(value);
+        currentGroupHasRules = true;
         break;
       case "disallow":
-        rules.userAgents.get(currentAgent)?.disallowed.push(value);
+        if (!value) break;
+        ensureCurrentAgents();
+        for (const agent of currentAgents) rules.userAgents.get(agent)?.disallowed.push(value);
+        currentGroupHasRules = true;
         break;
       case "sitemap":
         rules.sitemaps.push(value);
         break;
       case "crawl-delay":
-        rules.crawlDelay = parseFloat(value) || undefined;
+        ensureCurrentAgents();
+        {
+          const delay = Number.parseFloat(value);
+          if (Number.isFinite(delay) && delay >= 0) {
+            for (const agent of currentAgents) {
+              const agentRules = rules.userAgents.get(agent);
+              if (agentRules) agentRules.crawlDelay = Math.max(agentRules.crawlDelay ?? 0, delay);
+            }
+          }
+        }
+        currentGroupHasRules = true;
         break;
     }
   }
@@ -70,8 +109,12 @@ export function parseRobotsTxt(content: string): RobotsTxtRules {
  * Follows robots.txt precedence: most specific rule wins, allow overrides disallow for same specificity.
  */
 export function isUrlAllowed(path: string, userAgent: string, rules: RobotsTxtRules): boolean {
-  // Find matching user-agent (exact match first, then wildcard)
-  const agentRules = rules.userAgents.get(userAgent.toLowerCase()) ?? rules.userAgents.get("*");
+  // Prefer a version-specific product token, then its unversioned token, then
+  // the wildcard group. The crawler sends e.g. SERPVERA-Crawler/0.1, while
+  // robots.txt commonly declares just SERPVERA-Crawler.
+  const normalizedAgent = userAgent.trim().toLowerCase().split(/[\s(]/, 1)[0] ?? "";
+  const productToken = normalizedAgent.split("/", 1)[0] ?? "";
+  const agentRules = matchingAgentRules(normalizedAgent, productToken, rules);
 
   if (!agentRules) return true;
 
@@ -95,16 +138,33 @@ export function isUrlAllowed(path: string, userAgent: string, rules: RobotsTxtRu
   return bestDisallowLength === -1;
 }
 
+/** Return the crawl delay belonging to the most specific matching agent group. */
+export function getCrawlDelay(userAgent: string, rules: RobotsTxtRules): number | undefined {
+  const normalizedAgent = userAgent.trim().toLowerCase().split(/[\s(]/, 1)[0] ?? "";
+  const productToken = normalizedAgent.split("/", 1)[0] ?? "";
+  return matchingAgentRules(normalizedAgent, productToken, rules)?.crawlDelay;
+}
+
+function matchingAgentRules(
+  normalizedAgent: string,
+  productToken: string,
+  rules: RobotsTxtRules,
+): RobotsAgentRules | undefined {
+  return (
+    rules.userAgents.get(normalizedAgent) ??
+    rules.userAgents.get(productToken) ??
+    rules.userAgents.get("*")
+  );
+}
+
 function pathMatches(path: string, pattern: string): boolean {
-  if (pattern === "/") return path === "/" || path === "";
+  const endsWithAnchor = pattern.endsWith("$");
+  const source = endsWithAnchor ? pattern.slice(0, -1) : pattern;
 
   // Convert robots pattern to regex
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\$$/, ".*$");
+  const escaped = source.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
 
-  return new RegExp(`^${escaped}`).test(path);
+  return new RegExp(`^${escaped}${endsWithAnchor ? "$" : ""}`).test(path);
 }
 
 /**

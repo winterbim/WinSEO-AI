@@ -36,6 +36,7 @@ import { mfaRoutes } from "./routes/mfa.ts";
 import { patchRoutes, projectAutofixRoutes } from "./routes/autofix.ts";
 import { HttpGoogleTransport, type GoogleTransport } from "./integrations/gsc/google-transport.ts";
 import { auditDomain, type AuditOptions } from "./audit/domain-audit.ts";
+import { auditSite } from "./audit/site-audit.ts";
 import { renderUrl } from "@serpvera/crawler";
 import type { FixturePageAdapter } from "./autofix/workflow.ts";
 
@@ -46,6 +47,8 @@ declare module "fastify" {
     gscTransport: GoogleTransport;
     /** Guarded domain audit; tests inject deterministic fixture input. */
     auditDomain: typeof auditDomain;
+    /** Bounded project site crawl; tests inject deterministic fixture input. */
+    auditSite: typeof auditSite;
     /** Local fixture page adapter; never available in production. */
     fixturePageAdapter: FixturePageAdapter | null;
   }
@@ -63,6 +66,8 @@ export interface BuildAppOptions extends CreateStoresOptions {
   gscTransport?: GoogleTransport;
   /** Overrides the audit pipeline (tests inject fixtures; production uses the guarded crawler). */
   auditDomain?: typeof auditDomain;
+  /** Overrides the project site crawl (tests inject fixtures; disabled in production). */
+  auditSite?: typeof auditSite;
   /** Test-only site/CMS simulator used by the proven-patch flow. */
   fixturePageAdapter?: FixturePageAdapter;
   /** Database readiness seam for deterministic tests; never available in production. */
@@ -84,6 +89,9 @@ export async function buildApp(opts: BuildAppOptions = {}) {
   }
   if (config.nodeEnv === "production" && opts.auditDomain) {
     throw new Error("Audit runner overrides are disabled in production.");
+  }
+  if (config.nodeEnv === "production" && opts.auditSite) {
+    throw new Error("Site audit runner overrides are disabled in production.");
   }
   assertDatabaseReadinessOverrideAllowed(config.nodeEnv, Boolean(opts.databaseReadiness));
   const app = Fastify({
@@ -110,6 +118,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
           })
       : auditDomain;
   app.decorate("auditDomain", opts.auditDomain ?? configuredAuditDomain);
+  app.decorate("auditSite", opts.auditSite ?? auditSite);
   // Loud driver announcement: a boot must never SILENTLY believe it is persistent.
   if (storeDriver === "postgres") {
     app.log.info(

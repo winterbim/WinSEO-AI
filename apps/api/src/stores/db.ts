@@ -68,6 +68,7 @@ import {
   disableMfa as disableMfaRow,
   query,
   consumeRateLimitWindow,
+  releaseRateLimitWindow,
   healthCheck,
   createAiVisibilityImport as insertAiVisibilityImport,
   getAiVisibilityImport as selectAiVisibilityImport,
@@ -514,6 +515,18 @@ export function createDbStores(): ApiStores {
           retryAfterSeconds: hit.count <= limitPerWindow ? 0 : hit.retryAfterSeconds,
         };
       },
+      async release(ip, _limitPerWindow, scope = "public-scan-ip") {
+        if (isLoopback(ip)) return;
+        const secret = process.env.AUTH_SECRET;
+        if (!secret) {
+          throw new Error("AUTH_SECRET is required for privacy-preserving rate-limit keys.");
+        }
+        const bucketKey = createHmac("sha256", secret)
+          .update(`${scope}:v1:`)
+          .update(ip)
+          .digest("hex");
+        await releaseRateLimitWindow(bucketKey);
+      },
     },
 
     sessions: {
@@ -617,8 +630,24 @@ export function createDbStores(): ApiStores {
       async createCrawlRun(organizationId, projectId, mode) {
         return createCrawlRunRow(organizationId, projectId, mode);
       },
-      async finishCrawlRun(organizationId, runId, status, pagesCrawled, pagesFailed) {
-        await finishCrawlRunRow(organizationId, runId, status, pagesCrawled, pagesFailed);
+      async finishCrawlRun(
+        organizationId,
+        runId,
+        status,
+        pagesCrawled,
+        pagesFailed,
+        pageLimit,
+        stopReason,
+      ) {
+        await finishCrawlRunRow(
+          organizationId,
+          runId,
+          status,
+          pagesCrawled,
+          pagesFailed,
+          pageLimit,
+          stopReason,
+        );
       },
       async addFinding(organizationId, projectId, finding) {
         return insertFindingRow({
@@ -707,6 +736,8 @@ export function createDbStores(): ApiStores {
           completedAt: r.completed_at ? r.completed_at.toISOString() : null,
           pagesCrawled: r.pages_crawled,
           pagesFailed: r.pages_failed,
+          pageLimit: r.page_limit,
+          stopReason: r.stop_reason,
         }));
       },
       async createDetectedAction(organizationId, projectId, findingId) {

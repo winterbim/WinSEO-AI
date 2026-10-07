@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { startProjectCrawl } from "./dashboard/crawl-kickoff.ts";
 import {
   clearPendingProjectCreation,
+  normalizeProjectDomain,
   postProjectCreation,
   readPendingProjectCreation,
   savePendingProjectCreation,
@@ -82,6 +83,21 @@ void describe("workspace destination selection", () => {
 });
 
 void describe("project creation retries", () => {
+  void it("normalizes domain and homepage inputs while rejecting page paths and unsafe schemes", () => {
+    assert.deepEqual(normalizeProjectDomain(" example.com "), {
+      ok: true,
+      primaryDomain: "example.com",
+    });
+    assert.deepEqual(normalizeProjectDomain("HTTPS://Example.com/"), {
+      ok: true,
+      primaryDomain: "example.com",
+    });
+    assert.equal(normalizeProjectDomain("example.com/blog").ok, false);
+    assert.equal(normalizeProjectDomain("https://example.com/?q=test").ok, false);
+    assert.equal(normalizeProjectDomain("javascript://example.com").ok, false);
+    assert.equal(normalizeProjectDomain("https://user:secret@example.com").ok, false);
+  });
+
   void it("persists the same key and payload across a page retry", () => {
     const values = new Map<string, string>();
     const storage = {
@@ -138,10 +154,18 @@ void describe("startProjectCrawl", () => {
       requestedUrl =
         typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       requestedMethod = init?.method ?? "";
-      return Promise.resolve(new Response(null, { status: 202 }));
+      return Promise.resolve(
+        Response.json(
+          { crawlRun: { id: "run-1", projectId: "project-1", status: "running" } },
+          { status: 201 },
+        ),
+      );
     });
 
-    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(result, {
+      ok: true,
+      crawlRun: { id: "run-1", projectId: "project-1", status: "running" },
+    });
     assert.equal(requestedUrl, "/api/v1/projects/project-1/crawl-runs");
     assert.equal(requestedMethod, "POST");
   });

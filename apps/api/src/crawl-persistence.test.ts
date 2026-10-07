@@ -17,7 +17,7 @@ import type { FastifyInstance } from "fastify";
 import type { Response } from "light-my-request";
 import { buildApp } from "./server.ts";
 import { withAdmin } from "@serpvera/db";
-import { createFixtureAuditRunner } from "./audit/fixture-audit.ts";
+import { createFixtureSiteAuditRunner } from "./audit/fixture-audit.ts";
 
 const TAG = `crawl${process.pid}${(Date.now() % 100_000).toString(36)}`;
 const PW = "crawl-persist-pw-123";
@@ -41,7 +41,7 @@ void describe("project crawl persists fixture-derived findings/evidence (real Po
   before(async () => {
     app = await buildApp({
       driver: "postgres",
-      auditDomain: createFixtureAuditRunner(),
+      auditSite: createFixtureSiteAuditRunner(),
     });
     await app.ready();
   });
@@ -189,13 +189,120 @@ void describe("project crawl persists fixture-derived findings/evidence (real Po
     assert.ok(eRows.n > 0, "evidence_items rows must exist");
     assert.equal(eRows.hashed, eRows.n, "every evidence row must carry a content hash");
     assert.equal(eRows.org, a.orgId, "evidence must be owned by the tenant org");
+    assert.equal(
+      eRows.n,
+      2,
+      "fixture site crawl must persist one evidence item for each observed URL",
+    );
+
+    const relationRows = await withAdmin(async (c) => {
+      const r = await c.query(
+        `SELECT count(*)::int AS n,
+                count(*) FILTER (WHERE e.source_ref = ANY(f.affected_urls))::int AS same_url
+           FROM finding_evidence fe
+           JOIN findings f ON f.id = fe.finding_id
+           JOIN evidence_items e ON e.id = fe.evidence_id
+          WHERE f.project_id = $1`,
+        [a.projectId],
+      );
+      return r.rows[0] as { n: number; same_url: number };
+    });
+    assert.ok(relationRows.n > 0, "findings must link to page evidence");
+    assert.equal(
+      relationRows.same_url,
+      relationRows.n,
+      "each page finding must link only to evidence from that same URL",
+    );
 
     // Crawl run reached a terminal state.
     const runRow = await withAdmin(async (c) => {
-      const r = await c.query(`SELECT status FROM crawl_runs WHERE id = $1`, [runId]);
-      return r.rows[0] as { status: string } | undefined;
+      const r = await c.query(
+        `SELECT status, pages_crawled, page_limit, stop_reason FROM crawl_runs WHERE id = $1`,
+        [runId],
+      );
+      return r.rows[0] as
+        | {
+            status: string;
+            pages_crawled: number;
+            page_limit: number | null;
+            stop_reason: string | null;
+          }
+        | undefined;
     });
-    assert.equal(runRow?.status, "completed", "crawl run must complete");
+    assert.ok(runRow, "crawl run should be persisted");
+    assert.equal(runRow.status, "completed", "crawl run must complete");
+    assert.equal(runRow.pages_crawled, 2, "run totals must report every observed page");
+    assert.equal(runRow.page_limit, 50, "the applied crawl cap must be persisted");
+    assert.equal(runRow.stop_reason, null, "an exhausted fixture queue has no stop condition");
+  });
+
+  void it("admits only one active crawl for a project across concurrent requests", async () => {
+    const tenant = await setup("a", "audit-fixture.test");
+    const runClaims = await Promise.all([
+      app.stores.crawl.createCrawlRun(tenant.orgId, tenant.projectId, "HTTP_FAST"),
+      app.stores.crawl.createCrawlRun(tenant.orgId, tenant.projectId, "HTTP_FAST"),
+    ]);
+    assert.equal(runClaims.filter(Boolean).length, 1);
+    assert.equal(runClaims.filter((run) => run === null).length, 1);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/projects/${tenant.projectId}/crawl-runs`,
+      headers: { cookie: `serpvera_session=${tenant.cookie}` },
+    });
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(
+      (JSON.parse(response.body) as { error: { code: string } }).error.code,
+      "CRAWL_ALREADY_RUNNING",
+    );
+  });
+
+  void it("returns the organization quota unit when active-run admission rejects", async () => {
+    const tenant = await setup("b", "rejected-admission-fixture.test");
+    const activeRun = await app.stores.crawl.createCrawlRun(
+      tenant.orgId,
+      tenant.projectId,
+      "HTTP_FAST",
+    );
+    assert.ok(activeRun);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/projects/${tenant.projectId}/crawl-runs`,
+      headers: { cookie: `serpvera_session=${tenant.cookie}` },
+    });
+    assert.equal(response.statusCode, 409, response.body);
+
+    const reservations = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        app.stores.rateLimits.hit(tenant.orgId, 10, "project-crawl-org"),
+      ),
+    );
+    assert.ok(reservations.every((reservation) => reservation.allowed));
+  });
+
+  void it("enforces a shared per-organization crawl quota before creating a run", async () => {
+    const tenant = await setup("b", "quota-fixture.test");
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const decision = await app.stores.rateLimits.hit(tenant.orgId, 10, "project-crawl-org");
+      assert.equal(decision.allowed, true);
+    }
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/projects/${tenant.projectId}/crawl-runs`,
+      headers: { cookie: `serpvera_session=${tenant.cookie}` },
+    });
+    assert.equal(response.statusCode, 429, response.body);
+    assert.equal(
+      (JSON.parse(response.body) as { error: { code: string } }).error.code,
+      "CRAWL_RATE_LIMITED",
+    );
+    assert.equal(
+      (await app.stores.crawl.listCrawlRuns(tenant.orgId, tenant.projectId)).length,
+      0,
+      "rate-limited requests must not create crawl runs",
+    );
   });
 
   void it("a foreign tenant gets 404 for the crawl/findings routes (no existence leak)", async () => {

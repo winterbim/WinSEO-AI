@@ -106,7 +106,7 @@ export type {
   GscOauthStateInput,
 } from "./gsc.ts";
 
-export { consumeRateLimitWindow } from "./rate-limit.ts";
+export { consumeRateLimitWindow, releaseRateLimitWindow } from "./rate-limit.ts";
 export type { RateLimitWindowHit } from "./rate-limit.ts";
 
 export { createPatch, getPatch, listPatches, updatePatch } from "./patches.ts";

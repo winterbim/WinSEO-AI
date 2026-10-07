@@ -160,6 +160,32 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
       rows.includes("0026_ai_visibility_capture_org_fk"),
       "0026_ai_visibility_capture_org_fk must be in ledger",
     );
+    assert.ok(
+      rows.includes("0027_crawl_run_coverage"),
+      "crawl coverage migration must be recorded",
+    );
+  });
+
+  void it("crawl runs persist bounded coverage with database constraints", async () => {
+    const result = await withAdmin(async (c) => {
+      const columns = await c.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='crawl_runs'`,
+      );
+      const constraints = await c.query<{ conname: string }>(
+        `SELECT conname FROM pg_constraint
+          WHERE conrelid='public.crawl_runs'::regclass
+            AND conname IN ('crawl_runs_page_limit_range', 'crawl_runs_stop_reason_allowed')`,
+      );
+      return {
+        columns: columns.rows.map((row) => row.column_name),
+        constraints: constraints.rows.map((row) => row.conname),
+      };
+    });
+    assert.ok(result.columns.includes("page_limit"));
+    assert.ok(result.columns.includes("stop_reason"));
+    assert.ok(result.constraints.includes("crawl_runs_page_limit_range"));
+    assert.ok(result.constraints.includes("crawl_runs_stop_reason_allowed"));
   });
 
   void it("removes the temporary GSC migration guard after the migration chain", async () => {
