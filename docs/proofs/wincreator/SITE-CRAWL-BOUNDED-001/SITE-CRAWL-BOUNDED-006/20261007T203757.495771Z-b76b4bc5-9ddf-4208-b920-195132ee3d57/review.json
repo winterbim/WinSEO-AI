@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "SITE-CRAWL-BOUNDED-006",
+      "level": "Meso",
+      "text": "A project crawl is constrained to one origin, obeys applicable robots rules across queue entries and redirects, records URL-scoped observations/findings, respects page/time/request budgets, and surfaces persisted coverage limits; the captured PostgreSQL tests use the same disposable local database whose migration state the gate checks.",
+      "gate": "`bash scripts/verify-site-crawl-gate.sh`",
+      "row_sha256": "e6439c4396c9b93503eb86c450b5feb30f444e87d9aed12bbb3b5d02e19288ac",
+      "ledger_sha256_before": "025bfc577f62de32800aa368f437fc92e4fb975d53a8e79422d6e58621bd99d4",
+      "status_before": "CLAIMED"
+    },
+    "capture_digest": "d4ae0e6a23e224b4f00dd9af96df18af000600c48b6ea20082ac021140f59ee8",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_FAIL",
+    "verdict": "INSUFFICIENT",
+    "reviewer": "audit_security_ci",
+    "challenge": "The exact capture stops before its migration query or any product test. stdout contains only GATE_START; stderr says psql could not connect to /tmp/winseo-pgsocket/.s.PGSQL.55432: Operation not permitted (exit 2). This is an environment access failure, so the run neither supports nor disproves the combined crawl and same-disposable-DB claim. A capture after approved socket access is needed to evaluate it.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "047d6a6b123c8bbcdaffefac69b95e50cbbd592360e3ac6ea51b2b1f90c9db5e"
+    },
+    "reviewed_at": "2026-10-07T20:39:04.453713Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "ab6c2ed0a1294f8f551e9530e235fb0285fb958ba6e7c3041734ce03d179da40"
+  }
+}

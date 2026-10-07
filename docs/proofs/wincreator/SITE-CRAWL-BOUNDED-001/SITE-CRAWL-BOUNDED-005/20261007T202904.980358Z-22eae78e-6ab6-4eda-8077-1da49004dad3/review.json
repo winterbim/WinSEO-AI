@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "SITE-CRAWL-BOUNDED-005",
+      "level": "Meso",
+      "text": "A project crawl is constrained to one origin, obeys applicable robots rules across queue entries and redirects, records URL-scoped observations/findings, respects page/time/request budgets, and surfaces persisted coverage limits.",
+      "gate": "`bash scripts/verify-site-crawl-gate.sh`",
+      "row_sha256": "407dc609b9403f10fb5e33028573501ed275d876b17106ddef11e5014784e619",
+      "ledger_sha256_before": "1d40fa1c736289c6c7b9d5419c231fca62a44ab9ff2077c5a0f8a9f12765bafd",
+      "status_before": "IN_PROGRESS"
+    },
+    "capture_digest": "05cfac937e3a6dca6cd61013e03f7ce6e2134e137acde2fdfbe2be55a6f978f6",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "INSUFFICIENT",
+    "reviewer": "audit_security_ci",
+    "challenge": "The gate checks migration 0027 on PG_SOCKET_DIR/PGDATABASE, but it neither rejects nor unsets DATABASE_URL. apps/api createStores prefers DATABASE_URL, and the PostgreSQL crawl integration test calls buildApp({driver: postgres}) without an explicit connection override; Turbo runs in loose env mode. Thus the recorded suite can test a different database than the disposable database whose migration the gate checked. The capture does not bind the API test DB target, so it cannot establish the required disposable-DB gate condition.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "4708bc322333021c85ed3bf504c4c62c499902c37575df216d1987389d476902"
+    },
+    "reviewed_at": "2026-10-07T20:33:43.158590Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "1e2dba740ebb22e3389faf793240b872a3ab31b56113214f4d8db1ef57f04311"
+  }
+}
