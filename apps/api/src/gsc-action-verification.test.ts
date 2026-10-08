@@ -100,6 +100,7 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
     cookieA?: string;
     cookieB?: string;
     connectionA?: string;
+    septemberJobA?: string;
     verified?: string;
     rejected?: string;
     inconclusiveSample?: string;
@@ -281,6 +282,7 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
       windowEnd: SEPTEMBER.endDate,
       idempotencyKey: `${SEPTEMBER.startDate}:${SEPTEMBER.endDate}`,
     });
+    ctx.septemberJobA = jobSept.id;
     const jobAug = await gsc.createOrReuseJob({
       organizationId: a.organizationId,
       projectId: ctx.projectA,
@@ -1230,6 +1232,150 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
       "2026-09-16",
       "freshness never overstates recency",
     );
+  });
+
+  void it("withholds before/after metrics when a trusted sync covers only part of the baseline window", async () => {
+    assert.ok(ctx.verified && ctx.cookieA && ctx.connectionA && ctx.projectA && ctx.orgA);
+    await withAdmin(async (client) => {
+      const legacy = await client.query(
+        `UPDATE gsc_sync_jobs
+            SET ingestion_version = 0
+          WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
+            AND window_start <= $4::date AND window_end >= $5::date
+          RETURNING id`,
+        [ctx.orgA, ctx.projectA, ctx.connectionA, AUGUST.endDate, AUGUST.startDate],
+      );
+      assert.ok((legacy.rowCount ?? 0) >= 1, "the fixture has trusted August coverage to reset");
+    });
+    const gsc = app.stores.gsc;
+    assert.ok(gsc);
+    const partial = await gsc.createOrReuseJob({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-08-02",
+      windowEnd: "2026-08-15",
+      idempotencyKey: "action-before-after-partial-baseline-window",
+    });
+    const attempt = await gsc.claimJob(ctx.orgA, partial.id, "2026-10-02T00:00:00.000Z");
+    assert.ok(attempt);
+    await gsc.persistMetricWindow({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      syncJobId: partial.id,
+      expectedAttempt: attempt,
+      window: { startDate: "2026-08-02", endDate: "2026-08-15" },
+      rows: [
+        metricRow({
+          date: "2026-08-15",
+          query: "verified q",
+          page: "https://example.com/v",
+          clicks: 2,
+          impressions: 20,
+          ctr: 0.1,
+          position: 4,
+        }),
+      ],
+    });
+    assert.equal(
+      await gsc.updateJob(ctx.orgA, partial.id, {
+        status: "COMPLETED",
+        expectedAttempt: attempt,
+        rowCount: 1,
+        completedAt: "2026-10-02T00:00:00.000Z",
+        ingestionVersion: 1,
+      }),
+      true,
+    );
+
+    const res = await inject("GET", `/v1/gsc/actions/${ctx.verified}/before-after`, ctx.cookieA);
+    assert.equal(res.statusCode, 409, res.body);
+    assert.equal(
+      (JSON.parse(res.body) as { error: { code: string } }).error.code,
+      "COMPARISON_WINDOW_NOT_SYNCED",
+    );
+    assert.equal(
+      res.body.includes("MEASURED"),
+      false,
+      "partial baseline metrics never reach the caller",
+    );
+  });
+
+  void it("withholds before/after metrics when a trusted sync covers only part of the action window", async () => {
+    assert.ok(ctx.verified && ctx.cookieA && ctx.connectionA && ctx.projectA && ctx.orgA);
+    await withAdmin(async (client) => {
+      const legacy = await client.query(
+        `UPDATE gsc_sync_jobs
+            SET ingestion_version = 0
+          WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
+            AND window_start <= $4::date AND window_end >= $5::date
+          RETURNING id`,
+        [ctx.orgA, ctx.projectA, ctx.connectionA, SEPTEMBER.endDate, SEPTEMBER.startDate],
+      );
+      assert.ok((legacy.rowCount ?? 0) >= 1, "the fixture has trusted September coverage to reset");
+    });
+    const gsc = app.stores.gsc;
+    assert.ok(gsc);
+    const partial = await gsc.createOrReuseJob({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: SEPTEMBER.startDate,
+      windowEnd: "2026-09-15",
+      idempotencyKey: "action-before-after-partial-window",
+    });
+    const attempt = await gsc.claimJob(ctx.orgA, partial.id, "2026-10-02T00:00:00.000Z");
+    assert.ok(attempt);
+    await gsc.persistMetricWindow({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      syncJobId: partial.id,
+      expectedAttempt: attempt,
+      window: { startDate: SEPTEMBER.startDate, endDate: "2026-09-15" },
+      rows: [
+        metricRow({
+          date: "2026-09-15",
+          query: "verified q",
+          page: "https://example.com/v",
+          clicks: 1,
+          impressions: 10,
+          ctr: 0.1,
+          position: 4,
+        }),
+      ],
+    });
+    assert.equal(
+      await gsc.updateJob(ctx.orgA, partial.id, {
+        status: "COMPLETED",
+        expectedAttempt: attempt,
+        rowCount: 1,
+        completedAt: "2026-10-02T00:00:00.000Z",
+        ingestionVersion: 1,
+      }),
+      true,
+    );
+
+    const res = await inject("GET", `/v1/gsc/actions/${ctx.verified}/before-after`, ctx.cookieA);
+    assert.equal(res.statusCode, 409, res.body);
+    assert.equal(
+      (JSON.parse(res.body) as { error: { code: string } }).error.code,
+      "MEASUREMENT_WINDOW_NOT_SYNCED",
+    );
+    assert.equal(res.body.includes("MEASURED"), false, "partial metrics never reach the caller");
+  });
+
+  void it("withholds action comparisons when the action property is no longer active", async () => {
+    assert.ok(ctx.verified && ctx.cookieA && ctx.orgA && ctx.connectionA);
+    const gsc = app.stores.gsc;
+    assert.ok(gsc);
+    assert.equal(await gsc.disconnectConnection(ctx.orgA, ctx.connectionA), true);
+    const res = await inject("GET", `/v1/gsc/actions/${ctx.verified}/before-after`, ctx.cookieA);
+    assert.equal(res.statusCode, 409, res.body);
+    assert.equal(
+      (JSON.parse(res.body) as { error: { code: string } }).error.code,
+      "GSC_PROPERTY_NOT_CONNECTED",
+    );
+    assert.equal(res.body.includes("MEASURED"), false);
   });
 
   void it("cross-tenant before/after is a uniform 404", async () => {

@@ -23,12 +23,23 @@ import { GSC_SYNC_JOB_LEASE_MS, GscSyncAttemptLostError } from "@serpvera/db";
 
 /** Dimensions persisted by 0006 — one row per day × query × page × country × device. */
 export const GSC_DIMENSIONS = ["date", "query", "page", "country", "device"] as const;
+/** Version 1 identifies jobs handled by the bounded, de-duplicating collector. */
+export const GSC_INGESTION_VERSION = 1;
 export const DEFAULT_ROW_LIMIT = 25_000; // Google's documented page maximum
 export const DEFAULT_MAX_ROWS = 250_000; // Hard cap so one job cannot exhaust memory
 export const DEFAULT_MAX_ATTEMPTS = 3;
 export const RETRY_BASE_DELAY_MS = 250;
 /** Quota exhaustion deserves a longer cool-down than a transient 5xx. */
 export const QUOTA_BACKOFF_MULTIPLIER = 8;
+
+class GscResultLimitExceededError extends Error {
+  constructor(maxRows: number) {
+    super(
+      `Search Console returned more than the configured ${maxRows.toLocaleString()} row limit; this window was not persisted.`,
+    );
+    this.name = "GscResultLimitExceededError";
+  }
+}
 
 export interface GscIngestDeps {
   store: GscStore;
@@ -118,26 +129,36 @@ async function fetchAllPages(
 ): Promise<GscMetricRow[]> {
   const rowLimit = deps.rowLimit ?? DEFAULT_ROW_LIMIT;
   const maxRows = deps.maxRows ?? DEFAULT_MAX_ROWS;
+  if (!Number.isInteger(rowLimit) || rowLimit < 1 || rowLimit > DEFAULT_ROW_LIMIT) {
+    throw new Error(`rowLimit must be an integer from 1 to ${DEFAULT_ROW_LIMIT}.`);
+  }
+  if (!Number.isInteger(maxRows) || maxRows < 1) {
+    throw new Error("maxRows must be a positive integer.");
+  }
   const collected: GscMetricRow[] = [];
   let startRow = 0;
 
   for (;;) {
+    const remaining = maxRows - collected.length;
+    // Fetch at most one row over the remaining capacity. That extra row is a
+    // sentinel: it proves the local cap was exceeded without holding an
+    // unbounded response in memory.
+    const requestRowLimit = Math.min(rowLimit, remaining + 1);
     const request: SearchAnalyticsRequest = {
       startDate: window.startDate,
       endDate: window.endDate,
       dimensions: [...GSC_DIMENSIONS],
-      rowLimit,
+      rowLimit: requestRowLimit,
       startRow,
     };
     const page = await deps.transport.querySearchAnalytics(accessToken, deps.property, request);
     if (page.rows.length === 0) break;
+    if (page.rows.length > remaining) throw new GscResultLimitExceededError(maxRows);
     collected.push(...page.rows);
-    if (page.rows.length < rowLimit) break;
-    if (collected.length >= maxRows) break;
     startRow += page.rows.length;
   }
 
-  return collected.slice(0, maxRows);
+  return collected;
 }
 
 /**
@@ -228,6 +249,7 @@ export async function runGscIngest(
       errorCode: extra.error?.code ?? null,
       errorMessage: extra.error?.message ?? null,
       nextRetryAt: extra.nextRetryAt ?? null,
+      ingestionVersion: status === "COMPLETED" ? GSC_INGESTION_VERSION : undefined,
       completedAt:
         status === "COMPLETED" || status === "FAILED" ? new Date(now()).toISOString() : undefined,
     });
@@ -284,6 +306,16 @@ export async function runGscIngest(
       lastError = undefined;
       break;
     } catch (err) {
+      if (err instanceof GscResultLimitExceededError) {
+        return finish("FAILED", {
+          error: {
+            code: "RESULT_LIMIT_EXCEEDED",
+            message: err.message,
+            retryable: false,
+          },
+          nextRetryAt: null,
+        });
+      }
       if (err instanceof GscCredentialsRequiredError) {
         // No grant, no data. The job says so; nothing is invented.
         return finish("CREDENTIALS_REQUIRED", {

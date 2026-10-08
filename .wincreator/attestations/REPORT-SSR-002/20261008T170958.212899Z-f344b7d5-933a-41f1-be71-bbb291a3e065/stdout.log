@@ -1,0 +1,20 @@
+
+> serpvera@0.1.0 proof:report:ssr /tmp/winseo-publish
+> node --test scripts/ssr-proof-readiness.test.mjs && node scripts/run-report-ssr-proof.mjs
+
+▶ SSR proof startup ownership
+  ✔ requires the API child post-listen marker (1.198336ms)
+  ✔ accepts only the Next child announcing the exact selected port (0.514933ms)
+  ✔ checks startup output after stripping terminal color sequences (0.252096ms)
+✔ SSR proof startup ownership (3.815174ms)
+ℹ tests 3
+ℹ suites 1
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.638565
+REPORT_SSR_FRESH_BUILD_OK cached=0 build_id_sha256=c702639332fb210a71eec01f06dd77b088bd134fda595b837b3a39f781fc8b8f report_route_sha256=b7bedd048b58dbf22f3013d65ba6654d06d071c56c049fe8b9e7eaa05e0a6cb7
+SSR_REPORT_OK store=postgres project=d11accc7-d276-4d61-a6e6-62e1e6a83900 persisted_imports=1 csv_sha256=43f38d325999b11696a9c9cfa8cf2eeab7b58954aaf0cc604a18e9602215dd48
+REPORT_SSR_POSTGRES_GATE_OK api=postgres database=ready migrations=ready

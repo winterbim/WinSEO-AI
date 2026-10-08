@@ -144,6 +144,23 @@ void describe("AI visibility imports (authenticated API + PostgreSQL)", () => {
     }
   });
 
+  void it("returns a genuine empty stats-only history without raw capture rows", async () => {
+    assert.ok(ctx.projectA && ctx.cookieA);
+    const response = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/ai-visibility/imports?includeStats=true`,
+      ctx.cookieA,
+    );
+    assert.equal(response.statusCode, 200, response.body);
+    const body = JSON.parse(response.body) as {
+      imports: unknown[];
+      dataAvailability: { source: string; promptPanelCompleteness: string };
+    };
+    assert.deepEqual(body.imports, []);
+    assert.equal(body.dataAvailability.source, "USER_SUPPLIED");
+    assert.equal(body.dataAvailability.promptPanelCompleteness, "UNKNOWN");
+  });
+
   void it("persists the exact CSV hash and returns stored per-engine/prompt statistics", async () => {
     assert.ok(ctx.projectA && ctx.cookieA);
     const response = await inject(
@@ -238,6 +255,63 @@ void describe("AI visibility imports (authenticated API + PostgreSQL)", () => {
     );
     assert.equal(historyBody.dataAvailability.promptPanelCompleteness, "UNKNOWN");
 
+    const reportHistory = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/ai-visibility/imports?includeStats=true&limit=5`,
+      ctx.cookieA,
+    );
+    assert.equal(reportHistory.statusCode, 200, reportHistory.body);
+    const reportHistoryBody = JSON.parse(reportHistory.body) as {
+      imports: {
+        id: string;
+        csvSha256: string;
+        rowCount: number;
+        createdAt: string;
+        stats: { engine: string; promptId: string; runs: number; mentionCount: number }[];
+        captures?: unknown[];
+      }[];
+      dataAvailability: {
+        source: string;
+        epistemicClass: string;
+        unverified_by_provider: boolean;
+        promptPanelCompleteness: string;
+        basis: string;
+      };
+    };
+    assert.equal(reportHistoryBody.imports.length, 1);
+    const reportImport = reportHistoryBody.imports[0];
+    assert.ok(reportImport);
+    assert.equal(reportImport.id, ctx.importId);
+    assert.equal(reportImport.csvSha256, body.import.csvSha256);
+    assert.equal(reportImport.rowCount, 3);
+    assert.ok(reportImport.createdAt);
+    assert.deepEqual(
+      reportImport.stats.map(({ engine, promptId, runs, mentionCount }) => ({
+        engine,
+        promptId,
+        runs,
+        mentionCount,
+      })),
+      [
+        { engine: "ChatGPT", promptId: "brand-comparison", runs: 2, mentionCount: 1 },
+        { engine: "Claude", promptId: "brand-comparison", runs: 1, mentionCount: 1 },
+      ],
+    );
+    assert.equal(reportImport.captures, undefined);
+    assert.deepEqual(reportHistoryBody.dataAvailability, {
+      source: "USER_SUPPLIED",
+      epistemicClass: "DOCUMENTED",
+      unverified_by_provider: true,
+      promptPanelCompleteness: "UNKNOWN",
+      basis: "persisted imported captures only",
+    });
+    const oversizedReportHistory = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/ai-visibility/imports?includeStats=true&limit=6`,
+      ctx.cookieA,
+    );
+    assert.equal(oversizedReportHistory.statusCode, 400);
+
     const detail = await inject(
       "GET",
       `/v1/projects/${ctx.projectA}/ai-visibility/imports/${ctx.importId}`,
@@ -287,6 +361,13 @@ void describe("AI visibility imports (authenticated API + PostgreSQL)", () => {
     assert.equal(firstStat.runs, 2);
     assert.equal(secondStat.runs, 2);
     assert.notEqual(firstStat.mentionCount, secondStat.mentionCount);
+
+    const ambiguousComparison = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/ai-visibility/imports?compare=${ctx.importId},${secondId}&includeStats=true`,
+      ctx.cookieA,
+    );
+    assert.equal(ambiguousComparison.statusCode, 400, ambiguousComparison.body);
   });
 
   void it("denies evidence imports to same-tenant VIEWER and BILLING roles", async () => {
@@ -394,6 +475,13 @@ void describe("AI visibility imports (authenticated API + PostgreSQL)", () => {
       ctx.cookieB,
     );
     assert.equal(foreignImport.statusCode, 404);
+
+    const foreignReportHistory = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/ai-visibility/imports?includeStats=true`,
+      ctx.cookieB,
+    );
+    assert.equal(foreignReportHistory.statusCode, 404);
 
     const foreignWrite = await inject(
       "POST",

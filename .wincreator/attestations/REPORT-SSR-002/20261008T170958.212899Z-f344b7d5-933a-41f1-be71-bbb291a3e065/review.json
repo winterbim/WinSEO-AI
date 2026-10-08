@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "REPORT-SSR-002",
+      "level": "Meso",
+      "text": "Fresh PostgreSQL-backed SSR proof builds Next without cache, verifies the compiled report route, requires the launched API child’s post-listen marker and the launched Next child’s exact selected port before accepting readiness, imports and confirms a CSV row in PostgreSQL, and verifies rendered report content plus cleanup",
+      "gate": "`env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev pnpm proof:report:ssr`",
+      "row_sha256": "9bd8e29840042dca2aa48402c13bdb19519467642c72b6e54acc5e63756b1958",
+      "ledger_sha256_before": "1599370838ce8d8cb24318d71e4317feb9ac960b1e5400f0f7b3ca44382a40c6",
+      "status_before": "PENDING"
+    },
+    "capture_digest": "0f2301bbc4b5932b2bda17a672b09737bc3e70e9785be8b2b6ddd961646056c5",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "skeptic-report-ssr-2026-10-08-r4",
+    "challenge": "Falsification challenge: I tried a stale listener or port fallback serving the SSR response, a memory-backed API, cached/stale report code, and shared text. The API readiness marker is captured from its child after app.listen, Next's child emits the exact selected Local port after the server listening event, and readiness requires both child-output markers; the runner also forces an uncached workspace build, hashes the compiled report route, and rechecks the build id and artifact after SSR. The proof posts through the Next BFF, confirms exactly one PostgreSQL import for the fresh project and CSV hash before SSR, requires that hash plus stats/provenance in the returned HTML, and runs exact fixture deletes in finally; no false-pass route remained.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "27119f0fc1d4801fae1d90e8d37a38fb8e39b56d346bb5339df08d9385ef5b8b"
+    },
+    "reviewed_at": "2026-10-08T17:13:30.905129Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "42141cb54b59cb8b36ed3d72786dc0010799eac229d02e565d8ca950da6b50c5"
+  }
+}

@@ -444,6 +444,7 @@ export interface StoredGscJob {
   windowStart: string;
   windowEnd: string;
   status: string;
+  ingestionVersion: number;
   rowCount: number;
   attempt: number;
   errorCode: string | null;
@@ -574,6 +575,7 @@ export interface GscStore {
       errorMessage?: string | null;
       attempt?: number;
       nextRetryAt?: string | null;
+      ingestionVersion?: number;
       expectedAttempt: number;
     },
   ): Promise<boolean>;

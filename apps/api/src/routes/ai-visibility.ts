@@ -18,6 +18,7 @@ const importListQuerySchema = z
     limit: z.string().regex(/^\d+$/).optional(),
     offset: z.string().regex(/^\d+$/).optional(),
     compare: z.string().max(200).optional(),
+    includeStats: z.enum(["true", "false"]).optional(),
   })
   .strict();
 
@@ -189,6 +190,14 @@ export function aiVisibilityRoutes(app: FastifyInstance) {
       });
     }
     if (query.data.compare) {
+      if (query.data.includeStats === "true") {
+        return reply.status(400).send({
+          error: {
+            code: "INVALID_QUERY",
+            message: "includeStats cannot be combined with compare.",
+          },
+        });
+      }
       const compareIds = query.data.compare.split(",");
       if (
         compareIds.length < 2 ||
@@ -238,11 +247,17 @@ export function aiVisibilityRoutes(app: FastifyInstance) {
       });
       return reply.send({ comparisons, dataAvailability: DATA_AVAILABILITY });
     }
-    const limit = Number(query.data.limit ?? "50");
+    const includeStats = query.data.includeStats === "true";
+    const limit = Number(query.data.limit ?? (includeStats ? "5" : "50"));
     const offset = Number(query.data.offset ?? "0");
-    if (limit < 1 || limit > 100 || offset > 10_000) {
+    if (limit < 1 || limit > (includeStats ? 5 : 100) || offset > 10_000) {
       return reply.status(400).send({
-        error: { code: "INVALID_QUERY", message: "Use limit 1–100 and offset 0–10000." },
+        error: {
+          code: "INVALID_QUERY",
+          message: includeStats
+            ? "Use limit 1–5 when includeStats=true and offset 0–10000."
+            : "Use limit 1–100 and offset 0–10000.",
+        },
       });
     }
     const imports = await app.stores.aiVisibility.listImports(
@@ -251,8 +266,20 @@ export function aiVisibilityRoutes(app: FastifyInstance) {
       limit,
       offset,
     );
+    const reportImports = includeStats
+      ? await Promise.all(
+          imports.map(async (imported) => ({
+            ...toImportResponse(imported),
+            stats: await app.stores.aiVisibility.listStats(
+              ctx.organizationId,
+              ctx.projectId,
+              imported.id,
+            ),
+          })),
+        )
+      : imports.map(toImportResponse);
     return reply.send({
-      imports: imports.map(toImportResponse),
+      imports: reportImports,
       dataAvailability: DATA_AVAILABILITY,
     });
   });

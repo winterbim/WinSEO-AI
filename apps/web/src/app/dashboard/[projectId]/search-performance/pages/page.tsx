@@ -65,8 +65,12 @@ export default async function GscPagesPage({ params }: { params: Promise<{ proje
 
       <FreshnessLine freshness={breakdown.freshness} window={breakdown.window} />
 
-      {breakdown.rows.length === 0 ? (
-        <EmptyCard text="No measured page rows in this window. Nothing is filled in from other sources." />
+      {breakdown.syncCoverage === "INCOMPLETE" ? (
+        <EmptyCard text="This Search Console window is incomplete. Page rows are withheld until every date has a verified sync." />
+      ) : breakdown.syncCoverage === "NO_UNIQUE_PROPERTY" ? (
+        <EmptyCard text="Connect exactly one Search Console property to measure page performance." />
+      ) : breakdown.rows.length === 0 ? (
+        <EmptyCard text="No page rows were returned for this fully synchronized window. Nothing is filled in from other sources." />
       ) : (
         <section className="rounded-lg border border-line bg-panel p-5">
           <div className="overflow-x-auto">

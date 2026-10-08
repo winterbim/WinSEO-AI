@@ -46,6 +46,7 @@ export interface GscConnectionRow {
   credential_ref: string | null;
   status: string;
   connected_at: Date | null;
+  /** Derived from verified completed jobs by connection read methods. */
   last_sync_at: Date | null;
   created_at: Date;
 }
@@ -58,6 +59,7 @@ export interface GscSyncJobRow {
   window_start: string;
   window_end: string;
   status: string;
+  ingestion_version: number;
   requested_at: Date;
   started_at: Date | null;
   completed_at: Date | null;
@@ -349,9 +351,19 @@ export async function listConnections(
 ): Promise<GscConnectionRow[]> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<GscConnectionRow>(
-      `SELECT * FROM gsc_connections
-        WHERE organization_id = $1 AND project_id = $2
-        ORDER BY created_at, id`,
+      `SELECT c.id, c.organization_id, c.project_id, c.external_property, c.scope,
+              c.credential_ref, c.status, c.connected_at, c.created_at,
+              (SELECT max(j.completed_at)
+                 FROM gsc_sync_jobs AS j
+                WHERE j.organization_id = c.organization_id
+                  AND j.project_id = c.project_id
+                  AND j.connection_id = c.id
+                  AND j.status = 'COMPLETED'
+                  AND j.completed_at IS NOT NULL
+                  AND j.ingestion_version >= 1) AS last_sync_at
+         FROM gsc_connections AS c
+        WHERE c.organization_id = $1 AND c.project_id = $2
+        ORDER BY c.created_at, c.id`,
       [organizationId, projectId],
     );
     return res.rows;
@@ -364,7 +376,18 @@ export async function getConnection(
 ): Promise<GscConnectionRow | null> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<GscConnectionRow>(
-      `SELECT * FROM gsc_connections WHERE organization_id = $1 AND id = $2`,
+      `SELECT c.id, c.organization_id, c.project_id, c.external_property, c.scope,
+              c.credential_ref, c.status, c.connected_at, c.created_at,
+              (SELECT max(j.completed_at)
+                 FROM gsc_sync_jobs AS j
+                WHERE j.organization_id = c.organization_id
+                  AND j.project_id = c.project_id
+                  AND j.connection_id = c.id
+                  AND j.status = 'COMPLETED'
+                  AND j.completed_at IS NOT NULL
+                  AND j.ingestion_version >= 1) AS last_sync_at
+         FROM gsc_connections AS c
+        WHERE c.organization_id = $1 AND c.id = $2`,
       [organizationId, connectionId],
     );
     return res.rows[0] ?? null;
@@ -387,7 +410,7 @@ export async function disconnectConnection(
   });
 }
 
-/** Mark a connection's last sync (freshness metadata). */
+/** Persist the raw sync timestamp for compatibility; read paths derive trusted freshness from jobs. */
 export async function markConnectionSynced(
   organizationId: string,
   connectionId: string,
@@ -564,6 +587,7 @@ export interface GscJobPatch {
   errorMessage?: string | null;
   attempt?: number;
   nextRetryAt?: string | null;
+  ingestionVersion?: number;
   expectedAttempt: number;
 }
 
@@ -607,7 +631,10 @@ export async function updateJob(
               error_code      = CASE WHEN $7::boolean THEN $8 ELSE error_code END,
               error_message   = CASE WHEN $7::boolean THEN $9 ELSE error_message END,
               attempt         = COALESCE($10, attempt),
-              next_retry_at   = CASE WHEN $11::boolean THEN $12::timestamptz ELSE next_retry_at END
+              next_retry_at   = CASE WHEN $11::boolean THEN $12::timestamptz ELSE next_retry_at END,
+              ingestion_version = CASE WHEN $14::boolean
+                                       THEN GREATEST(ingestion_version, $15)
+                                       ELSE ingestion_version END
         WHERE organization_id = $1 AND id = $2
           AND status = 'RUNNING' AND attempt = $13`,
       [
@@ -624,6 +651,8 @@ export async function updateJob(
         patch.nextRetryAt !== undefined,
         patch.nextRetryAt ?? null,
         patch.expectedAttempt,
+        patch.status === "COMPLETED",
+        patch.ingestionVersion ?? 1,
       ],
     );
     if ((res.rowCount ?? 0) === 0) return false;
@@ -809,6 +838,7 @@ export async function loadMetricRows(
       `sync_job_id IN (
          SELECT id FROM gsc_sync_jobs
           WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED'
+            AND ingestion_version >= 1
        )`,
       ...filter.clauses,
     ];
@@ -851,6 +881,7 @@ export async function metricSeries(
       `sync_job_id IN (
          SELECT id FROM gsc_sync_jobs
           WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED'
+            AND ingestion_version >= 1
        )`,
       ...filter.clauses,
     ];
@@ -881,7 +912,7 @@ export async function metricSeries(
 export interface GscFreshness {
   /** Latest metric_date actually persisted for the project (null = no data). */
   latestMetricDate: string | null;
-  /** Most recent completed sync, ISO. */
+  /** Most recent completed, trusted ingestion, ISO. */
   lastSyncAt: string | null;
   /** Rows persisted for the project in total. */
   totalRows: number;
@@ -902,18 +933,20 @@ export async function metricFreshness(
       `SELECT (SELECT max(metric_date)::text FROM gsc_query_metrics
                 WHERE organization_id = $1 AND project_id = $2
                   AND sync_job_id IN (
-                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED'
+                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED' AND ingestion_version >= 1
                   )
                   AND ($3::uuid IS NULL OR sync_job_id IN (
                     SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
                   ))) AS latest,
-              (SELECT max(last_sync_at) FROM gsc_connections
+              (SELECT max(completed_at) FROM gsc_sync_jobs
                 WHERE organization_id = $1 AND project_id = $2
-                  AND ($3::uuid IS NULL OR id = $3)) AS last_sync,
+                  AND status = 'COMPLETED' AND completed_at IS NOT NULL
+                  AND ingestion_version >= 1
+                  AND ($3::uuid IS NULL OR connection_id = $3)) AS last_sync,
               (SELECT count(*)::int FROM gsc_query_metrics
                 WHERE organization_id = $1 AND project_id = $2
                   AND sync_job_id IN (
-                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED'
+                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED' AND ingestion_version >= 1
                   )
                   AND ($3::uuid IS NULL OR sync_job_id IN (
                     SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3

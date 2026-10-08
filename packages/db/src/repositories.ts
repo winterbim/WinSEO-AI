@@ -761,7 +761,8 @@ async function validateGscSnapshot(
   const jobs = await client.query<{ window_start: string; window_end: string }>(
     `SELECT window_start::text AS window_start, window_end::text AS window_end
        FROM gsc_sync_jobs
-      WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3 AND status = 'COMPLETED'`,
+      WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3 AND status = 'COMPLETED'
+        AND ingestion_version >= 1`,
     [organizationId, projectId, connectionId],
   );
   const completedWindows = jobs.rows.map((job) => ({
@@ -809,6 +810,7 @@ async function validateGscSnapshot(
           AND j.project_id = m.project_id
         WHERE ${clauses.join(" AND ")}
           AND j.status = 'COMPLETED'
+          AND j.ingestion_version >= 1
         ORDER BY m.metric_date, m.query, m.page, m.country, m.device, m.sync_job_id`,
       values,
     );

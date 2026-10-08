@@ -11,7 +11,7 @@
     "build": "tsc",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "test": "node --import ./src/test-env.ts --experimental-strip-types --test --test-concurrency=1 src/*.test.ts src/**/*.test.ts",
+    "test": "node --import ./src/test-env.ts --experimental-strip-types --test --test-concurrency=1 src/*.test.ts src/**/*.test.ts src/integrations/gsc/*.test.ts",
     "demo:autofix": "node --experimental-strip-types src/autofix/demo.ts",
     "demo:autofix:e2e": "pnpm --filter @serpvera/db db:migrate && node --import ./src/test-env.ts --experimental-strip-types --test src/autofix-postgres-routes.integration.test.ts",
     "clean": "rm -rf dist"

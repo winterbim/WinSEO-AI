@@ -69,8 +69,12 @@ export default async function GscQueriesPage({
 
       <FreshnessLine freshness={breakdown.freshness} window={breakdown.window} />
 
-      {breakdown.rows.length === 0 ? (
-        <EmptyCard text="No measured query rows in this window. Nothing is filled in from other sources." />
+      {breakdown.syncCoverage === "INCOMPLETE" ? (
+        <EmptyCard text="This Search Console window is incomplete. Query rows are withheld until every date has a verified sync." />
+      ) : breakdown.syncCoverage === "NO_UNIQUE_PROPERTY" ? (
+        <EmptyCard text="Connect exactly one Search Console property to measure query performance." />
+      ) : breakdown.rows.length === 0 ? (
+        <EmptyCard text="No query rows were returned for this fully synchronized window. Nothing is filled in from other sources." />
       ) : (
         <section className="rounded-lg border border-line bg-panel p-5">
           <div className="overflow-x-auto">

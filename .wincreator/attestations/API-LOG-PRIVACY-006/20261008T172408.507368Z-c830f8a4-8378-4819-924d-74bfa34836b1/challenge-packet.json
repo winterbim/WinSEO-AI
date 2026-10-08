@@ -1,0 +1,127 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "957856747d49192538ce9365ed6fc499b7b1f14e154548cf50346f6e45ef5ec6",
+    "claim": {
+      "id": "API-LOG-PRIVACY-006",
+      "level": "Meso",
+      "text": "The OAuth request-log privacy gate fails closed on raw, encoded, recursively nested, stringified JSON, decode-budget exhaustion, and malformed percent encoding exposed at 1, 9, and 10 decoding layers; it emits generic markers, runs PostgreSQL callback tests, and removes its private temporary directory",
+      "gate": "`env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-oauth-log-privacy.sh`",
+      "row_sha256": "e99d7552964ba72d9a8da33e5bc1b823fff74051ff845250d50cde088e421e8f",
+      "ledger_sha256_before": "c054db6e9f7ccf2147eb6d2ec9f8221714a69935fd78bf1a9488773f65a8daf2",
+      "status_before": "PENDING"
+    },
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-postgres-socket",
+      "PGPORT=5432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "bash",
+      "scripts/verify-oauth-log-privacy.sh"
+    ],
+    "stdout": {
+      "sha256": "6e9b8e5aa416f7bab72ec2ca6299256e56155692d8e62490cd7a2d290a934810",
+      "original_bytes": 1203,
+      "stored_bytes": 1203,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "▶ disposable PostgreSQL target guard\n  ✔ accepts loopback URLs for the development and test databases (1.188733ms)\n  ✔ rejects remote hosts, production database names, and malformed URLs (0.370039ms)\n✔ disposable PostgreSQL target guard (3.270223ms)\n▶ OAuth request log scanner\n  ✔ accepts a callback request after the entire query string is stripped (6.365465ms)\n  ✔ rejects a callback query even when parameter names are encoded (0.308772ms)\n  ✔ rejects structured code and state fields (0.4132ms)\n  ✔ rejects JSON-stringified and percent-encoded credential objects inside log fields (0.313592ms)\n  ✔ fails closed when a log field remains percent-encoded beyond the decode limit (0.345522ms)\n  ✔ fails closed on malformed percent encoding at every bounded decode boundary (0.407419ms)\n  ✔ rejects a code or state query on any logged request URL (0.236136ms)\n  ✔ fails closed on unreadable logs and detects matching content without exposing it (1.733122ms)\n✔ OAuth request log scanner (12.575526ms)\nℹ tests 10\nℹ suites 2\nℹ pass 10\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 126.174384\nOAUTH_QUERY_LOG_SCAN_OK route_tests=21\nGSC_ROUTE_TESTS_OK\n"
+    },
+    "stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "files": [
+      {
+        "path": "scripts/oauth-log-privacy-check.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "5dec1266b0372d84529ceded567700163bb0a020a574eee933e87802379476aa",
+        "bytes": 3395
+      },
+      {
+        "path": "scripts/oauth-log-privacy-check.test.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "9be25b22eec8f49b82b5da9c9dc89368e4a4c893867a36c70cf95f3df69b46e0",
+        "bytes": 3526
+      },
+      {
+        "path": "scripts/check-oauth-log-privacy.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "cc531b4a368ffba4513e4fbc0b829fd125ef92632722a8059ebdb39043df9487",
+        "bytes": 753
+      },
+      {
+        "path": "scripts/assert-disposable-db-url.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "6d27934f7b69642272da6147a7672450afa8e48ec52b80e313a2ce3ea1dcd59b",
+        "bytes": 761
+      },
+      {
+        "path": "scripts/disposable-db-url.test.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "77decc33b121e6fa96f8b051a1b22548b157d20b7b0813a15e579847319c1abe",
+        "bytes": 922
+      },
+      {
+        "path": "scripts/verify-oauth-log-privacy.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "1c3d5c1d3eaddb47dc3aa0b0c01d2e0a67599877f4f8b952cff943ec2d85786c",
+        "bytes": 2003
+      },
+      {
+        "path": "apps/api/src/server.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7c6b02ffe885bf997427b40ee5d6ba8c424974c116da292a8196fffc0d20ca7c",
+        "bytes": 12290
+      },
+      {
+        "path": "apps/api/src/gsc-live-routes.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "553ec50ca939a51b9daf8b7fcbb14f59909e349c5cd6b8dbdf59afa8af888622",
+        "bytes": 40098
+      },
+      {
+        "path": "apps/api/package.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "76d4bc50586d86ecb5ecd0a6fe04c5fc1e641a97f544308639fee821239610a4",
+        "bytes": 1270
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "2849045c4797873b0c4de9e6c9bb641d7b9f012d",
+      "tree": "45a9cb6c1ce2c3b9e168355d7d19aa6c3d4d14f0",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "9e17e6d7399a6da47813c42ef1b1c8d86c8de361520476d5b6f0d43cdbf3fdb5",
+      "worktree_digest": "e12cb718526bc6715f6201acf7455ced1aac5c60f0783530645dbce16e62043f"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "5a5341088d9544619f55ecb71bdcb8bb797b6f7742830a50fa6c3b79769f1c57"
+}

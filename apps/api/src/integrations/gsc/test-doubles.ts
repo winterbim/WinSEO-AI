@@ -259,6 +259,7 @@ export class FakeGscStore implements GscStore {
       windowStart: input.windowStart,
       windowEnd: input.windowEnd,
       status: "PENDING",
+      ingestionVersion: 0,
       rowCount: 0,
       attempt: 0,
       errorCode: null,
@@ -303,6 +304,7 @@ export class FakeGscStore implements GscStore {
       errorMessage?: string | null;
       attempt?: number;
       nextRetryAt?: string | null;
+      ingestionVersion?: number;
       expectedAttempt: number;
     },
   ): Promise<boolean> {
@@ -322,6 +324,9 @@ export class FakeGscStore implements GscStore {
     if (patch.errorMessage !== undefined) row.errorMessage = patch.errorMessage;
     if (patch.attempt !== undefined) row.attempt = patch.attempt;
     if (patch.nextRetryAt !== undefined) row.nextRetryAt = patch.nextRetryAt;
+    if (patch.status === "COMPLETED" && patch.ingestionVersion !== undefined) {
+      row.ingestionVersion = Math.max(row.ingestionVersion, patch.ingestionVersion);
+    }
     if (patch.status === "COMPLETED") {
       for (let i = this.metrics.length - 1; i >= 0; i--) {
         const metric = this.metrics[i];
@@ -412,6 +417,7 @@ export class FakeGscStore implements GscStore {
             r.date >= window.startDate &&
             r.date <= window.endDate &&
             this.jobs.get(r.syncJobId)?.status === "COMPLETED" &&
+            (this.jobs.get(r.syncJobId)?.ingestionVersion ?? 0) >= 1 &&
             (!filters?.query || r.query === filters.query) &&
             (!filters?.page || r.page === filters.page) &&
             (!filters?.device || r.device === filters.device) &&
@@ -453,7 +459,8 @@ export class FakeGscStore implements GscStore {
       (r) =>
         r.organizationId === organizationId &&
         r.projectId === projectId &&
-        this.jobs.get(r.syncJobId)?.status === "COMPLETED",
+        this.jobs.get(r.syncJobId)?.status === "COMPLETED" &&
+        (this.jobs.get(r.syncJobId)?.ingestionVersion ?? 0) >= 1,
     );
     const dates = rows.map((r) => r.date).sort();
     const syncs = [...this.connections.values()]

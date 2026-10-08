@@ -18,7 +18,8 @@
     "format:check": "prettier --check .",
     "clean": "turbo clean",
     "db:migrate": "turbo db:migrate --env-mode=loose",
-    "db:seed": "turbo db:seed --env-mode=loose"
+    "db:seed": "turbo db:seed --env-mode=loose",
+    "proof:report:ssr": "node --test scripts/ssr-proof-readiness.test.mjs && node scripts/run-report-ssr-proof.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

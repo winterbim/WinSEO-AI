@@ -190,6 +190,36 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
       rows.includes("0029_crawl_template_groups_comment"),
       "accurate crawl group column comment migration must be recorded",
     );
+    assert.ok(
+      rows.includes("0030_gsc_sync_ingestion_version"),
+      "legacy GSC ingestion version migration must be recorded",
+    );
+    assert.ok(rows.includes("0031_gsc_unverified_default"), "GSC verification default migration");
+    assert.ok(rows.includes("0032_gsc_trust_reset"), "GSC trust reset migration");
+  });
+
+  void it("GSC jobs mark historical rows unverified and current rows versioned", async () => {
+    const result = await withAdmin(async (c) => {
+      const column = await c.query<{
+        column_default: string | null;
+        is_nullable: string;
+      }>(
+        `SELECT column_default, is_nullable FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='gsc_sync_jobs'
+            AND column_name='ingestion_version'`,
+      );
+      const constraint = await c.query<{ conname: string }>(
+        `SELECT conname FROM pg_constraint
+          WHERE conrelid='public.gsc_sync_jobs'::regclass
+            AND conname='gsc_sync_jobs_ingestion_version_nonnegative'`,
+      );
+      return { column: column.rows[0], constraint: constraint.rows[0] };
+    });
+    assert.ok(result.column);
+    assert.equal(result.column.is_nullable, "NO");
+    assert.match(result.column.column_default ?? "", /0/);
+    assert.ok(result.constraint);
+    assert.equal(result.constraint.conname, "gsc_sync_jobs_ingestion_version_nonnegative");
   });
 
   void it("crawl runs persist bounded coverage with database constraints", async () => {

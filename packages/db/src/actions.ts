@@ -366,6 +366,7 @@ async function gscWindowVerdict(
       WHERE metric.organization_id = $1
         AND metric.project_id = $2
         AND job.status = 'COMPLETED'
+        AND job.ingestion_version >= 1
         AND metric.metric_date BETWEEN $3::date AND $4::date
         AND ($5::text IS NULL OR metric.query = $5)
         AND ($6::text IS NULL OR metric.page = $6)

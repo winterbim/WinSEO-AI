@@ -60,6 +60,27 @@ declare module "fastify" {
 
 const config = loadConfig();
 
+interface RequestLogInput {
+  method?: string;
+  url?: string;
+  hostname?: string;
+  remoteAddress?: string;
+  remotePort?: number;
+}
+
+/** Keep query strings out of request logs; OAuth callbacks carry code and state there. */
+export function serializeRequestForLogs(request: RequestLogInput) {
+  const rawUrl = request.url ?? "/";
+  const queryStart = rawUrl.indexOf("?");
+  return {
+    method: request.method,
+    url: queryStart === -1 ? rawUrl : rawUrl.slice(0, queryStart),
+    hostname: request.hostname,
+    remoteAddress: request.remoteAddress,
+    remotePort: request.remotePort,
+  };
+}
+
 export interface BuildAppOptions extends CreateStoresOptions {
   driver?: StoreDriver;
   /** Overrides the Google transport (tests inject a fake; production uses HTTP). */
@@ -95,7 +116,10 @@ export async function buildApp(opts: BuildAppOptions = {}) {
   }
   assertDatabaseReadinessOverrideAllowed(config.nodeEnv, Boolean(opts.databaseReadiness));
   const app = Fastify({
-    logger: { level: config.nodeEnv === "production" ? "info" : "debug" },
+    logger: {
+      level: config.nodeEnv === "production" ? "info" : "debug",
+      serializers: { req: serializeRequestForLogs },
+    },
     // TRUST_PROXY=true is REQUIRED behind a reverse proxy/load balancer:
     // without it request.ip is the proxy's address, so per-IP rate limits
     // (P-GAP-06) would quota every client as one. Off by default (safe:

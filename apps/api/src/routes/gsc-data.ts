@@ -25,6 +25,7 @@ import {
   type MetricWindow,
 } from "../integrations/gsc/intelligence.ts";
 import type { GscStore } from "../stores/types.ts";
+import { GSC_INGESTION_VERSION } from "../integrations/gsc/ingest.ts";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
 
@@ -112,7 +113,7 @@ function hasCompletedWindowCoverage(
 ): boolean {
   let nextUncoveredDate = window.startDate;
   const completed = jobs
-    .filter((job) => job.status === "COMPLETED")
+    .filter((job) => job.status === "COMPLETED" && job.ingestionVersion >= GSC_INGESTION_VERSION)
     .filter((job) => job.connectionId === connectionId)
     .filter((job) => job.windowEnd >= window.startDate && job.windowStart <= window.endDate)
     .sort((a, b) => a.windowStart.localeCompare(b.windowStart));
@@ -248,31 +249,46 @@ export function gscDataRoutes(app: FastifyInstance) {
 
     const window = { startDate: query.data.startDate, endDate: query.data.endDate };
     const property = await connectedProperty(gsc, organizationId, project.id);
-    const measurementFilters = {
-      ...toFilters(query.data),
-      connectionId: property?.id ?? NO_CONNECTED_PROPERTY,
-    };
-    const series = await gsc.metricSeries(organizationId, project.id, window, measurementFilters);
-    const clicks = series.reduce((sum, p) => sum + p.clicks, 0);
-    const impressions = series.reduce((sum, p) => sum + p.impressions, 0);
-    const weightedPosition = series.reduce((sum, p) => sum + p.position * p.impressions, 0);
     const freshness = await gsc.metricFreshness(
       organizationId,
       project.id,
       property?.id ?? NO_CONNECTED_PROPERTY,
     );
+    const syncCoverage = property
+      ? hasCompletedWindowCoverage(
+          await gsc.listJobs(organizationId, project.id),
+          window,
+          property.id,
+        )
+        ? "SYNCED"
+        : "INCOMPLETE"
+      : "NO_UNIQUE_PROPERTY";
+    const series =
+      syncCoverage === "SYNCED"
+        ? await gsc.metricSeries(organizationId, project.id, window, {
+            ...toFilters(query.data),
+            connectionId: property?.id ?? NO_CONNECTED_PROPERTY,
+          })
+        : [];
+    const clicks = series.reduce((sum, p) => sum + p.clicks, 0);
+    const impressions = series.reduce((sum, p) => sum + p.impressions, 0);
+    const weightedPosition = series.reduce((sum, p) => sum + p.position * p.impressions, 0);
 
     return await reply.send({
       window,
+      syncCoverage,
       filters: toFilters(query.data),
       property: property?.externalProperty ?? null,
-      totals: {
-        clicks,
-        impressions,
-        ctr: impressions > 0 ? clicks / impressions : 0,
-        position: impressions > 0 ? weightedPosition / impressions : 0,
-        days: series.length,
-      },
+      totals:
+        syncCoverage === "SYNCED"
+          ? {
+              clicks,
+              impressions,
+              ctr: impressions > 0 ? clicks / impressions : 0,
+              position: impressions > 0 ? weightedPosition / impressions : 0,
+              days: series.length,
+            }
+          : null,
       series,
       freshness,
     });
@@ -299,10 +315,22 @@ export function gscDataRoutes(app: FastifyInstance) {
 
     const window = { startDate: query.data.startDate, endDate: query.data.endDate };
     const property = await connectedProperty(gsc, organizationId, project.id);
-    const rows = await gsc.loadMetricRows(organizationId, project.id, window, {
-      ...toFilters(query.data),
-      connectionId: property?.id ?? NO_CONNECTED_PROPERTY,
-    });
+    const syncCoverage = property
+      ? hasCompletedWindowCoverage(
+          await gsc.listJobs(organizationId, project.id),
+          window,
+          property.id,
+        )
+        ? "SYNCED"
+        : "INCOMPLETE"
+      : "NO_UNIQUE_PROPERTY";
+    const rows =
+      syncCoverage === "SYNCED"
+        ? await gsc.loadMetricRows(organizationId, project.id, window, {
+            ...toFilters(query.data),
+            connectionId: property?.id ?? NO_CONNECTED_PROPERTY,
+          })
+        : [];
     const limit = query.data.limit ? Math.min(Number(query.data.limit), 1000) : 100;
     const grouped = summarizeByDimension(rows, query.data.dimension).slice(0, limit);
     const freshness = await gsc.metricFreshness(
@@ -313,6 +341,7 @@ export function gscDataRoutes(app: FastifyInstance) {
 
     return await reply.send({
       window,
+      syncCoverage,
       filters: toFilters(query.data),
       property: property?.externalProperty ?? null,
       dimension: query.data.dimension,
@@ -687,10 +716,38 @@ export function gscDataRoutes(app: FastifyInstance) {
     if (property?.projectId !== action.projectId) {
       return await sendError(reply, 404, "NOT_FOUND", "Action not found.");
     }
+    const activeProperties = (await gsc.listConnections(organizationId, action.projectId)).filter(
+      (connection) => connection.status === "CONNECTED",
+    );
+    if (activeProperties.length !== 1 || activeProperties[0]?.id !== property.id) {
+      return await sendError(
+        reply,
+        409,
+        "GSC_PROPERTY_NOT_CONNECTED",
+        "The action’s Search Console property is not the project’s only active connection. Reconnect one property before comparing measurements.",
+      );
+    }
 
     const comparison = action.comparisonWindow as { startsAt?: string; endsAt?: string } | null;
     const measurementWindow = windowFromIso(comparison?.startsAt, comparison?.endsAt);
     const baselineWindow = deriveBaselineWindow(measurementWindow, undefined, undefined);
+    const jobs = await gsc.listJobs(organizationId, action.projectId);
+    if (!hasCompletedWindowCoverage(jobs, measurementWindow, property.id)) {
+      return await sendError(
+        reply,
+        409,
+        "MEASUREMENT_WINDOW_NOT_SYNCED",
+        "The action’s Search Console measurement window is not completely synchronized. Sync the full window before comparing results.",
+      );
+    }
+    if (!hasCompletedWindowCoverage(jobs, baselineWindow, property.id)) {
+      return await sendError(
+        reply,
+        409,
+        "COMPARISON_WINDOW_NOT_SYNCED",
+        "The action’s Search Console baseline window is not completely synchronized. Its missing dates cannot be treated as zero; sync the full window before comparing results.",
+      );
+    }
     const subject = {
       ...(typeof spec.query === "string" ? { query: spec.query } : {}),
       ...(typeof spec.page === "string" ? { page: spec.page } : {}),

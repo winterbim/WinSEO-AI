@@ -176,14 +176,58 @@ void describe("GSC-005 ingestion — happy path and idempotency", () => {
     assert.equal(store.metrics[0]?.clicks, 7, "revised values overwrite stale ones");
   });
 
-  void it("caps collection at maxRows so one job cannot exhaust memory", async () => {
+  void it("fails without persisting when results exceed the cap", async () => {
     const rows = Array.from({ length: 5 }, (_, i) =>
       metricRow({ date: `2026-09-1${i}`, query: `q${i}`, page: `https://example.com/p${i}` }),
     );
-    const { deps } = await harness({ analyticsRows: rows }, { rowLimit: 2, maxRows: 3 });
+    const { store, deps } = await harness({ analyticsRows: rows }, { rowLimit: 2, maxRows: 3 });
+    const outcome = await runGscIngest(deps, FIXTURE_WINDOW);
+    assert.equal(outcome.status, "FAILED");
+    assert.equal(outcome.error?.code, "RESULT_LIMIT_EXCEEDED");
+    assert.equal(outcome.error.retryable, false);
+    assert.equal(outcome.rowCount, 0);
+    assert.equal(store.metrics.length, 0, "a truncated window is never persisted as complete");
+  });
+
+  void it("accepts exactly the row cap only after an empty sentinel page", async () => {
+    const rows = Array.from({ length: 3 }, (_, i) =>
+      metricRow({ date: `2026-09-1${i}`, query: `q${i}`, page: `https://example.com/p${i}` }),
+    );
+    const { store, transport, deps } = await harness(
+      { analyticsRows: rows },
+      { rowLimit: 2, maxRows: 3 },
+    );
     const outcome = await runGscIngest(deps, FIXTURE_WINDOW);
     assert.equal(outcome.status, "COMPLETED");
     assert.equal(outcome.rowCount, 3);
+    assert.deepEqual(
+      transport.analyticsRequests.map((request) => [request.startRow, request.rowLimit]),
+      [
+        [0, 2],
+        [2, 2],
+        [3, 1],
+      ],
+      "the final one-row request proves the cap was not silently truncated",
+    );
+    assert.equal(store.metrics.length, 3);
+  });
+
+  void it("accepts a short final page below the cap without skipping the empty terminator", async () => {
+    const rows = Array.from({ length: 3 }, (_, i) =>
+      metricRow({ date: `2026-09-1${i}`, query: `q${i}`, page: `https://example.com/p${i}` }),
+    );
+    const { store, transport, deps } = await harness(
+      { analyticsRows: rows },
+      { rowLimit: 4, maxRows: 5 },
+    );
+    const outcome = await runGscIngest(deps, FIXTURE_WINDOW);
+    assert.equal(outcome.status, "COMPLETED");
+    assert.equal(outcome.rowCount, 3);
+    assert.deepEqual(
+      transport.analyticsRequests.map((request) => request.startRow),
+      [0, 3],
+    );
+    assert.equal(store.metrics.length, 3);
   });
 });
 

@@ -336,6 +336,36 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
 
   void it("ingests measured rows end-to-end and serves them with freshness", async () => {
     assert.ok(ctx.connectionId && ctx.projectA && ctx.cookieA);
+    const unsynced = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
+      ctx.cookieA,
+    );
+    assert.equal(unsynced.statusCode, 200, unsynced.body);
+    const unsyncedData = JSON.parse(unsynced.body) as {
+      syncCoverage: string;
+      totals: unknown;
+      series: unknown[];
+    };
+    assert.equal(unsyncedData.syncCoverage, "INCOMPLETE");
+    assert.equal(unsyncedData.totals, null, "incomplete windows have no measured totals");
+    assert.deepEqual(unsyncedData.series, [], "incomplete windows expose no partial series");
+
+    const unsyncedBreakdown = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/breakdown?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}&dimension=query`,
+      ctx.cookieA,
+    );
+    assert.equal(unsyncedBreakdown.statusCode, 200, unsyncedBreakdown.body);
+    const incompleteBreakdown = JSON.parse(unsyncedBreakdown.body) as {
+      syncCoverage: string;
+      rows: unknown[];
+      sourceRows: number;
+    };
+    assert.equal(incompleteBreakdown.syncCoverage, "INCOMPLETE");
+    assert.deepEqual(incompleteBreakdown.rows, [], "incomplete windows expose no query rows");
+    assert.equal(incompleteBreakdown.sourceRows, 0);
+
     transport.script.analyticsRows = [
       metricRow({
         date: "2026-09-15",
@@ -354,6 +384,42 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
         position: 8,
       }),
     ];
+    const partialWindow = { startDate: "2026-09-15", endDate: "2026-09-16" };
+    const partialSync = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, {
+      connectionId: ctx.connectionId,
+      ...partialWindow,
+    });
+    assert.equal(partialSync.statusCode, 200, partialSync.body);
+    const partialSummary = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
+      ctx.cookieA,
+    );
+    const partialData = JSON.parse(partialSummary.body) as {
+      syncCoverage: string;
+      totals: unknown;
+      series: unknown[];
+    };
+    assert.equal(partialData.syncCoverage, "INCOMPLETE");
+    assert.equal(partialData.totals, null, "a verified subset cannot become full-window totals");
+    assert.deepEqual(
+      partialData.series,
+      [],
+      "a verified subset cannot become a full-window series",
+    );
+
+    const partialBreakdown = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/breakdown?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}&dimension=query`,
+      ctx.cookieA,
+    );
+    const partialGroups = JSON.parse(partialBreakdown.body) as {
+      syncCoverage: string;
+      rows: unknown[];
+    };
+    assert.equal(partialGroups.syncCoverage, "INCOMPLETE");
+    assert.deepEqual(partialGroups.rows, [], "partial query groups are not exposed");
+
     const sync = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, {
       connectionId: ctx.connectionId,
       ...WINDOW,
@@ -382,10 +448,12 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     );
     assert.equal(summary.statusCode, 200, summary.body);
     const data = JSON.parse(summary.body) as {
-      totals: { clicks: number; impressions: number; ctr: number; days: number };
+      totals: { clicks: number; impressions: number; ctr: number; days: number } | null;
       series: { date: string }[];
       freshness: { latestMetricDate: string | null; totalRows: number };
+      syncCoverage: string;
     };
+    assert.ok(data.totals);
     assert.deepEqual(data.totals, {
       clicks: 5,
       impressions: 49,
@@ -394,6 +462,7 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       days: 2,
     });
     assert.equal(data.freshness.latestMetricDate, "2026-09-16");
+    assert.equal(data.syncCoverage, "SYNCED");
 
     const breakdown = await inject(
       "GET",
@@ -401,9 +470,66 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       ctx.cookieA,
     );
     assert.equal(breakdown.statusCode, 200, breakdown.body);
-    const groups = (JSON.parse(breakdown.body) as { rows: { key: string; impressions: number }[] })
-      .rows;
+    const breakdownData = JSON.parse(breakdown.body) as {
+      syncCoverage: string;
+      rows: { key: string; impressions: number }[];
+    };
+    assert.equal(breakdownData.syncCoverage, "SYNCED");
+    const groups = breakdownData.rows;
     assert.deepEqual(groups.map((g) => g.key).sort(), ["evidence seo", "second q"]);
+  });
+
+  void it("does not present a legacy completed job as current coverage or measurement", async () => {
+    assert.ok(ctx.jobId && ctx.projectA && ctx.cookieA);
+    const rawConnection = await withAdmin(async (c) => {
+      await c.query(`UPDATE gsc_sync_jobs SET ingestion_version = 0 WHERE id = $1`, [ctx.jobId]);
+      const result = await c.query<{ rawLastSyncAt: Date | null; trustedLastSyncAt: Date | null }>(
+        `SELECT c.last_sync_at AS "rawLastSyncAt",
+                (SELECT max(j.completed_at)
+                   FROM gsc_sync_jobs j
+                  WHERE j.connection_id = c.id
+                    AND j.status = 'COMPLETED'
+                    AND j.ingestion_version >= 1) AS "trustedLastSyncAt"
+           FROM gsc_connections c
+          WHERE c.id = $1`,
+        [ctx.connectionId],
+      );
+      return result.rows[0] ?? null;
+    });
+    assert.ok(rawConnection?.rawLastSyncAt, "connection retains its raw historical timestamp");
+    assert.ok(rawConnection.trustedLastSyncAt, "the preceding partial window remains trusted");
+    assert.notEqual(
+      rawConnection.rawLastSyncAt.toISOString(),
+      rawConnection.trustedLastSyncAt.toISOString(),
+      "the latest raw timestamp belongs to the legacy attempt, not the trusted partial one",
+    );
+
+    const summary = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
+      ctx.cookieA,
+    );
+    assert.equal(summary.statusCode, 200, summary.body);
+    const data = JSON.parse(summary.body) as {
+      totals: { clicks: number } | null;
+      series: unknown[];
+      freshness: { totalRows: number; lastSyncAt: string | null };
+      syncCoverage: string;
+    };
+    assert.equal(data.totals, null, "an unverified window does not return partial totals");
+    assert.deepEqual(data.series, [], "unverified historical rows are withheld");
+    assert.equal(data.freshness.totalRows, 0, "legacy rows do not contribute to freshness");
+    assert.equal(
+      data.freshness.lastSyncAt,
+      rawConnection.trustedLastSyncAt.toISOString(),
+      "only the preceding trusted partial-window attempt contributes to freshness",
+    );
+    assert.equal(data.syncCoverage, "INCOMPLETE", "a fresh current-version sync is required");
+
+    const jobs = await inject("GET", `/v1/projects/${ctx.projectA}/gsc/jobs`, ctx.cookieA);
+    const connections = (JSON.parse(jobs.body) as { connections: { lastSyncAt: string | null }[] })
+      .connections;
+    assert.equal(connections[0]?.lastSyncAt, rawConnection.trustedLastSyncAt.toISOString());
   });
 
   void it("re-sync creates a new completed attempt and replaces, never doubles", async () => {
@@ -431,15 +557,19 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       jobs: { id: string; status: string; rowCount: number }[];
       connections: { externalProperty: string; lastSyncAt: string | null }[];
     };
-    assert.equal(jobList.jobs.length, 2, "each completed sync attempt stays in history");
+    assert.equal(
+      jobList.jobs.length,
+      3,
+      "partial, legacy, and replacement attempts stay in history",
+    );
     const firstJob = jobList.jobs[0];
     assert.ok(firstJob);
     assert.equal(firstJob.id, outcome.jobId);
     assert.equal(firstJob.status, "COMPLETED");
     assert.equal(
       jobList.jobs.filter((job) => job.status === "COMPLETED").length,
-      2,
-      "the previous successful attempt remains auditable",
+      3,
+      "partial, legacy, and replacement attempts remain auditable",
     );
     const firstConnection = jobList.connections[0];
     assert.ok(firstConnection?.lastSyncAt, "freshness metadata is exposed");
@@ -450,15 +580,31 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       ctx.cookieA,
     );
     const data = JSON.parse(summary.body) as {
-      totals: { clicks: number };
+      totals: { clicks: number } | null;
       freshness: { totalRows: number };
     };
-    assert.equal(data.totals.clicks, 7, "revised values replace stale ones");
+    assert.equal(data.totals?.clicks, 7, "revised values replace stale ones");
     assert.equal(data.freshness.totalRows, 1, "the withdrawn row is gone");
   });
 
   void it("incremental sync (no dates) derives its window from the last sync", async () => {
     assert.ok(ctx.connectionId && ctx.projectA && ctx.cookieA);
+    await withAdmin(async (c) => {
+      await c.query(`UPDATE gsc_sync_jobs SET ingestion_version = 0 WHERE connection_id = $1`, [
+        ctx.connectionId,
+      ]);
+    });
+
+    const unverifiedConnections = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/jobs`,
+      ctx.cookieA,
+    );
+    const unverifiedLastSync = (
+      JSON.parse(unverifiedConnections.body) as { connections: { lastSyncAt: string | null }[] }
+    ).connections[0]?.lastSyncAt;
+    assert.equal(unverifiedLastSync, null, "legacy jobs cannot set the next incremental window");
+
     transport.script.analyticsRows = [];
     const sync = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, {
       connectionId: ctx.connectionId,
@@ -476,7 +622,8 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       .connections;
     const lastSync = connections[0]?.lastSyncAt?.slice(0, 10) ?? null;
     const today = new Date().toISOString().slice(0, 10);
-    assert.deepEqual(outcome.window, deriveIncrementalWindow(lastSync, today));
+    assert.deepEqual(outcome.window, deriveIncrementalWindow(null, today));
+    assert.ok(lastSync, "a new verified collection restores the trusted sync date");
     assert.equal(outcome.window.endDate < today, true, "today's incomplete data is never claimed");
   });
 

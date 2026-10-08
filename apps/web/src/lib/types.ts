@@ -216,9 +216,10 @@ export interface GscTotals {
 
 export interface GscSummary {
   window: GscWindow;
+  syncCoverage: "SYNCED" | "INCOMPLETE" | "NO_UNIQUE_PROPERTY";
   property?: string | null;
   filters: Record<string, string>;
-  totals: GscTotals;
+  totals: GscTotals | null;
   series: GscDailyPoint[];
   freshness: GscFreshness;
 }
@@ -234,6 +235,7 @@ export interface GscDimensionRow {
 
 export interface GscBreakdown {
   window: GscWindow;
+  syncCoverage: "SYNCED" | "INCOMPLETE" | "NO_UNIQUE_PROPERTY";
   filters: Record<string, string>;
   dimension: "query" | "page";
   rows: GscDimensionRow[];

@@ -121,7 +121,7 @@ export const REQUIRED_PATCH_STATUSES = [
   "rejected",
 ] as const;
 
-export const REQUIRED_LATEST_MIGRATION = "0020_gsc_sync_claim_order";
+export const REQUIRED_LATEST_MIGRATION = "0032_gsc_trust_reset";
 
 export type RequiredSchemaMarker = (typeof REQUIRED_SCHEMA_MARKERS)[number];
 
@@ -953,6 +953,7 @@ function toStoredJob(r: {
   connection_id: string;
   window_start: string | Date;
   window_end: string | Date;
+  ingestion_version: number;
   window_start_iso?: string;
   window_end_iso?: string;
   status: string;
@@ -972,6 +973,7 @@ function toStoredJob(r: {
     windowStart: r.window_start_iso ?? toIsoDate(r.window_start),
     windowEnd: r.window_end_iso ?? toIsoDate(r.window_end),
     status: r.status,
+    ingestionVersion: r.ingestion_version,
     rowCount: r.row_count,
     attempt: r.attempt,
     errorCode: r.error_code,

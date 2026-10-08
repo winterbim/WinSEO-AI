@@ -963,6 +963,122 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
     assert.equal(completedRows[0].clicks, 99);
   });
 
+  void it("excludes legacy completed jobs from coverage, freshness, and measured series", async () => {
+    const window = { startDate: "2025-10-05", endDate: "2025-10-05" };
+    const before = await metricFreshness(ORG_A, ctx.projectA, ctx.connectionA);
+    const createdIds: string[] = [];
+    const persistAndComplete = async (
+      jobId: string,
+      clicks: number,
+      ingestionVersion: number,
+    ): Promise<void> => {
+      const expectedAttempt = await claimJob(ORG_A, jobId, new Date().toISOString());
+      assert.ok(expectedAttempt);
+      await persistMetricWindow({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        syncJobId: jobId,
+        expectedAttempt,
+        window,
+        rows: [
+          {
+            date: window.startDate,
+            query: "versioned-ingestion-fixture",
+            page: "https://alpha.example.com/versioned-fixture",
+            country: "fra",
+            device: "DESKTOP",
+            clicks,
+            impressions: 10,
+            ctr: clicks / 10,
+            position: 4,
+          },
+        ],
+      });
+      await updateJob(ORG_A, jobId, {
+        status: "COMPLETED",
+        ingestionVersion,
+        expectedAttempt,
+        completedAt: new Date().toISOString(),
+      });
+    };
+
+    try {
+      const legacy = await createOrReuseJob({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        connectionId: ctx.connectionA,
+        windowStart: window.startDate,
+        windowEnd: window.endDate,
+        idempotencyKey: "legacy-ingestion-version-fixture",
+      });
+      createdIds.push(legacy.id);
+      assert.equal(legacy.ingestion_version, 0);
+      await persistAndComplete(legacy.id, 2, 0);
+
+      assert.deepEqual(
+        await loadMetricRows(ORG_A, ctx.projectA, window, {
+          query: "versioned-ingestion-fixture",
+          connectionId: ctx.connectionA,
+        }),
+        [],
+        "legacy rows are not exposed as measurements",
+      );
+      assert.deepEqual(
+        await metricSeries(ORG_A, ctx.projectA, window, {
+          query: "versioned-ingestion-fixture",
+          connectionId: ctx.connectionA,
+        }),
+        [],
+        "legacy rows do not enter the Search Performance series",
+      );
+      assert.equal(
+        (await metricFreshness(ORG_A, ctx.projectA, ctx.connectionA)).totalRows,
+        before.totalRows,
+        "legacy rows do not change measured-row freshness",
+      );
+
+      const current = await createOrReuseJob({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        connectionId: ctx.connectionA,
+        windowStart: window.startDate,
+        windowEnd: window.endDate,
+        idempotencyKey: "legacy-ingestion-version-fixture",
+      });
+      createdIds.push(current.id);
+      assert.equal(current.ingestion_version, 0, "a pending job is not yet trusted");
+      await persistAndComplete(current.id, 7, 1);
+      assert.equal((await getJob(ORG_A, current.id))?.ingestion_version, 1);
+
+      const rows = await loadMetricRows(ORG_A, ctx.projectA, window, {
+        query: "versioned-ingestion-fixture",
+        connectionId: ctx.connectionA,
+      });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]?.clicks, 7);
+      assert.deepEqual(
+        await metricSeries(ORG_A, ctx.projectA, window, {
+          query: "versioned-ingestion-fixture",
+          connectionId: ctx.connectionA,
+        }),
+        [{ date: window.startDate, clicks: 7, impressions: 10, ctr: 0.7, position: 4 }],
+      );
+      assert.equal(
+        (await metricFreshness(ORG_A, ctx.projectA, ctx.connectionA)).totalRows,
+        before.totalRows + 1,
+      );
+    } finally {
+      if (createdIds.length) {
+        await withAdmin(async (c) => {
+          await c.query(`DELETE FROM gsc_query_metrics WHERE sync_job_id = ANY($1::uuid[])`, [
+            createdIds,
+          ]);
+          await c.query(`DELETE FROM gsc_sync_jobs WHERE id = ANY($1::uuid[])`, [createdIds]);
+        });
+      }
+    }
+  });
+
   void it("credential deletion is tenant-scoped (disconnect cannot hit a foreign grant)", async () => {
     const foreignDelete = await deleteCredential(ORG_B, ctx.projectA);
     assert.equal(foreignDelete, false);

@@ -69,7 +69,8 @@ export default async function SearchPerformancePage({
   }
 
   const connected = connections.find((c) => c.status === "CONNECTED");
-  const hasData = summary.freshness.totalRows > 0;
+  const hasData =
+    summary.syncCoverage === "SYNCED" && summary.series.length > 0 && summary.totals !== null;
 
   return (
     <div className="space-y-6">
@@ -119,8 +120,12 @@ export default async function SearchPerformancePage({
         </div>
       </section>
 
-      {!hasData ? (
-        <EmptyCard text="No measured Search Analytics rows for this project yet. Connect a property and run a sync — until then this page stays empty by design." />
+      {summary.syncCoverage === "INCOMPLETE" ? (
+        <EmptyCard text="The Search Console sync does not cover this entire window. Metrics are withheld; sync the missing dates before using them." />
+      ) : summary.syncCoverage === "NO_UNIQUE_PROPERTY" ? (
+        <EmptyCard text="Connect exactly one Search Console property to measure this project. No metrics are shown until a property is connected." />
+      ) : !hasData || !summary.totals ? (
+        <EmptyCard text="No Search Analytics rows were returned for this fully synchronized window. That is not evidence that each metric was zero." />
       ) : (
         <>
           <section aria-label="Totals" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
