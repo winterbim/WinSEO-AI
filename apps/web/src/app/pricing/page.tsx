@@ -108,9 +108,7 @@ export default function PricingPage() {
           <div
             key={plan.name}
             className={`rounded-lg border p-6 ${
-              plan.highlighted
-                ? "border-primary ring-2 ring-primary/20"
-                : "border-line"
+              plan.highlighted ? "border-primary ring-2 ring-primary/20" : "border-line"
             } bg-panel`}
           >
             <h3 className="text-lg font-bold">{plan.name}</h3>
@@ -143,7 +141,10 @@ export default function PricingPage() {
 
       <p className="mt-10 text-center text-sm text-slate-700">
         Prices are introductory and subject to change. All plans include a 14-day free trial — no
-        credit card required. <a href="/methodology" className="text-primary underline">See our methodology.</a>
+        credit card required.{" "}
+        <a href="/methodology" className="text-primary underline">
+          See our methodology.
+        </a>
       </p>
     </main>
   );

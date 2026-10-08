@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "GSC-ACTION-COVERAGE-003",
+      "level": "Meso",
+      "text": "The Action Center before/after API rejects incomplete trusted baseline or measurement coverage and rejects the action’s property when it is no longer the sole active project connection; no partial metrics are returned",
+      "gate": "`env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev pnpm --filter @serpvera/api test`",
+      "row_sha256": "a7d9e8c5d7316d13913887c0e3a69c33c1f8db3990f68f65aac4e058d9008598",
+      "ledger_sha256_before": "30ba6780719691e808421477c817d85e351de8b729be22ee6c9f26acaf47f795",
+      "status_before": "PENDING"
+    },
+    "capture_digest": "8a9aee8cd21b86e917e868d337849f180a7cd90369315e9280cd61f122670734",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "skeptic-gsc-action-coverage-2026-10-08-v3",
+    "challenge": "Falsification attempt: in PostgreSQL, reset complete August jobs to ingestion_version 0, add only a completed v1 sync for Aug 2–15, and leave the complete trusted September measurement fixture intact; the Action Center endpoint returns 409 COMPARISON_WINDOW_NOT_SYNCED with no MEASURED body. The next test independently resets September and adds only Sep 1–15, requiring 409 MEASUREMENT_WINDOW_NOT_SYNCED. A separate disconnected-property case returns 409 before reading rows. The bound route requires the exact action connection to be the sole active project connection and only calls loadMetricRows after both trusted coverage checks pass.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "d5d463f5c3c65cc58dc5df0011a8063dde90f7226db35860051ab92a32e1f269"
+    },
+    "reviewed_at": "2026-10-08T17:25:21.764229Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "44b59ebbcdca05a379260bb0b1faa7ef2a58c15ec3e273b908c549fec328ddcd"
+  }
+}

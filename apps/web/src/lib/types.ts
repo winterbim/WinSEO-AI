@@ -25,15 +25,7 @@ export interface Overview {
   evidence: { total: number };
   crawls: {
     total: number;
-    latest: {
-      id: string;
-      status: string;
-      mode: string;
-      startedAt: string;
-      completedAt: string | null;
-      pagesCrawled: number;
-      pagesFailed: number;
-    } | null;
+    latest: CrawlRun | null;
   };
   interventions: { verified: number; pending: number; note: string };
   dataFreshness: string;
@@ -80,6 +72,21 @@ export interface CrawlRun {
   completedAt: string | null;
   pagesCrawled: number;
   pagesFailed: number;
+  pageLimit: number | null;
+  stopReason: string | null;
+  templateGroups: CrawlTemplateGroup[] | null;
+}
+
+export interface CrawlTemplateGroup {
+  id: string;
+  routePattern: string;
+  domSignatureHash: string | null;
+  pageCount: number;
+  sampleUrls: string[];
+  groupingMethod:
+    | "URL_PATTERN_AND_SEMANTIC_DOM_V2"
+    | "URL_PATTERN_ONLY_PRIVACY_SINGLETON_V2"
+    | "SEMANTIC_DOM_PRIVACY_SINGLETON_V1";
 }
 
 export type ActionState =
@@ -209,8 +216,10 @@ export interface GscTotals {
 
 export interface GscSummary {
   window: GscWindow;
+  syncCoverage: "SYNCED" | "INCOMPLETE" | "NO_UNIQUE_PROPERTY";
+  property?: string | null;
   filters: Record<string, string>;
-  totals: GscTotals;
+  totals: GscTotals | null;
   series: GscDailyPoint[];
   freshness: GscFreshness;
 }
@@ -226,6 +235,7 @@ export interface GscDimensionRow {
 
 export interface GscBreakdown {
   window: GscWindow;
+  syncCoverage: "SYNCED" | "INCOMPLETE" | "NO_UNIQUE_PROPERTY";
   filters: Record<string, string>;
   dimension: "query" | "page";
   rows: GscDimensionRow[];

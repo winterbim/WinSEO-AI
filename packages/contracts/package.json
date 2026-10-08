@@ -10,6 +10,7 @@
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
+    "test": "node --experimental-strip-types --test src/*.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "clean": "rm -rf dist"

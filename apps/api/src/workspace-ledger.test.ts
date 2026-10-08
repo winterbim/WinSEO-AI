@@ -14,7 +14,7 @@ import type { FastifyInstance } from "fastify";
 import type { Response } from "light-my-request";
 import { buildApp } from "./server.ts";
 import { withAdmin } from "@serpvera/db";
-import { createFixtureAuditRunner } from "./audit/fixture-audit.ts";
+import { createFixtureSiteAuditRunner } from "./audit/fixture-audit.ts";
 
 const TAG = `ui${process.pid}${(Date.now() % 100_000).toString(36)}`;
 const PW = "workspace-pw-123";
@@ -53,7 +53,7 @@ void describe("workspace/Evidence-Ledger endpoints (real PostgreSQL)", () => {
   before(async () => {
     app = await buildApp({
       driver: "postgres",
-      auditDomain: createFixtureAuditRunner(),
+      auditSite: createFixtureSiteAuditRunner(),
     });
     await app.ready();
 
@@ -209,6 +209,8 @@ void describe("workspace/Evidence-Ledger endpoints (real PostgreSQL)", () => {
         status: string;
         mode: string;
         startedAt: string;
+        pageLimit: number | null;
+        stopReason: string | null;
       }[];
     };
     assert.ok(body.crawlRuns.length >= 1);
@@ -217,6 +219,8 @@ void describe("workspace/Evidence-Ledger endpoints (real PostgreSQL)", () => {
     assert.equal(run.status, "completed");
     assert.equal(run.mode, "HTTP_FAST");
     assert.ok(run.startedAt, "startedAt must be exposed for the timeline");
+    assert.equal(run.pageLimit, 50, "bounded crawl limit must be visible in history");
+    assert.equal(run.stopReason, null, "fixture discovery ended without a truncation reason");
   });
 
   void it("findings expose scope, declared gate, provenance and action state", async () => {

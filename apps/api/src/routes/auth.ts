@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { logger } from "@serpvera/telemetry";
 import { hashPassword, verifyPassword } from "../auth/crypto.ts";
@@ -11,27 +11,53 @@ import {
   requireAuth,
 } from "../auth/session.ts";
 import { DuplicateEmailError } from "../stores/types.ts";
+import type { RateLimitScope } from "../rate-limit.ts";
+
+const LOGIN_ATTEMPT_LIMIT = 20;
+const REGISTER_ATTEMPT_LIMIT = 5;
+const MAX_PASSWORD_LENGTH = 1024;
+const DUMMY_PASSWORD_HASH = `${"0".repeat(32)}:${"0".repeat(128)}`;
+
+async function allowAuthAttempt(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  scope: RateLimitScope,
+  limit: number,
+): Promise<boolean> {
+  const decision = await app.stores.rateLimits.hit(request.ip, limit, scope);
+  if (decision.allowed) return true;
+  void reply.header("retry-after", String(decision.retryAfterSeconds));
+  void reply.status(429).send({
+    error: {
+      code: "AUTH_RATE_LIMITED",
+      message: "Too many authentication attempts. Try again later.",
+    },
+  });
+  return false;
+}
 
 // Routes receive stores via the Fastify instance decorator (app.stores).
 // Production: PostgreSQL-backed (RLS). Tests: in-memory (explicit).
 export function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/register
   app.post("/register", async (request, reply) => {
+    if (
+      !(await allowAuthAttempt(app, request, reply, "auth-register-ip", REGISTER_ATTEMPT_LIMIT))
+    ) {
+      return;
+    }
     const schema = z.object({
-      email: z.email(),
-      password: z.string().min(8),
-      name: z.string().optional(),
+      email: z.email().max(320),
+      password: z.string().min(8).max(MAX_PASSWORD_LENGTH),
+      name: z.string().max(120).optional(),
     });
 
     const body = schema.parse(request.body);
     const passwordHash = await hashPassword(body.password);
 
     try {
-      const user = await app.stores.users.createUser(
-        body.email,
-        passwordHash,
-        body.name,
-      );
+      const user = await app.stores.users.createUser(body.email, passwordHash, body.name);
 
       await issueSession(app.stores.sessions, reply, { userId: user.id, email: user.email });
       logger.info("User registered", { userId: user.id });
@@ -51,22 +77,25 @@ export function authRoutes(app: FastifyInstance) {
 
   // POST /v1/auth/login
   app.post("/login", async (request, reply) => {
+    if (!(await allowAuthAttempt(app, request, reply, "auth-login-ip", LOGIN_ATTEMPT_LIMIT))) {
+      return;
+    }
     const schema = z.object({
-      email: z.email(),
-      password: z.string(),
+      email: z.email().max(320),
+      password: z.string().max(MAX_PASSWORD_LENGTH),
     });
 
     const body = schema.parse(request.body);
 
     const foundUser = await app.stores.users.findByEmail(body.email);
-    if (!foundUser) {
-      return reply.status(401).send({
-        error: { code: "INVALID_CREDENTIALS", message: "Invalid email or password." },
-      });
-    }
-
-    const valid = await verifyPassword(body.password, foundUser.passwordHash);
-    if (!valid) {
+    // Perform the same scrypt work when the email is unknown so account lookup
+    // does not have a cheap timing oracle. This fixed-format hash can never be
+    // a real credential and exists only for the dummy verification operation.
+    const valid = await verifyPassword(
+      body.password,
+      foundUser?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!foundUser || !valid) {
       return reply.status(401).send({
         error: { code: "INVALID_CREDENTIALS", message: "Invalid email or password." },
       });
@@ -96,9 +125,7 @@ export function authRoutes(app: FastifyInstance) {
     } catch {
       return;
     }
-    const revoked = await app.stores.sessions.revokeAllForUser(
-      request.session.userId,
-    );
+    const revoked = await app.stores.sessions.revokeAllForUser(request.session.userId);
     clearSessionCookie(reply);
     logger.info("All sessions revoked", {
       userId: request.session.userId,
@@ -139,10 +166,7 @@ export function authRoutes(app: FastifyInstance) {
       });
     }
 
-    const role = await app.stores.orgs.getRoleForUser(
-      request.session.userId,
-      org.id,
-    );
+    const role = await app.stores.orgs.getRoleForUser(request.session.userId, org.id);
 
     // ROTATION on privilege change: the previous token is revoked server-side
     // and a fresh one is issued carrying the tenant context. The old cookie

@@ -64,7 +64,11 @@ export class GscApiError extends Error {
   readonly retryable: boolean;
   readonly status: number | undefined;
 
-  constructor(code: GscErrorCode, message: string, options: { retryable: boolean; status?: number }) {
+  constructor(
+    code: GscErrorCode,
+    message: string,
+    options: { retryable: boolean; status?: number },
+  ) {
     super(message);
     this.name = "GscApiError";
     this.code = code;
@@ -87,11 +91,7 @@ export interface GoogleTransport {
     clientSecret: string;
   }): Promise<GoogleTokenResponse>;
   /** Best-effort revocation: Google answers 200 even for unknown tokens. */
-  revokeToken(input: {
-    token: string;
-    clientId: string;
-    clientSecret: string;
-  }): Promise<void>;
+  revokeToken(input: { token: string; clientId: string; clientSecret: string }): Promise<void>;
   listSites(accessToken: string): Promise<GscSiteEntry[]>;
   querySearchAnalytics(
     accessToken: string,
@@ -163,7 +163,11 @@ async function readError(response: Response): Promise<never> {
   throw classifyHttpError(response.status, text);
 }
 
-async function postForm(url: string, form: Record<string, string>, fetchFn: FetchLike): Promise<unknown> {
+async function postForm(
+  url: string,
+  form: Record<string, string>,
+  fetchFn: FetchLike,
+): Promise<unknown> {
   let response: Response;
   try {
     response = await fetchFn(url, {
@@ -262,9 +266,13 @@ export class HttpGoogleTransport implements GoogleTransport {
       });
     }
     if (!response.ok) await readError(response);
-    const body = (await response.json()) as { siteEntry?: { siteUrl?: string; permissionLevel?: string }[] };
+    const body = (await response.json()) as {
+      siteEntry?: { siteUrl?: string; permissionLevel?: string }[];
+    };
     return (body.siteEntry ?? [])
-      .filter((entry): entry is { siteUrl: string; permissionLevel?: string } => Boolean(entry.siteUrl))
+      .filter((entry): entry is { siteUrl: string; permissionLevel?: string } =>
+        Boolean(entry.siteUrl),
+      )
       .map((entry) => ({
         siteUrl: entry.siteUrl,
         permissionLevel: entry.permissionLevel ?? "siteOwner",

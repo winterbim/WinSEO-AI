@@ -5,11 +5,7 @@
 
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
-import {
-  renderUrl,
-  closeRenderer,
-  concurrencyState,
-} from "./renderer.ts";
+import { renderUrl, closeRenderer, concurrencyState } from "./renderer.ts";
 
 const FIXTURE = `<!DOCTYPE html><html><head><title>Static Source Title</title></head>
 <body><div id="app"></div>
@@ -86,10 +82,6 @@ void describe("renderer (real Chromium)", () => {
       `observed active=${observed.join(",")} exceeds limit=${limit}`,
     );
     // ...and after all tasks the semaphore must be fully released.
-    assert.equal(
-      concurrencyState().active,
-      0,
-      "semaphore must return to 0 after all renders",
-    );
+    assert.equal(concurrencyState().active, 0, "semaphore must return to 0 after all renders");
   });
 });

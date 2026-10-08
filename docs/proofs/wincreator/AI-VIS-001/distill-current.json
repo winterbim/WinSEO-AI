@@ -1,0 +1,553 @@
+{
+  "dependencies": [
+    "npm:@fastify/cookie",
+    "npm:@fastify/cors",
+    "npm:@serpvera/api",
+    "npm:@serpvera/authz",
+    "npm:@serpvera/config",
+    "npm:@serpvera/contracts",
+    "npm:@serpvera/crawler",
+    "npm:@serpvera/db",
+    "npm:@serpvera/telemetry",
+    "npm:@tailwindcss/postcss",
+    "npm:@types/node",
+    "npm:@types/pg",
+    "npm:@types/react",
+    "npm:@types/react-dom",
+    "npm:eslint",
+    "npm:eslint-config-prettier",
+    "npm:fastify",
+    "npm:light-my-request",
+    "npm:next",
+    "npm:pg",
+    "npm:prettier",
+    "npm:react",
+    "npm:react-dom",
+    "npm:tailwindcss",
+    "npm:tsx",
+    "npm:turbo",
+    "npm:typescript",
+    "npm:typescript-eslint",
+    "npm:zod"
+  ],
+  "digest": "a5837ae9240daf6a4e0cbd41f2e39c0747140a314ec350c1a49ae005925f9802",
+  "duplicates": [
+    {
+      "fingerprint": "018b828472e052c39dc9e67b27748e1c535fdd89d0f14b1cf35c702ffc698e67",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:136",
+        "packages/contracts/src/ai-visibility.ts:11"
+      ]
+    },
+    {
+      "fingerprint": "0787ffd41db8a704a15fad87383f4bbb7ea52686bc31bd5e98b42bab1a82f705",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:487",
+        "apps/api/src/stores/db.ts:511"
+      ]
+    },
+    {
+      "fingerprint": "079e87e7fa76262fb0b5dcf4c38fba0f8485654ef5ff0f0dcfacaf7ca8de0be5",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:163",
+        "packages/contracts/src/ai-visibility.test.ts:35"
+      ]
+    },
+    {
+      "fingerprint": "1dbd05a5dd3928e8d5ba955b218401aac52bb5964502ba8122bff04e828ba2c3",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:322",
+        "apps/api/src/stores/memory.ts:357"
+      ]
+    },
+    {
+      "fingerprint": "2d33f60088a146a2501651fbb889e20645013bb3daafd8580547c83067d43999",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:489",
+        "apps/api/src/stores/db.ts:513"
+      ]
+    },
+    {
+      "fingerprint": "4a1cce97a5393d21d94b79d2d9a7c77f9b82bdee3c6f42da3ccd1363e9b35df6",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:493",
+        "apps/api/src/stores/db.ts:517"
+      ]
+    },
+    {
+      "fingerprint": "54b954a8e1e7bb2b3ad616c6316d64bd56e6a1135dc3f87fe7aa18efccbde9aa",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:318",
+        "apps/api/src/stores/memory.ts:353"
+      ]
+    },
+    {
+      "fingerprint": "57885133b8e4dc78e92bd951ccd54bb43ec8d342664e5734935c42506666082c",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:319",
+        "apps/api/src/stores/memory.ts:354"
+      ]
+    },
+    {
+      "fingerprint": "5c5c1b98084978ae5d04bc77f629b0d0bf2aa634b0af5572fb5690a39d1038fb",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:138",
+        "packages/contracts/src/ai-visibility.ts:13"
+      ]
+    },
+    {
+      "fingerprint": "5e953845925220c8f6e1bd99f1f9d720062afb46ff0e65be3d0e031be8386816",
+      "occurrences": [
+        "packages/contracts/src/ai-visibility.test.ts:4",
+        "packages/contracts/src/index.ts:45"
+      ]
+    },
+    {
+      "fingerprint": "5eb88b46d8eee35a50e0608201435816322f88928fbe37f62ebaaf5a77204921",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:320",
+        "apps/api/src/stores/memory.ts:355"
+      ]
+    },
+    {
+      "fingerprint": "71e993a4cdba8b9b159f365b0f2e8e1efe2ded4913b5f7d90d53b81d1d6aaa3f",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:19",
+        "packages/db/src/schema-integrity.test.ts:37"
+      ]
+    },
+    {
+      "fingerprint": "72f4cb80904b5b08469c2ef40b4bf13dcbfbb4ef44a8e51a642752306384987b",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:18",
+        "packages/db/src/schema-integrity.test.ts:36"
+      ]
+    },
+    {
+      "fingerprint": "7379875a89276e574975101842d77e4fb297e4b4e5e33f516e63e63a207c6335",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:503",
+        "apps/api/src/stores/db.ts:525"
+      ]
+    },
+    {
+      "fingerprint": "83186914112f7a01a454508cccda850e09b2468fb3dabb8977d3213710e1b466",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:317",
+        "apps/api/src/stores/memory.ts:352"
+      ]
+    },
+    {
+      "fingerprint": "886048deb6942959ce180912222689cdee79987c60b62c29425ee4ca1ad0eb62",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:492",
+        "apps/api/src/stores/db.ts:516"
+      ]
+    },
+    {
+      "fingerprint": "920ba75b750700629d86dfcc5c863a0f86fb5fc9cdbedf90e535aa3bf00f1816",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:491",
+        "apps/api/src/stores/db.ts:515"
+      ]
+    },
+    {
+      "fingerprint": "9535f954250779208aa43bb607bd5ebf4ed76691ebeaa4c96b0d5b2c5c3738a3",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:137",
+        "packages/contracts/src/ai-visibility.ts:12"
+      ]
+    },
+    {
+      "fingerprint": "965359a845d12acf92c11c04e351df1a2fcf2596c85e1690d917eaf15c2d38ee",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:316",
+        "apps/api/src/stores/memory.ts:351"
+      ]
+    },
+    {
+      "fingerprint": "a5ff6d2c466d9749642da5d7d6c4322dcbff9c12a3edcaa5f4ef46ca40fffa95",
+      "occurrences": [
+        "apps/api/src/stores/types.ts:324",
+        "apps/api/src/stores/types.ts:361"
+      ]
+    },
+    {
+      "fingerprint": "adecae63ab244c723ac44549b83f9fb33cea9061e1adfbb261c67bc573774487",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:161",
+        "packages/contracts/src/ai-visibility.test.ts:33"
+      ]
+    },
+    {
+      "fingerprint": "aebf9d3d95530b5f3ca24eda22ed55d10f656bbb5574997c919c4596d36d30c3",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:502",
+        "apps/api/src/stores/db.ts:524"
+      ]
+    },
+    {
+      "fingerprint": "af86711bf305601565ae78c427bbac1bcba445661e3cfde067238446e3f88daf",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:321",
+        "apps/api/src/stores/memory.ts:356"
+      ]
+    },
+    {
+      "fingerprint": "b100b47c2ed2bb2deeb5bcd02fac31747e5976228b25956c874c6089c8c72697",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:135",
+        "packages/contracts/src/ai-visibility.ts:10"
+      ]
+    },
+    {
+      "fingerprint": "b6f53442b08305754a59618f0e978713a5c4f88ddfe2e281d9f528239a6dd251",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:162",
+        "packages/contracts/src/ai-visibility.test.ts:34"
+      ]
+    },
+    {
+      "fingerprint": "bdfb3bfd3426b804f6330001f67b5429a29c39183b22bb74e29cf652f0b2daf0",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:438",
+        "apps/api/src/stores/memory.ts:457"
+      ]
+    },
+    {
+      "fingerprint": "beff0d2b36e2ccd4c19481cd1510191bc9fd86146a2271f05577d9e4cbcfa98d",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:490",
+        "apps/api/src/stores/db.ts:514"
+      ]
+    },
+    {
+      "fingerprint": "bf88fd965a3af2797259d8a0617627506f337ce926ea76173805d3a8c40c2478",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:437",
+        "apps/api/src/stores/memory.ts:456"
+      ]
+    },
+    {
+      "fingerprint": "c27c147ba34239a220b461259e35601982d5e9c3570807beaff2d68368b36f73",
+      "occurrences": [
+        "apps/api/src/routes/ai-visibility.ts:75",
+        "apps/api/src/routes/ai-visibility.ts:131"
+      ]
+    },
+    {
+      "fingerprint": "c39960911c71d3664c0c9fdec915baa2c9b008a98efbbca77202538b5a3a559d",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:139",
+        "packages/contracts/src/ai-visibility.ts:14"
+      ]
+    },
+    {
+      "fingerprint": "c8b400c7a7d338e552b85662a8cb6ff21b362ccc29d8161fe1cbd63c58f50207",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:315",
+        "apps/api/src/stores/memory.ts:350"
+      ]
+    },
+    {
+      "fingerprint": "cb7690066805a93e89ba655f534672d3ec701f4f28a9a00b4514ca7a87f1ef25",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:15",
+        "packages/db/src/schema-integrity.test.ts:33"
+      ]
+    },
+    {
+      "fingerprint": "d06da86178f60a531afea35c53f63b63bb1c3f030fabc24e63e12caf43595ef6",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:136",
+        "apps/api/src/stores/memory.ts:150"
+      ]
+    },
+    {
+      "fingerprint": "d7af6e9c256b09223b3078e3c227dbd34a20cfe6bce2c7de830fca0a39744816",
+      "occurrences": [
+        "packages/db/src/schema-integrity.test.ts:16",
+        "packages/db/src/schema-integrity.test.ts:34"
+      ]
+    },
+    {
+      "fingerprint": "e98e93ed78a57092831123c1b9b807b5c6c60a595da89b2895f5e88b8bacafc0",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:488",
+        "apps/api/src/stores/db.ts:512"
+      ]
+    },
+    {
+      "fingerprint": "ead79e5d1fd10a147cf2e3496ceb490b30e280eb9f8355aee0556f9018ec3778",
+      "occurrences": [
+        "apps/api/src/stores/db.ts:501",
+        "apps/api/src/stores/db.ts:523"
+      ]
+    },
+    {
+      "fingerprint": "ecedebfe390cd2f71e3cfc827d31f4c65c617c91b6e269c98696a94901ae11ee",
+      "occurrences": [
+        "apps/api/src/ai-visibility-routes.integration.test.ts:140",
+        "packages/contracts/src/ai-visibility.ts:15"
+      ]
+    },
+    {
+      "fingerprint": "ed54228db2014b549b723128e3b00c58469886c1bcf49a592e29a37646e0f52a",
+      "occurrences": [
+        "apps/api/src/stores/memory.ts:323",
+        "apps/api/src/stores/memory.ts:358"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "bytes": 14585,
+      "lines": 406,
+      "nonblank_lines": 381,
+      "path": "apps/api/src/ai-visibility-routes.integration.test.ts",
+      "sha256": "5d78bb62c2525721ae986a7ad840b65b165890808098f6a15eb5e927aaca651f"
+    },
+    {
+      "bytes": 9810,
+      "lines": 290,
+      "nonblank_lines": 277,
+      "path": "apps/api/src/routes/ai-visibility.ts",
+      "sha256": "6ef7a3ffc8a8cff8780eef9d5b854f292345dbcfaf9205793c2683842637b37c"
+    },
+    {
+      "bytes": 11139,
+      "lines": 269,
+      "nonblank_lines": 249,
+      "path": "apps/api/src/server.ts",
+      "sha256": "76f19cd4c6d46295ede29729e94e995b7dd8c118491fdfbbc60b871767dfb38d"
+    },
+    {
+      "bytes": 38212,
+      "lines": 1081,
+      "nonblank_lines": 1037,
+      "path": "apps/api/src/stores/db.ts",
+      "sha256": "68e49ab12eeb8dd475a058fc046c0df2be9b7ea101d19c3f82f0e9a62fba45c3"
+    },
+    {
+      "bytes": 26160,
+      "lines": 748,
+      "nonblank_lines": 731,
+      "path": "apps/api/src/stores/memory.ts",
+      "sha256": "6d89b3ee3bb4767f57f26e91eab6cc739f39b1e5d8431c9773cc30857a3b5768"
+    },
+    {
+      "bytes": 17263,
+      "lines": 581,
+      "nonblank_lines": 535,
+      "path": "apps/api/src/stores/types.ts",
+      "sha256": "dbb3b75115130ad0562768717011f31739ca9b072cc93bc7adb527055134f55b"
+    },
+    {
+      "bytes": 20343,
+      "lines": 554,
+      "nonblank_lines": 525,
+      "path": "apps/web/src/app/dashboard/[projectId]/ai-visibility/geo-csv-lab.tsx",
+      "sha256": "c5c628b27f9e8e6858f2e5fb2d6eb1e9251626b2a4d5f194dc37fff72c0d51f5"
+    },
+    {
+      "bytes": 3243,
+      "lines": 85,
+      "nonblank_lines": 79,
+      "path": "apps/web/src/app/dashboard/[projectId]/ai-visibility/page.tsx",
+      "sha256": "6f9d8ded5504737c7c58d6ebeab1a2775b9a74db5fbb496ef4396a41901eaf23"
+    },
+    {
+      "bytes": 2854,
+      "lines": 76,
+      "nonblank_lines": 65,
+      "path": "packages/authz/src/index.test.ts",
+      "sha256": "c2ee5d23b6a65e9a19af0f2f4c703fb484e206f5ea92650cabe814ef1a7a5d12"
+    },
+    {
+      "bytes": 1949,
+      "lines": 72,
+      "nonblank_lines": 65,
+      "path": "packages/authz/src/index.ts",
+      "sha256": "0bf3a6e48781c4f34b7e0f5caac9e3d3848111d3ddd077aed6102f940fdca2ce"
+    },
+    {
+      "bytes": 4091,
+      "lines": 112,
+      "nonblank_lines": 105,
+      "path": "packages/contracts/src/ai-visibility.test.ts",
+      "sha256": "e1b20609b8dfc01a08d32134c2b589a71c7e63237b0168677622bcbe1d764010"
+    },
+    {
+      "bytes": 11432,
+      "lines": 335,
+      "nonblank_lines": 316,
+      "path": "packages/contracts/src/ai-visibility.ts",
+      "sha256": "e4ceb42256302c0b584e3406f192f7cc9f13f32117cbceca01c94374379b0f49"
+    },
+    {
+      "bytes": 5620,
+      "lines": 259,
+      "nonblank_lines": 230,
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "ec78d8a7e89c91468e0263ef3924d98aebddde57bc436494e1810efbcde39e4f"
+    },
+    {
+      "bytes": 3685,
+      "lines": 87,
+      "nonblank_lines": 78,
+      "path": "packages/db/migrations/0025_ai_visibility_imports.sql",
+      "sha256": "ef085c5863989277d09517150e3f529f0a454a664d98d006a51a8617fb355c7e"
+    },
+    {
+      "bytes": 736,
+      "lines": 26,
+      "nonblank_lines": 22,
+      "path": "packages/db/migrations/0026_ai_visibility_capture_org_fk.sql",
+      "sha256": "aa16cf9b5fb6201d5ae4ccea2ab62490937089f6fb66e1d20b836e5bd706cd0d"
+    },
+    {
+      "bytes": 7612,
+      "lines": 227,
+      "nonblank_lines": 213,
+      "path": "packages/db/src/ai-visibility-rls.test.ts",
+      "sha256": "b8dd894443fcda067154cd1c8fe93e99b336b48f9a9c0f23e03342a4e697d122"
+    },
+    {
+      "bytes": 10381,
+      "lines": 280,
+      "nonblank_lines": 265,
+      "path": "packages/db/src/ai-visibility.ts",
+      "sha256": "26ae7c9c20b852e4733254c5301f547c0544c7658d68e361b09db459fead84cf"
+    },
+    {
+      "bytes": 23779,
+      "lines": 618,
+      "nonblank_lines": 593,
+      "path": "packages/db/src/schema-integrity.test.ts",
+      "sha256": "7ba2ffcf3a1cd92fd24aac7b960bebdc20009b815c7d71c8c85aedf3f8ae6586"
+    }
+  ],
+  "manifest_files": [
+    {
+      "dependency_parsed": true,
+      "path": "apps/api/package.json",
+      "sha256": "827430c8345cd92b71781aabe6129533cf39d626b926c6885c67e46989538df9"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "apps/web/package.json",
+      "sha256": "6910ad17a54b509852deab54d079ac467f7048abd8b31ea82518b815aee819bc"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "package.json",
+      "sha256": "e3b53aa48ce0dd26dbbd23ca833cfdb21f7a58390dafe87cffae0f3cf4d31405"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "packages/authz/package.json",
+      "sha256": "4cfb7c6c8fac055177dff25b3fb99c823cdd92011d96ebfc4e99b3b0698d03e8"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "packages/contracts/package.json",
+      "sha256": "bf53eefd376fb8916fa64533c59e23bc06e0a34d899c42954025a26984276acd"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "packages/db/package.json",
+      "sha256": "2900188cfd8e8da6dc9642d9119f206dca20ff2fe48e6b90077dccdbb9acd751"
+    }
+  ],
+  "manifests": [
+    "apps/api/package.json",
+    "apps/web/package.json",
+    "package.json",
+    "packages/authz/package.json",
+    "packages/contracts/package.json",
+    "packages/db/package.json"
+  ],
+  "metrics": {
+    "declared_dependencies": 29,
+    "duplicate_fingerprints": 38,
+    "largest_file_lines": 1081,
+    "nonblank_lines": 5766,
+    "source_bytes": 212894,
+    "source_files": 18,
+    "source_lines": 6106
+  },
+  "policy": {
+    "duplicate_min_chars": 120,
+    "duplicate_window_lines": 6,
+    "exclude_dirs": [
+      ".git",
+      ".hg",
+      ".svn",
+      ".venv",
+      ".wincreator",
+      "__pycache__",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules",
+      "target",
+      "vendor",
+      "venv"
+    ],
+    "exclude_globs": [
+      "*.map",
+      "*.min.css",
+      "*.min.js"
+    ],
+    "schema": "wincreator.distill-policy/v1",
+    "source_extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cs",
+      ".css",
+      ".dart",
+      ".go",
+      ".h",
+      ".hpp",
+      ".html",
+      ".java",
+      ".js",
+      ".jsx",
+      ".kt",
+      ".php",
+      ".py",
+      ".rb",
+      ".rs",
+      ".sh",
+      ".sql",
+      ".svelte",
+      ".swift",
+      ".ts",
+      ".tsx",
+      ".vue"
+    ]
+  },
+  "policy_digest": "78eef27d5de49a0d903f94956f3d1233fd682325ea5c97b0a4cb3bacfee1cda3",
+  "schema": "wincreator.distill-snapshot/v1",
+  "scopes": [
+    "apps/api/src/routes/ai-visibility.ts",
+    "apps/api/src/ai-visibility-routes.integration.test.ts",
+    "apps/api/src/server.ts",
+    "apps/api/src/stores/db.ts",
+    "apps/api/src/stores/memory.ts",
+    "apps/api/src/stores/types.ts",
+    "apps/web/src/app/dashboard/[projectId]/ai-visibility",
+    "packages/contracts/src/ai-visibility.ts",
+    "packages/contracts/src/ai-visibility.test.ts",
+    "packages/contracts/src/index.ts",
+    "packages/db/src/ai-visibility.ts",
+    "packages/db/src/ai-visibility-rls.test.ts",
+    "packages/db/src/schema-integrity.test.ts",
+    "packages/db/migrations/0025_ai_visibility_imports.sql",
+    "packages/db/migrations/0026_ai_visibility_capture_org_fk.sql",
+    "packages/authz/src/index.ts",
+    "packages/authz/src/index.test.ts"
+  ],
+  "warnings": []
+}

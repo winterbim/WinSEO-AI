@@ -57,7 +57,9 @@ export function FindingsTable({
             id="findings-search"
             type="search"
             value={query}
-            onChange={(e) => { setQuery(e.target.value); }}
+            onChange={(e) => {
+              setQuery(e.target.value);
+            }}
             placeholder="Title, rule id or URL…"
             className="mt-1 w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
@@ -69,7 +71,9 @@ export function FindingsTable({
           <select
             id="filter-severity"
             value={severity}
-            onChange={(e) => { setSeverity(e.target.value); }}
+            onChange={(e) => {
+              setSeverity(e.target.value);
+            }}
             className="mt-1 rounded-lg border border-line bg-panel px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="">All</option>
@@ -87,7 +91,9 @@ export function FindingsTable({
           <select
             id="filter-class"
             value={epistemic}
-            onChange={(e) => { setEpistemic(e.target.value); }}
+            onChange={(e) => {
+              setEpistemic(e.target.value);
+            }}
             className="mt-1 rounded-lg border border-line bg-panel px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="">All</option>
@@ -102,7 +108,9 @@ export function FindingsTable({
           <input
             type="checkbox"
             checked={onlyOpen}
-            onChange={(e) => { setOnlyOpen(e.target.checked); }}
+            onChange={(e) => {
+              setOnlyOpen(e.target.checked);
+            }}
             className="size-4 accent-primary"
           />
           Open only
@@ -125,13 +133,27 @@ export function FindingsTable({
             </caption>
             <thead>
               <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                <th scope="col" className="py-2 pr-4">Finding</th>
-                <th scope="col" className="py-2 pr-4">Severity</th>
-                <th scope="col" className="py-2 pr-4">Evidence</th>
-                <th scope="col" className="py-2 pr-4">Rule / version</th>
-                <th scope="col" className="py-2 pr-4">Affected URL</th>
-                <th scope="col" className="py-2 pr-4">Action</th>
-                <th scope="col" className="py-2">First seen</th>
+                <th scope="col" className="py-2 pr-4">
+                  Finding
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Severity
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Evidence
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Rule / version
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Affected URL
+                </th>
+                <th scope="col" className="py-2 pr-4">
+                  Action
+                </th>
+                <th scope="col" className="py-2">
+                  First seen
+                </th>
               </tr>
             </thead>
             <tbody>

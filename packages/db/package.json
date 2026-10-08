@@ -16,6 +16,7 @@
     "db:seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "@serpvera/authz": "workspace:*",
     "@serpvera/contracts": "workspace:*",
     "@serpvera/telemetry": "workspace:*",
     "pg": "^8.14.0"

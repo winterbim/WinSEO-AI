@@ -1,0 +1,176 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "GSC-ACTION-COVERAGE-003",
+      "level": "Meso",
+      "text": "The Action Center before/after API rejects incomplete trusted baseline or measurement coverage and rejects the action’s property when it is no longer the sole active project connection; no partial metrics are returned",
+      "gate": "`env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev pnpm --filter @serpvera/api test`",
+      "row_sha256": "a7d9e8c5d7316d13913887c0e3a69c33c1f8db3990f68f65aac4e058d9008598",
+      "ledger_sha256_before": "30ba6780719691e808421477c817d85e351de8b729be22ee6c9f26acaf47f795",
+      "status_before": "PENDING"
+    },
+    "ledger": "PROOF_LEDGER.md",
+    "builder": "wina",
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-postgres-socket",
+      "PGPORT=5432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "pnpm",
+      "--filter",
+      "@serpvera/api",
+      "test"
+    ],
+    "command_string": "env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev pnpm --filter @serpvera/api test",
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "started_at": "2026-10-08T17:23:16.091222Z",
+    "finished_at": "2026-10-08T17:24:02.569015Z",
+    "duration_ms": 46477,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "54e238c49864909f36461de2a20b39873cd54a4533de81e1765aa6caf7c9de1e",
+      "original_bytes": 237137,
+      "stored_bytes": 237137,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "32447,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-m\",\"res\":{\"statusCode\":404},\"responseTime\":0.9514360000000579,\"msg\":\"request completed\"}\n{\"level\":30,\"time\":1791480232447,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-n\",\"req\":{\"method\":\"GET\",\"url\":\"/v1/projects/e53ee0d0-00ec-428b-adbd-f22a6e93ea40/findings\",\"hostname\":\"localhost\"},\"msg\":\"incoming request\"}\n{\"level\":30,\"time\":1791480232448,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-n\",\"res\":{\"statusCode\":404},\"responseTime\":0.9877950000000055,\"msg\":\"request completed\"}\n{\"level\":30,\"time\":1791480232449,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-o\",\"req\":{\"method\":\"GET\",\"url\":\"/v1/projects/e53ee0d0-00ec-428b-adbd-f22a6e93ea40/findings\",\"hostname\":\"localhost\"},\"msg\":\"incoming request\"}\n{\"level\":30,\"time\":1791480232451,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-o\",\"res\":{\"statusCode\":200},\"responseTime\":1.9268070000000534,\"msg\":\"request completed\"}\n{\"level\":30,\"time\":1791480232451,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-p\",\"req\":{\"method\":\"GET\",\"url\":\"/v1/findings/effdb819-afe3-40e0-adc7-21355095d75c\",\"hostname\":\"localhost\"},\"msg\":\"incoming request\"}\n{\"level\":30,\"time\":1791480232458,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-p\",\"res\":{\"statusCode\":404},\"responseTime\":7.57334400000002,\"msg\":\"request completed\"}\n{\"level\":30,\"time\":1791480232458,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-q\",\"req\":{\"method\":\"GET\",\"url\":\"/v1/projects\",\"hostname\":\"localhost\"},\"msg\":\"incoming request\"}\n{\"level\":30,\"time\":1791480232459,\"pid\":1222965,\"hostname\":\"wina-LOQ-16IRH8\",\"reqId\":\"req-q\",\"res\":{\"statusCode\":401},\"responseTime\":0.08436999999992167,\"msg\":\"request completed\"}\n  ✔ cross-tenant: B gets 404 everywhere on A's workspace, 401 unauthenticated (15.835229ms)\n✔ workspace/Evidence-Ledger endpoints (real PostgreSQL) (795.227201ms)\nℹ tests 221\nℹ suites 48\nℹ pass 221\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 45829.465233\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "files": [
+      {
+        "path": "apps/api/src/gsc-action-verification.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "624c2c80cc224fb0fdcb18a497fd05996dfddf7f80bc65e3441734132c0bd0b6",
+        "bytes": 50013
+      },
+      {
+        "path": "apps/api/src/routes/gsc-data.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "e8ace17ca393f87e001f7673bbdbbe8c1760092c088c6da50cd12d4a9cfd9267",
+        "bytes": 31317
+      },
+      {
+        "path": "apps/api/src/server.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7c6b02ffe885bf997427b40ee5d6ba8c424974c116da292a8196fffc0d20ca7c",
+        "bytes": 12290
+      },
+      {
+        "path": "apps/api/src/stores/db.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "54f1f6939cc6b7d9ba2cb90b704cd9b0292f30a3b070cb8faa32bc8fafd1367d",
+        "bytes": 39295
+      },
+      {
+        "path": "apps/api/src/stores/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "24d8e41dffb22998f1b788e6487d1bfb0f1849c1126b7af1c2f679fab59a83bc",
+        "bytes": 18143
+      },
+      {
+        "path": "packages/db/src/gsc.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "990f51a3ae0948d3642bdab8bbc43b799d7dd7945bd36988b8f3288da0b92758",
+        "bytes": 35493
+      },
+      {
+        "path": "packages/db/src/repositories.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "936ce05e185d2f40861001528c16832c2e7a9461a8e8fa03cfa49c6bf09dffaa",
+        "bytes": 36588
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "4b2c7177ee97c6a9d985f5b0ee87319eaea1977aede8b234d3be567e53eadd9a",
+        "bytes": 28249
+      },
+      {
+        "path": "packages/db/migrations/0030_gsc_sync_ingestion_version.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "c6b845eb8ccfd8a55567b30bf1a005b432f67dbcef7272ea547619e1870a58b3",
+        "bytes": 1092
+      },
+      {
+        "path": "packages/db/migrations/0031_gsc_unverified_default.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "9ea474ac7bb72ec8d88674340aca528335b988cc290da7b020716049289325a7",
+        "bytes": 734
+      },
+      {
+        "path": "packages/db/migrations/0032_gsc_trust_reset.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "9cd129de7df3e21e923f438e16796b94c926a77d4add44a54e2513c8015f7451",
+        "bytes": 781
+      },
+      {
+        "path": "apps/api/package.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "76d4bc50586d86ecb5ecd0a6fe04c5fc1e641a97f544308639fee821239610a4",
+        "bytes": 1270
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "2849045c4797873b0c4de9e6c9bb641d7b9f012d",
+      "tree": "45a9cb6c1ce2c3b9e168355d7d19aa6c3d4d14f0",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "8a8b29e4e1bde3ec0a0579cb8ea7a1d661562a323e337585876f2030d69c5163",
+      "worktree_digest": "c69452c031ad2ea71fedc2670715e82e64b37697423f985ffda794397fe0c045"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 1048576,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "8a9aee8cd21b86e917e868d337849f180a7cd90369315e9280cd61f122670734"
+  }
+}

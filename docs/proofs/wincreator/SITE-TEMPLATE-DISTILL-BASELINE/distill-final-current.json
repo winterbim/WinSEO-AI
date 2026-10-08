@@ -1,0 +1,110 @@
+{
+  "dependencies": [
+    "npm:@serpvera/contracts",
+    "npm:@serpvera/telemetry",
+    "npm:@serpvera/test-fixtures",
+    "npm:@types/node",
+    "npm:eslint",
+    "npm:eslint-config-prettier",
+    "npm:parse5",
+    "npm:playwright",
+    "npm:prettier",
+    "npm:turbo",
+    "npm:typescript",
+    "npm:typescript-eslint"
+  ],
+  "digest": "af137d29f200010d1a9186487956f1ddb02e5e75bbeb112f1fc8ac48d40d7a23",
+  "duplicates": [],
+  "files": [
+    {
+      "bytes": 9175,
+      "lines": 291,
+      "nonblank_lines": 264,
+      "path": "services/crawler/src/site-template.ts",
+      "sha256": "a69d2253c8b8c85a35e84aa9e7cea1bc311cd88ae70345485701814235672176"
+    }
+  ],
+  "manifest_files": [
+    {
+      "dependency_parsed": true,
+      "path": "package.json",
+      "sha256": "e3b53aa48ce0dd26dbbd23ca833cfdb21f7a58390dafe87cffae0f3cf4d31405"
+    },
+    {
+      "dependency_parsed": true,
+      "path": "services/crawler/package.json",
+      "sha256": "1e96721fa397bddfbe307849a7ba70bb8585632e183a6ec1fc7ea0e30caa2ccd"
+    }
+  ],
+  "manifests": [
+    "package.json",
+    "services/crawler/package.json"
+  ],
+  "metrics": {
+    "declared_dependencies": 12,
+    "duplicate_fingerprints": 0,
+    "largest_file_lines": 291,
+    "nonblank_lines": 264,
+    "source_bytes": 9175,
+    "source_files": 1,
+    "source_lines": 291
+  },
+  "policy": {
+    "duplicate_min_chars": 120,
+    "duplicate_window_lines": 6,
+    "exclude_dirs": [
+      ".git",
+      ".hg",
+      ".svn",
+      ".venv",
+      ".wincreator",
+      "__pycache__",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules",
+      "target",
+      "vendor",
+      "venv"
+    ],
+    "exclude_globs": [
+      "*.map",
+      "*.min.css",
+      "*.min.js"
+    ],
+    "schema": "wincreator.distill-policy/v1",
+    "source_extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cs",
+      ".css",
+      ".dart",
+      ".go",
+      ".h",
+      ".hpp",
+      ".html",
+      ".java",
+      ".js",
+      ".jsx",
+      ".kt",
+      ".php",
+      ".py",
+      ".rb",
+      ".rs",
+      ".sh",
+      ".sql",
+      ".svelte",
+      ".swift",
+      ".ts",
+      ".tsx",
+      ".vue"
+    ]
+  },
+  "policy_digest": "78eef27d5de49a0d903f94956f3d1233fd682325ea5c97b0a4cb3bacfee1cda3",
+  "schema": "wincreator.distill-snapshot/v1",
+  "scopes": [
+    "services/crawler/src/site-template.ts"
+  ],
+  "warnings": []
+}

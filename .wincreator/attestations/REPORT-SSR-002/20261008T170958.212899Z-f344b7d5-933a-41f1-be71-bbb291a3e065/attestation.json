@@ -1,0 +1,216 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "REPORT-SSR-002",
+      "level": "Meso",
+      "text": "Fresh PostgreSQL-backed SSR proof builds Next without cache, verifies the compiled report route, requires the launched API child’s post-listen marker and the launched Next child’s exact selected port before accepting readiness, imports and confirms a CSV row in PostgreSQL, and verifies rendered report content plus cleanup",
+      "gate": "`env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev pnpm proof:report:ssr`",
+      "row_sha256": "9bd8e29840042dca2aa48402c13bdb19519467642c72b6e54acc5e63756b1958",
+      "ledger_sha256_before": "1599370838ce8d8cb24318d71e4317feb9ac960b1e5400f0f7b3ca44382a40c6",
+      "status_before": "PENDING"
+    },
+    "ledger": "PROOF_LEDGER.md",
+    "builder": "wina",
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-postgres-socket",
+      "PGPORT=5432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "pnpm",
+      "proof:report:ssr"
+    ],
+    "command_string": "env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev pnpm proof:report:ssr",
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "started_at": "2026-10-08T17:09:58.213198Z",
+    "finished_at": "2026-10-08T17:10:17.749926Z",
+    "duration_ms": 19536,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "11e5cd39e496c0d367bfd874e28e65495e1f4f00a2a500a447846aab899a6b10",
+      "original_bytes": 1009,
+      "stored_bytes": 1009,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "\n> serpvera@0.1.0 proof:report:ssr /tmp/winseo-publish\n> node --test scripts/ssr-proof-readiness.test.mjs && node scripts/run-report-ssr-proof.mjs\n\n▶ SSR proof startup ownership\n  ✔ requires the API child post-listen marker (1.198336ms)\n  ✔ accepts only the Next child announcing the exact selected port (0.514933ms)\n  ✔ checks startup output after stripping terminal color sequences (0.252096ms)\n✔ SSR proof startup ownership (3.815174ms)\nℹ tests 3\nℹ suites 1\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 102.638565\nREPORT_SSR_FRESH_BUILD_OK cached=0 build_id_sha256=c702639332fb210a71eec01f06dd77b088bd134fda595b837b3a39f781fc8b8f report_route_sha256=b7bedd048b58dbf22f3013d65ba6654d06d071c56c049fe8b9e7eaa05e0a6cb7\nSSR_REPORT_OK store=postgres project=d11accc7-d276-4d61-a6e6-62e1e6a83900 persisted_imports=1 csv_sha256=43f38d325999b11696a9c9cfa8cf2eeab7b58954aaf0cc604a18e9602215dd48\nREPORT_SSR_POSTGRES_GATE_OK api=postgres database=ready migrations=ready\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "files": [
+      {
+        "path": "package.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "573c61040bc3502a1633769dee90b8d87dbf007a00a811ed4a4ebb89afa02ee8",
+        "bytes": 1103
+      },
+      {
+        "path": "scripts/run-report-ssr-proof.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "544f560778496005f51ac8c81d96e5f9c138cd7d134faefa3b0b7306011d5977",
+        "bytes": 9269
+      },
+      {
+        "path": "scripts/report-ssr-proof.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "e3fd8f38a35fb903b784173896e6873e5710895a1d55b4a3a5de94e0130dd07a",
+        "bytes": 5188
+      },
+      {
+        "path": "scripts/ssr-proof-readiness.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "212cafa05ac39b16a2cc034b9a3b39fe8f3fc72ca922d50186ec043e54b62b0f",
+        "bytes": 466
+      },
+      {
+        "path": "scripts/ssr-proof-readiness.test.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "d4b35523aef7ee3a788fcbbe67f4a08487366bf7eaa91f1b3bcdd8a83b7b5aa2",
+        "bytes": 1125
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/reports/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "e4d73a68a31587438d02d4ddfdb87a9cd5c19f88da67717544b46121bfce8cc8",
+        "bytes": 18014
+      },
+      {
+        "path": "apps/web/src/lib/report-data.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "9474094d1a2544d571400f0bb64c5ebca27024a0c587d83b67bd33feaa582cbd",
+        "bytes": 1491
+      },
+      {
+        "path": "apps/web/src/lib/report-data.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7dada616a6eb38db86b32501e6e8cae0b45e20d7636a076bc6fafa2762460d76",
+        "bytes": 2570
+      },
+      {
+        "path": "apps/web/src/lib/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "990614296807bb6b8e1f09a62a2212fc0b6d6ab8a06e2a8d0fde8aad0e65dccb",
+        "bytes": 7682
+      },
+      {
+        "path": "apps/api/src/routes/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "8490f6592749cb11bcdbfc3de6bfa64df7176845a33475628bed2a64be4bd2c5",
+        "bytes": 10716
+      },
+      {
+        "path": "apps/api/src/ai-visibility-routes.integration.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "861acb244ae395c8fbcde2f733720f491e9d77e2b6d5ab861e601b4ec3e46a8f",
+        "bytes": 17795
+      },
+      {
+        "path": "packages/db/src/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "26ae7c9c20b852e4733254c5301f547c0544c7658d68e361b09db459fead84cf",
+        "bytes": 10381
+      },
+      {
+        "path": "packages/db/src/ai-visibility-rls.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "b8dd894443fcda067154cd1c8fe93e99b336b48f9a9c0f23e03342a4e697d122",
+        "bytes": 7612
+      },
+      {
+        "path": "packages/contracts/src/ai-visibility.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "e4ceb42256302c0b584e3406f192f7cc9f13f32117cbceca01c94374379b0f49",
+        "bytes": 11432
+      },
+      {
+        "path": "packages/contracts/src/ai-visibility.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "e1b20609b8dfc01a08d32134c2b589a71c7e63237b0168677622bcbe1d764010",
+        "bytes": 4091
+      },
+      {
+        "path": "packages/db/migrations/0025_ai_visibility_imports.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "ef085c5863989277d09517150e3f529f0a454a664d98d006a51a8617fb355c7e",
+        "bytes": 3685
+      },
+      {
+        "path": "packages/db/migrations/0026_ai_visibility_capture_org_fk.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "aa16cf9b5fb6201d5ae4ccea2ab62490937089f6fb66e1d20b836e5bd706cd0d",
+        "bytes": 736
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "4b2c7177ee97c6a9d985f5b0ee87319eaea1977aede8b234d3be567e53eadd9a",
+        "bytes": 28249
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "2849045c4797873b0c4de9e6c9bb641d7b9f012d",
+      "tree": "45a9cb6c1ce2c3b9e168355d7d19aa6c3d4d14f0",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "35453225784463e7b9d280a4cfd746bb9ecd0937938e7d4855fb57f02c25dd38",
+      "worktree_digest": "99dd5232a99aa55dc0d1389a12dbaa7f3b33eb5eea802d8ac0f3a1422c2a85a7"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": false,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 1048576,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "0f2301bbc4b5932b2bda17a672b09737bc3e70e9785be8b2b6ddd961646056c5"
+  }
+}

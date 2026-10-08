@@ -1,0 +1,302 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "d4ae0e6a23e224b4f00dd9af96df18af000600c48b6ea20082ac021140f59ee8",
+    "claim": {
+      "id": "SITE-CRAWL-BOUNDED-006",
+      "level": "Meso",
+      "text": "A project crawl is constrained to one origin, obeys applicable robots rules across queue entries and redirects, records URL-scoped observations/findings, respects page/time/request budgets, and surfaces persisted coverage limits; the captured PostgreSQL tests use the same disposable local database whose migration state the gate checks.",
+      "gate": "`bash scripts/verify-site-crawl-gate.sh`",
+      "row_sha256": "e6439c4396c9b93503eb86c450b5feb30f444e87d9aed12bbb3b5d02e19288ac",
+      "ledger_sha256_before": "025bfc577f62de32800aa368f437fc92e4fb975d53a8e79422d6e58621bd99d4",
+      "status_before": "CLAIMED"
+    },
+    "capture": {
+      "status": "CAPTURED_FAIL",
+      "exit_code": 2,
+      "error": null
+    },
+    "command": [
+      "bash",
+      "scripts/verify-site-crawl-gate.sh"
+    ],
+    "stdout": {
+      "sha256": "87fbad3c9ae9c7df954b71a1b6083383a0b810e74a695a034412db74f76fb684",
+      "original_bytes": 49,
+      "stored_bytes": 49,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "GATE_START disposable PostgreSQL migration state\n"
+    },
+    "stderr": {
+      "sha256": "39bea4e2fe3fdba30fee660fbb8cd8d23e5f26edbd565b78b1869257cef5c00d",
+      "original_bytes": 187,
+      "stored_bytes": 187,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "psql: error: connection to server on socket \"/tmp/winseo-pgsocket/.s.PGSQL.55432\" failed: Operation not permitted\n\tIs the server running locally and accepting connections on that socket?\n"
+    },
+    "files": [
+      {
+        "path": "apps/api/src/audit/fixture-audit.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "a9e56a3065d63a9a1e642d5d3e0933ceee59a5cb0522324e3645b5f7ee1ce834",
+        "bytes": 2898
+      },
+      {
+        "path": "apps/api/src/audit/site-audit.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "648688fa8ddd6c812ef9ae2cd65e108c656af8bed97b991592d0a55b71f5e0d1",
+        "bytes": 18831
+      },
+      {
+        "path": "apps/api/src/audit/site-audit.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "842412e118c11fa2c1902aed014bc1bddf27c18bcf690c3bf2e565c8bd45572a",
+        "bytes": 9033
+      },
+      {
+        "path": "apps/api/src/crawl-persistence.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "a460058ad1de24fda05f2810704cb3a88fc9e53de3eb6665fc7bd85c3e931a5c",
+        "bytes": 15137
+      },
+      {
+        "path": "apps/api/src/project-creation-idempotency.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "e6a2f0cabf105acd20898884406f65251cfe3a63471c7c274f1f1c7b169df63e",
+        "bytes": 4043
+      },
+      {
+        "path": "apps/api/src/rate-limit.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "672ae15f953912b992a1d1f16db079c5ba8cc86b92891d6524b68e9b216631cc",
+        "bytes": 4136
+      },
+      {
+        "path": "apps/api/src/routes/projects.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "a649922a3bd4940b4e4161f382535f8cf80d4e2ead28595e356594f436f96c98",
+        "bytes": 14117
+      },
+      {
+        "path": "apps/api/src/server.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "bf703fd6a469d2f6d640b6c0850b63a9b4cedb01aaf80655b133864929601578",
+        "bytes": 11628
+      },
+      {
+        "path": "apps/api/src/stores/db.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "d4c162bfb8180fa9c0ffc0a8bb4e1a105b84af8c90bc65757d2707c640cda872",
+        "bytes": 38977
+      },
+      {
+        "path": "apps/api/src/stores/memory.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "2e23435a4683b55bc38ac9a5d6f85a3111535c4cdd4ae4c038c08a57bee39a34",
+        "bytes": 27081
+      },
+      {
+        "path": "apps/api/src/stores/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "e07acaeb6e16a1ddc666adaa19ebf1f547dcc59e42737fdeb9d596b399869622",
+        "bytes": 17676
+      },
+      {
+        "path": "apps/api/src/workspace-ledger.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "d6d41a6938bb79b8aab5886455420f0e13526404269c6f240d8870d022451754",
+        "bytes": 13578
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/crawls/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "45e8a54bcc5a14919305f97219becc874aba7a0db4f64be446e5da8194e9e20f",
+        "bytes": 6096
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "549911d589fd4e8f78604a62403c4a7df02434b682f127c4682f5fadbc480b79",
+        "bytes": 9991
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/start-crawl-button.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "7636eebd9bb7f9ed3b4f891a10acff305508e5dca9605468453801a42853b44b",
+        "bytes": 4155
+      },
+      {
+        "path": "apps/web/src/app/dashboard/crawl-kickoff.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "64693b3c6d12da2c263c30f5e407619522ba65c64eeb196d75c91283bd0ca2bd",
+        "bytes": 1310
+      },
+      {
+        "path": "apps/web/src/app/dashboard/create-project-form.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "826a955196775996208ed7420865603ce4bff4f1626807ae9e2d14bb94c53013",
+        "bytes": 15068
+      },
+      {
+        "path": "apps/web/src/app/dashboard/project-creation.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "c43394799fcecddd7ba74e5f50a5ae718a5007ab062dde69a47da90874371500",
+        "bytes": 3338
+      },
+      {
+        "path": "apps/web/src/app/onboarding.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "f50eb578efab76639ba1631d6391be881a389c788076bbba877946e77bd8f636",
+        "bytes": 7568
+      },
+      {
+        "path": "apps/web/src/lib/crawl-coverage.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "9054444ce02674459c55dcdccd38f4965fb00948720dc4af0e391f6cda1cb76b",
+        "bytes": 1075
+      },
+      {
+        "path": "apps/web/src/lib/crawl-coverage.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "9246676d654dc1b220d689ed2f731d6da8574faf52f5477895ffa2a373d75b09",
+        "bytes": 890
+      },
+      {
+        "path": "apps/web/src/lib/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "4c6a98f4c8a9f808f9a30eaa9dcc13e250a27af5e453b426a4d4f7c464ddd9f7",
+        "bytes": 7432
+      },
+      {
+        "path": "packages/contracts/src/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7c5376b44111968b4d4bc1f1c2de58277241b1659204c6f04380193b8aa26535",
+        "bytes": 5679
+      },
+      {
+        "path": "packages/db/src/index.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "673b6a0ec8a7d32005136eb87f618a0ea76c78c278fb609d64e33fae184df91e",
+        "bytes": 2952
+      },
+      {
+        "path": "packages/db/src/rate-limit.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "46d68d222e8c3ee371fc763adb47a067428beb05dd966d352326cbd195a6d7d2",
+        "bytes": 1622
+      },
+      {
+        "path": "packages/db/src/rate-limit.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "4e723f64292ab42221288d32d1c0fd512590ca7cb5084e07a94866bf24984fc9",
+        "bytes": 3345
+      },
+      {
+        "path": "packages/db/src/repositories.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "94acc2127b7179d86002c7f55e9a03e9bca01ce0c8dcc3303de313cd555c8d20",
+        "bytes": 36340
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "c286cc077c2a47c167c226c115b4b7d508bfaea80a56b2116518cd0c6b00e50a",
+        "bytes": 24929
+      },
+      {
+        "path": "packages/db/migrations/0027_crawl_run_coverage.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "a8837fcfdc2f2db7a7f614bb16e15e836822b1eb99ff6a0e3d62c88617d45ed5",
+        "bytes": 1213
+      },
+      {
+        "path": "services/crawler/src/audit-core.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "4bef7e9af11664bdce5c299e280390a2b0a5e59e00d0ab09acc5b3cdb758425c",
+        "bytes": 1371
+      },
+      {
+        "path": "services/crawler/src/http-fetcher.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "2c92cfb3855d0c7a5cbc61570e9607d69ac7c534d316785d9bf8a35f6cff35f1",
+        "bytes": 18046
+      },
+      {
+        "path": "services/crawler/src/rebinding-ssrf.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "fe7036eb3e893cf5a333741cb550a218047ea817a1cfe6f285eff2aee0349ec3",
+        "bytes": 8885
+      },
+      {
+        "path": "services/crawler/src/sitemap-parser.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "ec035ecab114dc85c9f1a61a5bb572e0c94b4ddb7c7d60652c118b719a504da9",
+        "bytes": 4675
+      },
+      {
+        "path": "services/crawler/src/sitemap-parser.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "b5e05b3cf23ab5d1bd731313573733dbd8bf65990546f58cdea965bbbd10e706",
+        "bytes": 7447
+      },
+      {
+        "path": "scripts/verify-site-crawl-gate.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "906ec195ae1b52a3c4f694ee35af2f167c1448c28aeb07b0b7bbb299a5ea4b74",
+        "bytes": 1504
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "1a7f9864da429958af38c849386bb04dc1100603",
+      "tree": "9f64f9adb90e43ad62c19766391d65a6e432f429",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "ce1125bd8b51c93fbe634d6121fa61ca7c009769ab9aa0e2701e33a9ae5cabc3",
+      "worktree_digest": "1e55d39e8bebc0997f734df415f819fa739cd53fdbbb7ea78bb957a8175c22fe"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "047d6a6b123c8bbcdaffefac69b95e50cbbd592360e3ac6ea51b2b1f90c9db5e"
+}

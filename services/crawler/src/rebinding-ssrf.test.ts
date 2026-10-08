@@ -142,6 +142,90 @@ void describe("http-fetcher connection-time SSRF defence", () => {
     assert.equal(fetchCalls, 0, "private DNS answer must be rejected before transport");
   });
 
+  void it("bounds DNS resolution by the per-request timeout before transport", async () => {
+    let fetchCalls = 0;
+    const fetcher = createHttpFetcher({
+      traceId: "dns-timeout",
+      timeoutMs: 3_000,
+      resolve: () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve([PUBLIC_IP]);
+          }, 100);
+        }),
+      fetchImpl: () => {
+        fetchCalls++;
+        return Promise.resolve(new Response("unexpected network access"));
+      },
+    });
+
+    const result = await fetcher.fetchPage(normalizeUrl(`https://${PUBLIC_NAME}/`), {
+      timeoutMs: 20,
+    });
+
+    assert.match(result.error ?? "", /timed out|timeout/i);
+    assert.equal(fetchCalls, 0, "a timed-out DNS lookup must never reach the transport");
+  });
+
+  void it("refuses an out-of-origin redirect before making the second request", async () => {
+    const requests: string[] = [];
+    const fetcher = createHttpFetcher({
+      traceId: "crawl-scope-redirect",
+      resolve: () => Promise.resolve([PUBLIC_IP]),
+      allowRedirect: (_from, to) => new URL(to).origin === `https://${PUBLIC_NAME}`,
+      fetchImpl: (input) => {
+        requests.push(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        );
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { location: "https://other.example/private" },
+          }),
+        );
+      },
+    });
+
+    const result = await fetcher.fetchPage(normalizeUrl(`https://${PUBLIC_NAME}/`));
+
+    assert.match(result.error ?? "", /scope policy/i);
+    assert.equal(result.httpStatus, 302);
+    assert.deepEqual(requests, [`https://${PUBLIC_NAME}/`]);
+  });
+
+  void it("runs the per-hop policy hook before issuing a redirected request", async () => {
+    const events: string[] = [];
+    const fetcher = createHttpFetcher({
+      traceId: "redirect-hop-hook",
+      resolve: () => Promise.resolve([PUBLIC_IP]),
+      allowRedirect: (_from, to) => new URL(to).origin === `https://${PUBLIC_NAME}`,
+      beforeRedirect: async () => {
+        events.push("before-redirect");
+        await Promise.resolve();
+        events.push("redirect-ready");
+      },
+      fetchImpl: (input) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        events.push(`request:${new URL(url).pathname}`);
+        if (new URL(url).pathname === "/") {
+          return Promise.resolve(
+            new Response(null, {
+              status: 302,
+              headers: { location: "/final" },
+            }),
+          );
+        }
+        return Promise.resolve(new Response("final body"));
+      },
+    });
+
+    const result = await fetcher.fetchPage(normalizeUrl(`https://${PUBLIC_NAME}/`));
+
+    assert.equal(result.body, "final body");
+    assert.deepEqual(events, ["request:/", "before-redirect", "redirect-ready", "request:/final"]);
+  });
+
   void it("guardUrl still rejects a private IP literal outright (no DNS needed)", () => {
     assert.throws(() => {
       guardUrl("http://127.0.0.1/");

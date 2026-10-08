@@ -13,12 +13,12 @@
 import type { ActionState } from "@serpvera/contracts";
 
 export interface PriorityInput {
-  businessValue: number;      // 0-10: how much revenue/traffic this affects
-  evidenceStrength: number;   // 0-10: quality of evidence behind this finding
-  impactHypothesis: number;   // 0-10: expected improvement if fixed
-  confidence: number;         // 0-1: how certain we are of the diagnosis
-  effort: number;             // 1-10: implementation difficulty
-  riskFactor: number;         // 1-10: risk of breaking something
+  businessValue: number; // 0-10: how much revenue/traffic this affects
+  evidenceStrength: number; // 0-10: quality of evidence behind this finding
+  impactHypothesis: number; // 0-10: expected improvement if fixed
+  confidence: number; // 0-1: how certain we are of the diagnosis
+  effort: number; // 1-10: implementation difficulty
+  riskFactor: number; // 1-10: risk of breaking something
 }
 
 export function computePriorityIndex(input: PriorityInput): number {
@@ -62,14 +62,11 @@ export const ACTION_STATE_TRANSITIONS: Record<ActionState, ActionState[]> = {
   MEASURING: ["VERIFIED", "REJECTED", "INCONCLUSIVE"],
   VERIFIED: ["CLOSED"],
   REJECTED: ["CLOSED"],
-  INCONCLUSIVE: ["PROPOSED"],  // re-propose with better evidence
+  INCONCLUSIVE: ["PROPOSED"], // re-propose with better evidence
   CLOSED: [],
 };
 
-export function isValidTransition(
-  from: ActionState,
-  to: ActionState,
-): boolean {
+export function isValidTransition(from: ActionState, to: ActionState): boolean {
   // ACTION_STATE_TRANSITIONS is a total Record<ActionState, ...> — indexing it
   // with a valid ActionState can never yield undefined, so no fallback is needed.
   return ACTION_STATE_TRANSITIONS[from].includes(to);

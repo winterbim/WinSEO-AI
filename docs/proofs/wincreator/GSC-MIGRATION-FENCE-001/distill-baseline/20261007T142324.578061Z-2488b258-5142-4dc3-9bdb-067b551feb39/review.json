@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "GSC-DISTILL-BASELINE-001",
+      "level": "Micro",
+      "text": "The pre-simplification structural snapshot for the GSC ACL fence is bound to the exact source scope and policy digest.",
+      "gate": "Run WinCreator distill_check verify against the captured snapshot and separately frozen SHA-256 before simplifying the source.",
+      "row_sha256": "edc126372ae21aae35b88f3b07d632ae629b5e382d3101660005b93578be33f4",
+      "ledger_sha256_before": "f647a2682dd257b17b288b8eeeb2ef96773e3845aa5bfae49d1779a66b95bd0c",
+      "status_before": "CLAIMED"
+    },
+    "capture_digest": "c3b8a155cdeecfa196700876742628c2eed0d92910936b384f37d73b6fe9d2ef",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "audit_product_ux",
+    "challenge": "Recomputed the bound snapshot file SHA-256; confirmed its four source scopes and file hashes, explicit policy_digest, and the snapshot digest matched the captured verify command.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "5e09870edc3cda870db0e55627157dbdaee9befe4500aee2a10045d4c8956ad4"
+    },
+    "reviewed_at": "2026-10-07T14:25:23.297819Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "615512a09637578f3e301e1b89bde4f65cc67f3ea7488ffb21dde9808918fe10"
+  }
+}

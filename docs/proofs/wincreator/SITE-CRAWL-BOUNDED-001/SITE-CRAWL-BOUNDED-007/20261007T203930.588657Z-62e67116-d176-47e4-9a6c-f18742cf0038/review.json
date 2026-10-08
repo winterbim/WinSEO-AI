@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "SITE-CRAWL-BOUNDED-007",
+      "level": "Meso",
+      "text": "A project crawl is constrained to one origin, obeys applicable robots rules across queue entries and redirects, records URL-scoped observations/findings, respects page/time/request budgets, and surfaces persisted coverage limits; the captured PostgreSQL tests use the same disposable local database whose migration state the gate checks.",
+      "gate": "`bash scripts/verify-site-crawl-gate.sh`",
+      "row_sha256": "bc56f683eba76ddcd4edf0a834468d2c7232ffd7b365fcadb785d77c2b686f17",
+      "ledger_sha256_before": "fcf6dbca7b1218af655d2fc8bd867516f69152a41e7bffb8591f871b87f3a146",
+      "status_before": "CLAIMED"
+    },
+    "capture_digest": "ab71c6dd99df6f3afb4af452c0b9d890bf98935c67a26e2a0d6f78d0bb821a23",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "audit_security_ci",
+    "challenge": "No material finding survives. The bound source verifies; the gate preflight explicitly checks serpvera_dev on the disposable socket, and its test stage runs env -u DATABASE_URL while passing the identical PG_SOCKET_DIR, PGPORT, PGUSER, and PGDATABASE. The API store falls back to that socket/database when DATABASE_URL is absent, and node-postgres resolves the explicitly passed PGPORT/PGUSER. Raw logs show migration 0027 preflight passed, DB tests force-executed with 81/81 passing, API tests force-executed with 136/136 passing including real PostgreSQL crawl persistence, and the final test tasks were 14/14 successful with 0 cached. The capture supports the bounded crawl and same-database claim.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "cb69f3c7d82bd0da5ef65dae61f394a75074f662f8b9baea6308c47d73f0ea74"
+    },
+    "reviewed_at": "2026-10-07T20:43:13.768222Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "10888a2070c829f4b8c011008aa289bf215aeb5cb4cb745f74232bae9e1af490"
+  }
+}

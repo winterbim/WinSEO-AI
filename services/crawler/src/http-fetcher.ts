@@ -27,6 +27,10 @@ export interface FetcherOptions {
   resolve?: (hostname: string) => Promise<string[]>;
   /** Controlled transport override for tests; production callers use pinned HTTP. */
   fetchImpl?: typeof fetch;
+  /** Optional restrictive redirect policy, evaluated before each redirect hop. */
+  allowRedirect?: (fromUrl: string, toUrl: string) => boolean | string;
+  /** Optional per-hop politeness hook; runs before any redirected request. */
+  beforeRedirect?: (fromUrl: string, toUrl: string, deadline: number) => void | Promise<void>;
 }
 
 interface HttpResponse {
@@ -92,6 +96,22 @@ async function resolveAndValidate(
   }
 
   return addresses;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(Object.assign(new Error("Operation timed out."), { name: "AbortError" }));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**
@@ -269,8 +289,13 @@ export function createHttpFetcher(options: Partial<FetcherOptions> = {}) {
     fetchPage,
   };
 
-  async function fetchPage(normalized: NormalizedUrl): Promise<FetchResult> {
+  async function fetchPage(
+    normalized: NormalizedUrl,
+    requestOptions: { timeoutMs?: number } = {},
+  ): Promise<FetchResult> {
     const startTime = Date.now();
+    const requestTimeoutMs = Math.max(1, Math.floor(requestOptions.timeoutMs ?? opts.timeoutMs));
+    const deadline = startTime + requestTimeoutMs;
     const redirectChain: string[] = [];
     let redirectCount = 0;
 
@@ -300,12 +325,27 @@ export function createHttpFetcher(options: Partial<FetcherOptions> = {}) {
       // Resolve every A/AAAA record once, reject any private result, then pin
       // Node's socket lookup to one member of that validated answer set.
       let addresses: string[];
+      const dnsTimeBudget = deadline - Date.now();
+      if (dnsTimeBudget <= 0) {
+        return {
+          url: normalized,
+          finalUrl: url,
+          httpStatus: 0,
+          headers: {},
+          body: null,
+          contentHash: "",
+          redirectChain,
+          fetchDurationMs: Date.now() - startTime,
+          error: "Request timeout",
+        };
+      }
       try {
-        addresses = await resolveAndValidate(
+        const resolution = resolveAndValidate(
           parsed.hostname.replace(/^\[|\]$/g, ""),
           opts.traceId,
           opts.resolve,
         );
+        addresses = await withTimeout(resolution, dnsTimeBudget);
       } catch (err) {
         return {
           url: normalized,
@@ -320,10 +360,24 @@ export function createHttpFetcher(options: Partial<FetcherOptions> = {}) {
         };
       }
 
+      const networkTimeBudget = deadline - Date.now();
+      if (networkTimeBudget <= 0) {
+        return {
+          url: normalized,
+          finalUrl: url,
+          httpStatus: 0,
+          headers: {},
+          body: null,
+          contentHash: "",
+          redirectChain,
+          fetchDurationMs: Date.now() - startTime,
+          error: "Request timeout",
+        };
+      }
       const controller = new AbortController();
       const timeout = setTimeout(() => {
         controller.abort();
-      }, opts.timeoutMs);
+      }, networkTimeBudget);
 
       try {
         const pinnedIp = addresses[0];
@@ -341,9 +395,8 @@ export function createHttpFetcher(options: Partial<FetcherOptions> = {}) {
             })
           : await nativePinnedRequest(url, pinnedIp, opts, controller.signal);
 
-        clearTimeout(timeout);
-
         if (response.oversizeBytes !== undefined) {
+          clearTimeout(timeout);
           return {
             url: normalized,
             finalUrl: url,
@@ -372,6 +425,40 @@ export function createHttpFetcher(options: Partial<FetcherOptions> = {}) {
             redirectCount++;
             // Resolve relative redirects
             const redirectUrl = new URL(location, url).href;
+            const redirectDecision = opts.allowRedirect?.(url, redirectUrl);
+            if (redirectDecision === false || typeof redirectDecision === "string") {
+              clearTimeout(timeout);
+              return {
+                url: normalized,
+                finalUrl: url,
+                httpStatus: status,
+                headers,
+                body: null,
+                contentHash: "",
+                redirectChain,
+                fetchDurationMs: Date.now() - startTime,
+                error:
+                  typeof redirectDecision === "string"
+                    ? `Redirect refused: ${redirectDecision}`
+                    : "Redirect refused by the configured crawl-scope policy.",
+              };
+            }
+            clearTimeout(timeout);
+            try {
+              await opts.beforeRedirect?.(url, redirectUrl, deadline);
+            } catch (err) {
+              return {
+                url: normalized,
+                finalUrl: url,
+                httpStatus: status,
+                headers,
+                body: null,
+                contentHash: "",
+                redirectChain,
+                fetchDurationMs: Date.now() - startTime,
+                error: `Redirect preparation failed: ${(err as Error).message}`,
+              };
+            }
             // `return await` inside try/catch so a failed redirect hop is
             // reported through the SAME structured error result as every
             // other failure in this block instead of escaping as a raw
@@ -383,6 +470,7 @@ export function createHttpFetcher(options: Partial<FetcherOptions> = {}) {
         // Read body with size cap
         const contentLength = parseInt(response.headers.get("content-length") ?? "0", 10);
         if (contentLength > opts.maxResponseSizeBytes) {
+          clearTimeout(timeout);
           return {
             url: normalized,
             finalUrl: url,
@@ -397,6 +485,7 @@ export function createHttpFetcher(options: Partial<FetcherOptions> = {}) {
         }
 
         const text = await response.text();
+        clearTimeout(timeout);
 
         // Check actual size after reading
         const actualSize = Buffer.byteLength(text, "utf-8");

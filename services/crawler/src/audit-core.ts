@@ -7,6 +7,8 @@ export { createHttpFetcher, fetchPage } from "./http-fetcher.ts";
 export type { FetcherOptions, FetchResult } from "./http-fetcher.ts";
 export { parseHtmlPage, stripTags } from "./html-parser.ts";
 export type { ParsedPage } from "./html-parser.ts";
+export { parseRobotsTxt, isUrlAllowed, getCrawlDelay, parseSitemapXml } from "./sitemap-parser.ts";
+export type { RobotsTxtRules, SitemapEntry } from "./sitemap-parser.ts";
 export {
   evaluatePageRules,
   RULES_VERSION,
@@ -16,6 +18,17 @@ export {
 export type { PageMeta, RuleFinding, RuleResult, EvidenceRecord } from "./seo-rules.ts";
 export { shouldRender } from "./render-escalation.ts";
 export type { EscalationDecision } from "./render-escalation.ts";
+export {
+  groupSitePageStructures,
+  groupSitePagesByTemplate,
+  semanticDomSignature,
+} from "./site-template.ts";
+export type {
+  SitePageShape,
+  SitePageStructure,
+  SiteTemplateGroup,
+  SiteTemplateGrouping,
+} from "./site-template.ts";
 export { compareSourceRender, describeDivergences } from "./render-compare.ts";
 export type { FieldDivergence, RenderComparison } from "./render-compare.ts";
 export type { RenderResult } from "./renderer.ts";

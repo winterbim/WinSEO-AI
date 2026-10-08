@@ -5,6 +5,7 @@ export const ROLE_PERMISSIONS: Record<OrgRole, Permission[]> = {
   OWNER: [
     "project.read",
     "evidence.read",
+    "evidence.write",
     "integration.manage",
     "action.approve",
     "production.write",
@@ -14,13 +15,14 @@ export const ROLE_PERMISSIONS: Record<OrgRole, Permission[]> = {
   ADMIN: [
     "project.read",
     "evidence.read",
+    "evidence.write",
     "integration.manage",
     "action.approve",
     "production.write",
     "member.manage",
   ],
-  ANALYST: ["project.read", "evidence.read", "action.approve"],
-  EDITOR: ["project.read", "evidence.read", "action.approve", "production.write"],
+  ANALYST: ["project.read", "evidence.read", "evidence.write", "action.approve"],
+  EDITOR: ["project.read", "evidence.read", "evidence.write", "action.approve", "production.write"],
   VIEWER: ["project.read", "evidence.read"],
   BILLING: ["project.read", "evidence.read", "billing.manage"],
 };

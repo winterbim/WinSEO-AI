@@ -37,41 +37,64 @@ export function orgRoutes(app: FastifyInstance) {
     });
 
     const body = schema.parse(request.body);
-    const slug =
+    const autoSlug = body.slug === undefined;
+    const slugBase =
       body.slug ??
       body.name
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 50)
+        .replace(/-+$/g, "");
 
-    if (!slug) {
+    if (!slugBase) {
       return reply.status(400).send({
         error: { code: "INVALID_SLUG", message: "Could not derive a slug from the name." },
       });
     }
 
-    try {
-      const org = await app.stores.orgs.createOrganization(
-        request.session.userId,
-        body.name,
-        slug,
-      );
+    for (let attempt = 1; attempt <= 100; attempt += 1) {
+      const suffix = attempt === 1 ? "" : `-${attempt}`;
+      const slug = autoSlug
+        ? `${slugBase.slice(0, 50 - suffix.length).replace(/-+$/g, "")}${suffix}`
+        : slugBase;
 
-      logger.info("Organization created", {
-        organizationId: org.id,
-        userId: request.session.userId,
-      });
+      try {
+        const org = await app.stores.orgs.createOrganization(
+          request.session.userId,
+          body.name,
+          slug,
+        );
 
-      return await reply.status(201).send({ organization: org });
-    } catch (err) {
-      if (err instanceof DuplicateSlugError) {
-        return reply.status(409).send({
-          error: { code: "SLUG_EXISTS", message: err.message },
+        logger.info("Organization created", {
+          organizationId: org.id,
+          userId: request.session.userId,
         });
+
+        return await reply.status(201).send({ organization: org });
+      } catch (err) {
+        if (err instanceof DuplicateSlugError) {
+          if (autoSlug && attempt < 100) continue;
+          return reply.status(409).send({
+            error: {
+              code: autoSlug ? "SLUG_ALLOCATION_EXHAUSTED" : "SLUG_EXISTS",
+              message: autoSlug
+                ? "Could not allocate a unique workspace address. Please retry."
+                : err.message,
+            },
+          });
+        }
+        throw err;
       }
-      throw err;
     }
+
+    return reply.status(409).send({
+      error: {
+        code: "SLUG_ALLOCATION_EXHAUSTED",
+        message: "Could not allocate a unique workspace address. Please retry.",
+      },
+    });
   });
 
   // GET /v1/organizations/:orgId — membership-gated.
@@ -91,10 +114,7 @@ export function orgRoutes(app: FastifyInstance) {
       });
     }
 
-    const org = await app.stores.orgs.getForRequester(
-      request.session.userId,
-      params.data.orgId,
-    );
+    const org = await app.stores.orgs.getForRequester(request.session.userId, params.data.orgId);
     if (!org) {
       return reply.status(404).send({
         error: { code: "NOT_FOUND", message: "Organization not found." },

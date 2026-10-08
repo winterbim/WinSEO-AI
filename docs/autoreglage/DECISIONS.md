@@ -2,6 +2,26 @@
 
 **Mis à jour :** 2026-10-06 20:25 UTC. Décisions de mission séparées des ADR d’architecture générales.
 
+## D-026 — Historique des captures AI Visibility
+
+**Décision :** conserver chaque lot importé sous une identité d'import append-only, liée au projet/organisation, avec SHA-256 du fichier CSV source, horodatage d'import, provenance `USER_SUPPLIED` et indicateur explicite « non vérifié auprès du fournisseur ». Stocker les lignes normalisées nécessaires aux statistiques; ne pas stocker le texte complet des réponses de fournisseurs dans cette première tranche. Autoriser la suppression tenant-scopée selon la rétention définie.
+
+**Raison :** le calcul actuel est seulement dans le navigateur et disparaît au rechargement. La chaîne de preuve doit pouvoir relire le même échantillon depuis la base sans prétendre que WinSEO a capturé ou authentifié une réponse stochastique externe.
+
+**Garde-fous :** plafond strict par import, vérification serveur des champs/types/domaines, FK composites organisation/projet, RLS avec `USING` et `WITH CHECK`, `FORCE ROW LEVEL SECURITY`, audit d'intégrité sur le lot et tests d'attaque inter-tenant. Les appels API de modèles restent désactivés.
+
+**Retour arrière :** retirer la route et les vues UI; la migration additive reste intacte, les nouvelles lignes pouvant être supprimées via le flux tenant-scopé. Pas de réécriture ni de suppression des anciennes migrations.
+
+## D-027 — Scanner les commits PR atteignables et activer les règles Gitleaks par défaut
+
+**Décision :** étendre la configuration Gitleaks intégrée avec `useDefault = true`, retirer les allowlists globales de chemins, et exécuter en CI `gitleaks git` sur les commits atteignables depuis le head mais pas depuis le base (`HEAD ^BASE`). Garder le scan GitHub Action, ajouter ce scan de graphe complet, et bloquer la CI si l'un échoue. Toute exception future doit être une empreinte de faux positif étroite, examinée en revue; aucun dossier ne peut être exclu globalement.
+
+**Raison :** le code de l'action v3 utilise `--no-merges --first-parent` sur les PR et ne couvre donc pas tous les commits d'une branche latérale fusionnée; la configuration précédente n'étendait pas les règles par défaut et excluait tout `docs/*.md`.
+
+**Preuve attendue :** CI verte sur la configuration par défaut, puis test synthétique local temporaire sur une branche latérale dont le secret est supprimé par le commit merge. Le secret synthétique reste hors du dépôt partagé après l'essai; une preuve retenue démontre l'échec du scan avant nettoyage.
+
+**Revue du premier passage :** le scan des règles intégrées a révélé six faux positifs dans des tests (UUID d'idempotence et mot de passe de fixture). Après examen, six empreintes complètes sont ignorées dans `.gitleaksignore`, chacune rattachée à un commit, un chemin, une règle et une ligne. La documentation Gitleaks décrit cette forme d'exception unitaire; aucune allowlist de chemin n'est rétablie. Revue sceptique indépendante encore requise.
+
 ## D-001 — Ordre imposé par la mission
 
 **Décision :** suivre M0 → M1 → M2, sans publication de comportement pendant M0. Le benchmark antérieur mettait « exécuter le dernier kilomètre WordPress, titles/metas » en P0. Cette priorité produit est retenue, mais sa séquence directe est remplacée par la tranche complète et sûre R0 multimodale (`alt`) + R1 (`title`) de M2, avec preuves et rollback avant toute extension.  
@@ -137,3 +157,273 @@ Sources utilisées pour le benchmark : documentation officielle de Google et de 
 **Retour arrière :** retirer les lignes et REQ ajoutées si elles ne sont pas confirmées; la portée produit existante n’est pas modifiée par le benchmark.
 
 **Résultat attendu :** les écarts à Semrush deviennent traçables et testables, sans gonfler les capacités WinSEO ni attribuer à Semrush une absence de fonctionnalité non démontrée.
+
+## D-019 — L’ordre d’autorité des mesures GSC vient de PostgreSQL
+
+**Décision :** chaque revendication de synchronisation reçoit un `claim_order` monotone par propriété, alloué sous le verrou transactionnel de la propriété. Pour les dates couvertes par plusieurs jobs terminés, le job revendiqué en dernier est l'unique source autoritaire, même si son worker termine avant ou après l'ancien.
+
+**Raison :** `started_at` fourni par le processus applicatif peut avoir la même précision à la milliseconde sur deux workers ou diverger à cause d'horloges décalées. Trier les mesures par cet horodatage ne prouve donc pas l'ordre réel des fetchs. L’ordre PostgreSQL ne dépend ni de l'horloge d'un client ni de l'ordre d'achèvement.
+
+**Preuve :** migration additive `0020_gsc_sync_claim_order.sql` rétroclasse les jobs historiques, crée une unicité partielle tenant/projet/propriété et nettoie les recouvrements historiques. Les tests PostgreSQL couvrent les deux ordres d'achèvement et des horodatages applicatifs inversés/identiques; les tests de schéma vérifient la colonne, l'index et le ledger.
+
+**Risque :** le `claim_order` reflète l'ordre de revendication et non l'horodatage de réponse côté Google; deux fetchs démarrés dans cet ordre peuvent encore recevoir des réponses de fraîcheur différente. Les jobs affichent leur fenêtre et statut; les mesures n'affirment pas une causalité.
+
+**Retour arrière :** migration en avant seulement; désactiver le remplacement des fenêtres nécessiterait une migration explicite après analyse des données. Ne pas supprimer la colonne ni réduire le statut d'une sync à `COMPLETED` sans preuve.
+
+**Résultat attendu :** aucune fenêtre partielle ou terminée plus ancienne ne peut effacer une mesure d'un fetch revendiqué plus récemment, indépendamment des horloges applicatives et du scheduling des workers.
+
+## D-020 — Conserver la configuration PostgreSQL dans les commandes Turbo
+
+**Décision :** les scripts racine `test`, `db:migrate` et `db:seed` utilisent explicitement le mode d'environnement `loose` de Turbo afin de transmettre `PG_SOCKET_DIR`, `PGDATABASE`, `PGPORT` et les variables de connexion nécessaires aux tâches ciblées.
+
+**Raison :** Turbo en mode strict a supprimé les variables fournies au shell pour la commande de migration, qui a alors utilisé `/var/run/postgresql` au lieu du cluster jetable. Le contrôle des comptes de la base par défaut a trouvé zéro ligne GSC avant 0020; la migration additive y est néanmoins enregistrée. Le mode explicite empêche les commandes futures de viser silencieusement la mauvaise base.
+
+**Preuve :** migration 0020 appliquée avec `node packages/db/src/migrate.ts` et `PG_SOCKET_DIR=/tmp/winseo-pgsocket`; les tests PostgreSQL sont exécutés directement avec les mêmes variables et les tâches Turbo de `pnpm verify` seront relancées en mode loose.
+
+**Risque :** mode loose transmet l'environnement complet aux tâches lancées par ces scripts; les secrets ne doivent pas être imprimés par les scripts. Cette configuration est limitée aux commandes de test, migration et seed.
+
+**Retour arrière :** retirer l'option des commandes racine après définition d'une allowlist Turbo explicite et testée pour toutes les variables PostgreSQL nécessaires.
+
+**Résultat attendu :** une migration ou une suite de tests lancée avec des variables PostgreSQL explicites se connecte à la base demandée, pas à une valeur par défaut.
+
+## D-021 — Préflight des horloges historiques avant nettoyage GSC
+
+**Décision :** conserver 0020 comme migration appliquée et ajouter `0019z_gsc_claim_order_preflight.sql`, exécutée avant elle. Si deux jobs terminés ont des données sur des jours chevauchants et que l'ordre obtenu avec `started_at` client contredit l'ordre `requested_at` stocké par PostgreSQL, l'upgrade s'arrête avant le nettoyage. Les lignes historiques restent intactes pour revue manuelle.
+
+**Raison :** le rattrapage de 0020 ne dispose pas d'un ordre de claim monotone préexistant. Un horodatage client peut être décalé; deviner l'ordre et supprimer les lignes serait irréversible. Le préflight bloque uniquement les cas contradictoires observables; il ne prétend pas reconstruire une chronologie qui n'a pas été enregistrée.
+
+**Preuve :** test d'intégration PostgreSQL `packages/db/src/gsc-claim-order-migration.test.ts` (3 cas): fichier trié avant 0020, horloges contradictoires -> échec et ligne conservée sans entrée de migration, horloges cohérentes -> migration inscrite. Résultats finaux capturés et revus séparément avant tout statut `EVIDENCED`.
+
+**Risque ouvert :** un historique comportant un décalage de client qui conserve par hasard le même ordre que les dates `requested_at` n'est pas détectable après coup; l'ordre DB reste le meilleur proxy stable disponible. Les installations avec conflit détecté doivent résoudre manuellement les lignes avant migration.
+
+**Retour arrière :** migration additive uniquement; aucun effacement ni correction automatique des fenêtres ambiguës. L'opérateur peut résoudre les données et relancer les migrations après analyse des jobs concernés.
+
+## D-022 — Bloquer les mutations GSC pendant le nettoyage des anciennes fenêtres
+
+**Décision :** placer un garde temporaire de maintenance dans une migration forward-only ordonnée après le préflight et avant 0020, puis le retirer dans 0021 après le nettoyage. Les déclencheurs bloquent les écritures GSC des connexions applicatives pendant la fenêtre; le runner signale explicitement sa propre connexion et la conserve jusqu'à la fin de chaîne.
+
+**Raison :** le préflight seul laisse une fenêtre entre le commit de son contrôle et le commit de 0020. Sans barrière, un nouveau job aux horodatages inversés peut apparaître après le contrôle et avant la suppression irréversible. Un garde durable entre migrations rend l'interruption fail-closed; 0021 réouvre les écritures seulement après l'opération.
+
+**Preuve :** test PostgreSQL adversarial requis : mutations applicatives refusées pendant le garde, mutations du runner autorisées, reprise après suppression du garde, et migration à risque refusée avant le nettoyage si une ambiguïté est détectée. Aucune revendication de réussite avant les résultats capturés et l'avis du Skeptic.
+
+**Risque :** si la chaîne de migration est interrompue après l'activation du garde, les nouvelles synchronisations GSC renvoient une erreur jusqu'au redémarrage réussi du runner. Aucune donnée n'est supprimée par le garde.
+
+**Retour arrière :** 0021 désactive et supprime le garde atomiquement. Une migration ultérieure dédiée peut restaurer le service si la migration est partiellement déployée; ne jamais contourner le déclencheur manuellement.
+
+## D-023 — Le bypass de migration GSC ne repose pas sur un GUC modifiable
+
+**Décision :** ajouter la migration forward-only `0019y_gsc_sync_write_fence.sql` avant le préflight. Elle retire temporairement à `serpvera_app` les privilèges `INSERT`, `UPDATE`, `DELETE` et `TRUNCATE` sur les deux tables GSC. Elle échoue si le rôle est propriétaire, membre d'un autre rôle, ou conserve un privilège d'écriture effectif. Après suppression du déclencheur par 0021, `0022_restore_gsc_runtime_writes.sql` vérifie l'absence du garde puis restaure les droits de lecture/écriture.
+
+**Raison :** le reviewer a démontré qu'un rôle pouvait définir lui-même `app.winseo_gsc_migration='on'`; un GUC personnalisé n'est donc pas un secret et ne peut pas constituer une frontière de sécurité. Le runner peut encore définir ce signal pour l'ancien déclencheur, mais les écritures runtime restent impossibles pendant toute la chaîne, même si l'application tente le même réglage.
+
+**Preuve attendue :** PostgreSQL réel vérifie qu'un `SET ROLE serpvera_app` avec GUC forgé ne peut pas modifier les jobs pendant la barrière, que le rôle de migration peut effectuer le nettoyage, et que les écritures runtime reprennent après 0021/0022. Le schéma final doit montrer les droits restaurés et aucun garde temporaire.
+
+**Risque :** toute interruption après 0019y laisse les écritures GSC désactivées jusqu'à la reprise réussie de la chaîne. La migration échoue fermée si le modèle de rôles observé n'est pas celui attendu; aucune mesure n'est supprimée par le fence lui-même.
+
+**Retour arrière :** 0022 rétablit les droits uniquement après confirmation que le garde a été retiré. Si la chaîne est interrompue, ne pas accorder manuellement ces privilèges avant l'inspection du ledger et des triggers; corriger la cause puis relancer le runner.
+
+## D-024 — Couvrir les suppressions parentes qui cascade vers les mesures GSC
+
+**Décision :** `0019x_gsc_parent_delete_fence.sql`, exécutée avant les autres fences GSC, révoque temporairement `DELETE` et `TRUNCATE` sur `gsc_connections`, `projects` et `organizations`. Ces tables parentes peuvent supprimer en cascade des jobs et leurs métriques. `0023_restore_gsc_parent_deletes.sql` restitue `DELETE` après la chaîne et laisse `TRUNCATE` non accordé.
+
+**Raison :** la revue adversariale a montré qu'un `DELETE` permis sur `gsc_connections` contournait la révocation DML posée uniquement sur les tables enfants; `projects` et `organizations` sont aussi des ancêtres de la même chaîne FK. La protection doit couvrir tout chemin SQL autorisé au rôle runtime, pas seulement les mutations directes.
+
+**Preuve attendue :** PostgreSQL réel crée les FK `ON DELETE CASCADE`, forge le GUC sous `SET ROLE serpvera_app`, puis tente de supprimer chacun des trois parents. Chaque suppression doit échouer par privilège avant de toucher aux enfants; après 0021–0023, les droits `DELETE` historiques sont restaurés et aucun droit `TRUNCATE` n'est accordé.
+
+**Risque :** les suppressions de connexion, projet et organisation sont indisponibles pendant la fenêtre de migration; une interruption maintient ce blocage jusqu'à reprise. La migration échoue fermée si le rôle applicatif possède les parents ou a des privilèges résiduels.
+
+**Retour arrière :** 0023 restaure `DELETE` après vérification que le trigger guard et sa table ont disparu. Aucun `TRUNCATE` n'est restauré; les données sont conservées par le fence.
+
+## D-025 — Fermer les privilèges effectifs de colonne accordés à PUBLIC
+
+**Décision :** placer `0019w_gsc_effective_acl_fence.sql` avant les autres fences GSC. La migration retire les privilèges de mutation au niveau table et colonne de `PUBLIC` et de `serpvera_app` sur cinq tables : `organizations`, `projects`, `gsc_connections`, `gsc_sync_jobs` et `gsc_metrics`. Elle vérifie les privilèges effectifs après révocation. `0024_restore_gsc_acl_baseline.sql` restaure le DML applicatif sur ces cinq tables uniquement après retrait de tous les gardes. Les écritures directes sur les tables de credentials et d'états OAuth restent hors de cette barrière et ne sont pas couvertes par cette preuve.
+
+**Raison :** PostgreSQL conserve des ACL de colonnes distinctes des ACL de tables. `REVOKE UPDATE ON table` ne neutralise pas forcément `GRANT UPDATE(status) TO PUBLIC`; un contrôle limité à `has_table_privilege` peut donc accepter une migration alors que le rôle runtime peut encore écrire.
+
+**Preuve attendue :** fixture PostgreSQL accorde à `PUBLIC` `UPDATE(status)` et `INSERT(...)` avant le fence, puis exécute les deux opérations sous `SET ROLE serpvera_app` avec le GUC falsifié. Les opérations doivent être refusées et `has_any_column_privilege` doit confirmer l'absence d'accès effectif durant la barrière. Après retrait du garde, le DML applicatif revient; aucun grant d'écriture à `PUBLIC` ne subsiste dans les catalogues.
+
+**Risque :** les tests et contrôles de migration doivent inclure les cinq tables et les chemins de privilèges hérités. La migration échoue si le runtime possède une table protégée ou est membre d'un autre rôle.
+
+**Retour arrière :** migrations forward-only `0019w`/`0024`; les ACL métier restent inchangées et seul le DML de `serpvera_app` est rétabli. Ne pas réaccorder de droits pendant une chaîne interrompue avant l'inspection du ledger et des triggers.
+
+## D-027 — Désactiver le cache pour les gates de preuve finale
+
+**Décision :** `scripts/verify-disposable-db-gates.sh` lance lint, typecheck, tests et build avec Turbo `--force`. La sortie doit montrer `Cached: 0` pour chaque étape; le script affiche des marqueurs de début et de réussite pour toutes les gates, y compris le contrôle PostgreSQL et `git diff --check`.
+
+**Raison :** une revue indépendante a relevé que les totaux de tests provenaient d'un cache Turbo. Un cache valide pour la productivité ne prouve pas qu'une suite PostgreSQL a été exécutée sur la base jetable nommée dans le rapport.
+
+**Preuve :** capture WinCreator `VERIFY-001` du 2026-10-07, sortie complète non tronquée, tests et build avec zéro tâche cachée, base `serpvera_dev` au port 55432, DB 75/75, crawler 124/124, API 119/119, authz 23/23, web 25/25, audit sans vulnérabilité connue; revue indépendante `EVIDENCED`.
+
+**Risque :** cette porte dure environ 105 secondes et consomme plus de ressources que les commandes locales mises en cache.
+
+**Retour arrière :** la porte de preuve demeure indépendante des commandes développeur; retirer `--force` uniquement si la CI conserve les résultats bruts et démontre l'exécution fraîche sur la bonne base.
+
+## D-028 — Garder la base PostgreSQL historique demandée par la migration CI
+
+**Décision :** le job PostgreSQL CI garde `serpvera_test` comme base cible pour migrations et tests, et crée aussi `serpvera_dev` dans le service PostgreSQL temporaire avant la migration.
+
+**Raison :** la migration historique `0001_init_schema.sql` accorde `CONNECT` sur `serpvera_dev` en dur. Elle ne doit pas être réécrite après application; le job isolé doit donc fournir cette dépendance historique sans déplacer les tests vers une base locale ou externe.
+
+**Preuve attendue :** GitHub Actions exécute le runner sur `serpvera_test`, passe les migrations et les tests sur son PostgreSQL éphémère; le log indique la base cible exacte.
+
+**Risque :** ajouter une seconde base au conteneur CI masque une hypothèse codée dans la migration historique; toute nouvelle base fixe doit être identifiée par recherche et revue.
+
+**Retour arrière :** supprimer la création de la base auxiliaire et rétablir le workflow précédent. Aucune base réelle n'est touchée.
+
+## D-029 — Scanner l'historique du PR avec un checkout complet
+
+**Décision :** le job Security Scan récupère l'historique Git complet; Gitleaks compare ainsi le commit de base du PR à la tête de branche. Le job garde les permissions en lecture seule, transmet `GITHUB_TOKEN`, utilise `GITLEAKS_CONFIG` et désactive uniquement les commentaires.
+
+**Raison :** Gitleaks a échoué avec `unknown revision` parce que `actions/checkout` ne ramenait pas le commit de base. Le log « aucun leak dans le scan partiel » ne prouve rien et ne doit pas produire un statut vert.
+
+**Preuve attendue :** le run GitHub Actions montre une exécution complète du range de commits du PR et le job de scan réussit; les sources Gitleaks consultées le 2026-10-07 documentent le token, la config par variable d'environnement et la migration de l'action vers v3.
+
+**Risque :** plus de données Git téléchargées; le token n'a pas de permission d'écriture et les commentaires sont désactivés.
+
+**Retour arrière :** restaurer l'action/version précédente seulement avec une preuve d'analyse complète et une config valide; ne jamais transformer le scan en étape advisory.
+
+## D-031 — Autoriser l'ajout de captures AI Visibility par permission dédiée
+
+**Décision :** ajouter la permission `evidence.write`, accordée à OWNER, ADMIN, ANALYST et EDITOR. La route d'import AI Visibility la vérifie après résolution du projet/tenant et avant de parser ou stocker le CSV. VIEWER et BILLING gardent l'accès en lecture sans possibilité d'ajouter des captures.
+
+**Raison :** la première revue sceptique a démontré que la route authentifiait l'appartenance au projet mais ne vérifiait aucun rôle; un Viewer ou Billing pouvait donc modifier l'historique et les mesures affichées. `production.write` serait trop large pour une donnée d'évidence fournie manuellement, tandis que `evidence.write` exprime exactement ce droit.
+
+**Preuve :** test de matrice authz et test d'intégration API/PostgreSQL créant des utilisateurs Viewer et Billing dans le même tenant puis exigeant HTTP 403 lors d'un import valide. Revue sceptique de suivi requise; le résultat du gate complet sera joint au registre.
+
+**Risque :** les permissions attribuées restent un choix de produit; ANALYST/EDITOR peuvent ajouter des données mais ne peuvent pas prétendre à une vérification fournisseur. Les imports restent marqués `USER_SUPPLIED` et `unverified_by_provider`.
+
+**Retour arrière :** retirer la vérification de route et la permission dédiée par commit; aucune ligne importée n'est modifiée. Ne pas accorder `production.write` pour faire passer le test.
+
+**Résultat attendu :** aucun rôle lecture seule ne peut modifier le corpus AI Visibility; les rôles d'analyse et d'édition peuvent enrichir le registre avec une provenance honnête.
+
+## D-026 — Ne pas modifier une migration après son application, même sur la base jetable
+
+**Décision :** après application d'une migration sur le PostgreSQL jetable, son fichier source est immuable. Toute correction future exige une nouvelle migration forward-only; le test de comportement peut évoluer séparément.
+
+**Raison :** modifier le fichier après application rend l'état du dépôt différent de l'état effectivement vérifié par le runner, même si aucune base de production n'est concernée. L'essai de simplification de `0019w` a été annulé et son hash restauré au contenu déjà appliqué.
+
+**Preuve :** le SHA-256 actuel de `0019w_gsc_effective_acl_fence.sql` est `5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab`, identique à celui capturé avant l'essai de simplification. Le test PostgreSQL ajoute des cas de refus pour la propriété et l'héritage de rôle sans changer la migration.
+
+**Risque :** une migration historique répétitive peut rester plus longue qu'une réécriture souhaitée; la lisibilité ne justifie pas de changer le contenu déjà appliqué.
+
+## D-032 — Exécuter les contrats AI Visibility dans la suite workspace
+
+**Décision :** déclarer un script `test` pour `@serpvera/contracts`, exécutant les tests `src/*.test.ts` avec le runner Node déjà utilisé par le dépôt. Aucun nouveau framework ni dépendance n'est ajouté.
+
+**Raison :** le premier gate global avait réussi, mais Turbo n'avait pas de tâche `@serpvera/contracts#test`; le test déterministe de parsing CSV restait donc absent de la suite agrégée. Un succès global ne doit pas laisser cette omission implicite.
+
+**Preuve :** la capture suivante de `AI-VIS-001` doit montrer la tâche contracts dans la liste Turbo sans cache et son résumé de tests, puis passer le gate complet et la revue sceptique indépendante. La capture précédente est conservée, mais n'est pas utilisée pour accepter le claim.
+
+**Risque :** les nouveaux fichiers de contrat `.test.ts` seront automatiquement inclus; ils doivent rester déterministes et sans appel réseau.
+
+**Retour arrière :** supprimer uniquement le script du paquet si le runner Node standard ne peut pas exécuter le contrat; ajouter alors une tâche de test équivalente et visible dans Turbo avant d'accepter la gate.
+
+## D-033 — Fonder l'autorisation AI Visibility sur le rôle actif jusqu'au commit
+
+**Décision :** le POST recharge le rôle actif depuis l'adhésion et la persistance PostgreSQL relit puis verrouille cette ligne avec `FOR SHARE` dans la transaction d'import. Le second contrôle utilise la permission centralisée `evidence.write`; un downgrade ou une révocation concurrente attend la fin de l'écriture, tandis qu'une session ancienne ne conserve pas son autorité.
+
+**Raison :** un contrôle basé seulement sur le rôle sérialisé dans la session autorisait un ancien rôle après downgrade. Une lecture fraîche seule conserve aussi une fenêtre TOCTOU avant le commit.
+
+**Risque :** le verrou retient une ligne d'adhésion durant l'import et peut retarder une modification de rôle de quelques millisecondes; le parseur borne le lot à 1 MiB et 5 000 lignes.
+
+**Retour arrière :** retirer le verrou et la seconde barrière du store rétablit le contrôle frais au niveau route; ce retour réouvre toutefois la fenêtre de course et exige une nouvelle revue de sécurité. Aucun changement de migration ou de donnée existante.
+
+**Preuve :** tests de contrat refusant les dates calendrier impossibles; tests API refusant Viewer/Billing avant le contrôle du hash et refusant un rôle Analyst déjà rétrogradé dans la base; test PostgreSQL refusant l'écriture Viewer dans la transaction de persistance; gate complète et revue sceptique sur les sources, tests et store atomique.
+
+## D-034 — Garder visible l'échec de vérification historique du ledger
+
+**Décision :** promouvoir `AI-VIS-001` à `EVIDENCED` sur sa capture vérifiée et revue, tout en enregistrant séparément `PROOF-REPLAY-001 = BLOCKED`. Ne pas réécrire les anciens claims ni transformer un échec de vérification en succès.
+
+**Raison :** le contrôle ciblé de la nouvelle attestation AI-VIS passe, mais la vérification de l'ensemble du ledger signale 35 problèmes, dont des attestations historiques absentes du checkout et d'anciennes captures AI-VIS liées à des fichiers modifiés.
+
+**Risque :** sans artefacts historiques, une preuve passée ne peut pas être indépendamment revalidée depuis ce checkout; les statuts historiques gardent donc une dette de traçabilité.
+
+**Retour arrière :** pas de code modifié. Si les artefacts d'origine sont restaurés ou les gates rejoués, réévaluer `PROOF-REPLAY-001` sur une nouvelle capture; ne pas effacer le constat courant.
+
+**Preuve :** vérification WinCreator ciblée de l'attestation AI-VIS : `VERIFY OK`; vérification du ledger complet : `VERIFY FAILED — 35 problem(s)`; `ledger_check.py PROOF_LEDGER.md` et `ledger_check.py --catches SKEPTIC_CATCHES.md` passent séparément.
+
+## D-035 — Déduire les groupes de pages de preuves observées, sans prétendre connaître le CMS
+
+**Décision :** le crawler peut regrouper les URL par motif de chemin et empreinte de structure DOM sémantique. Les résultats sont appelés « groupes de structure observés », comportent le support et quelques URL échantillons, et n'affirment pas qu'il s'agit de templates WordPress/Shopify réels. Aucun texte HTML brut n'est copié dans le champ de groupe.
+
+**Raison :** l'audit de plusieurs pages n'aide pas à prioriser par gabarit tant que les observations ne sont pas agrégées; le chemin et le DOM sont des éléments observables, mais ne révèlent pas à eux seuls la source CMS ou le composant qui les génère.
+
+**Risque :** des templates différents peuvent partager la même structure simplifiée ou un template peut varier à cause de contenus conditionnels. Les échantillons et l'empreinte rendent la limite inspectable; les groupes ne déclenchent aucune publication automatique.
+
+**Retour arrière :** retirer le regroupement et ses surfaces de lecture; la colonne JSONB nullable ajoutée par migration forward-only peut rester inutilisée. Ne jamais modifier une migration appliquée.
+
+**Preuve attendue :** fixture de 200 URL et cinq structures connues, métriques précisions/rappel de règles calculées contre les défauts injectés, persistance RLS, affichage de la couverture, gate complet et revue sceptique. La réussite n'accepte pas à elle seule M3 : rendu JS échantillonné, budget publié et reprise durable restent des gates séparées.
+
+## D-036 — Limiter les inférences du regroupement aux signaux de structure observés
+
+**Décision :** ignorer les commentaires et les contenus HTML raw-text lors de la signature; préserver la hiérarchie des éléments sémantiques; inférer un segment de slug textuel seulement quand au moins trois frères partagent un préfixe explicite avant un suffixe distinct. Les routes textuelles ordinaires restent distinctes. Les URL d'échantillon sont dédupliquées après suppression de la query et du fragment. Le crawl garde uniquement le hash DOM par page au lieu de retenir tout le HTML jusqu'à la fin.
+
+**Raison :** la revue indépendante a montré des faux changements causés par des chaînes ressemblant à des balises dans `script`, `style`, `textarea`, `iframe` et les commentaires; elle a aussi montré qu'une signature plate perdait la profondeur des sections, que trois routes statiques pouvaient devenir un faux `:slug`, et que les variantes query pouvaient dupliquer l'échantillon affiché.
+
+**Risque :** le tokeniseur reste une approximation du parseur HTML du navigateur; des structures équivalentes exprimées dans un HTML mal formé peuvent rester séparées, et des routes à préfixe partagé peuvent encore être des pages statiques. Le regroupement reste descriptif, n'est pas une identité CMS et n'est pas autorisé à déclencher une écriture.
+
+**Retour arrière :** désactiver l'agrégation de groupe dans le résultat du crawl et l'interface; garder la colonne JSONB nullable. Les preuves par page restent disponibles. Ne pas modifier les migrations appliquées.
+
+**Preuve :** tests adversariaux pour les raw-text/commentaires, la hiérarchie imbriquée, les chemins `/docs/new|archive|search`, la suppression des paramètres d'URL et la déduplication d'échantillons; gate complet après revue sceptique. L'évaluation 200 URL mesure uniquement le détecteur titre injecté et ne valide pas encore la précision générale du regroupement.
+
+## D-037 — Utiliser le parseur HTML5 maintenu pour les empreintes de structure
+
+**Décision :** remplacer le tokeniseur lexical ad hoc par `parse5` 8.0.1, parseur HTML5 conforme à la construction DOM du navigateur; parcourir les éléments HTML sémantiques retenus et les fragments `<template>`, conserver les répétitions par classes de cardinalité, et ne jamais inclure texte ou attributs. Une page XHTML ne passe pas dans le parseur HTML : son empreinte est indisponible. Si l'entrée dépasse 128 KiB ou le parcours 30 000 nœuds, l'empreinte est indisponible et l'URL reste singleton. Seuls les identifiants numériques/UUID/date et suffixes numériques explicites sont généralisés; aucun suffixe textuel n'est deviné.
+
+**Raison :** le reviewer a reproduit la fermeture `--!>` d'un commentaire, le contenu CDATA SVG, les fermetures implicites de `<li>`, la syntaxe de fermeture ignorée sur les éléments non void, les frères sémantiques répétés et des collisions de routes textuelles. Un scanner maison aurait dû reconstituer une partie importante de l'algorithme WHATWG.
+
+**Risque :** un nouvel import d'exécution augmente légèrement le graphe de dépendances; le parseur construit un arbre temporaire. Réponse HTTP bornée à 5 MiB, plafond d'entrée, plafond de nœuds, parcours itératif et fallback singleton bornent le coût. Les IDs d'URL seule utilisent seulement l'URL d'exemple assainie et l'index du run, jamais l'URL brute avec query. Le regroupement reste grossier (2 et 3 frères identiques partagent la classe `2-4`).
+
+**Retour arrière :** revenir à la dépendance et à l'empreinte antérieures, supprimer les groupes stockés via une migration forward-only si leur schéma change, et laisser les preuves par page intactes. Ne jamais éditer une migration déjà appliquée.
+
+**Sources consultées le 2026-10-07 :** [dépôt parse5](https://github.com/inikulin/parse5), [API `parse`](https://parse5.js.org/functions/parse5.parse.html), [métadonnées officielles du paquet 8.0.1](https://raw.githubusercontent.com/inikulin/parse5/refs/heads/master/packages/parse5/package.json).
+
+**Preuve attendue :** fixtures `--!>`, CDATA, li implicites, balise non-void avec slash, cardinalité, routes statiques, PII de chemin, IDs URL-only sans secret et dépassement des budgets; fixture 200 pages, XHTML non fingerprinté, build/typecheck, gate complet uncached et verdict sceptique indépendant. Le coût RSS de parse5 en production n'est pas mesuré; l'entrée bornée à 128 KiB borne la taille mais ne constitue pas une mesure de production.
+
+## D-038 — Corriger une description de colonne sans réécrire la migration appliquée
+
+**Décision :** conserver le texte exact de la migration 0028 déjà appliquée localement, même si son commentaire source décrit mal le stockage des corps HTML; ajouter la migration forward-only 0029 avec une description PostgreSQL explicite indiquant que `template_groups` ne contient pas de corps de page. Le test d'intégrité vérifie cette description.
+
+**Raison :** le parcours de crawl persiste des URL, hashes et métadonnées, pas les réponses HTML. La revue a relevé une phrase documentaire fausse. La mission interdit de réécrire une migration déjà appliquée; une migration suivante corrige donc la description visible par l'exploitation.
+
+**Risque :** le commentaire source historique de 0028 demeure inexact, même si le commentaire de colonne effectif est corrigé par 0029. Les développeurs doivent lire l'historique comme immuable et la définition SQL actuelle comme autoritaire.
+
+**Retour arrière :** migration 0030 peut retirer le commentaire de colonne si nécessaire; aucune donnée n'est modifiée.
+
+**Preuve attendue :** vérifier dans PostgreSQL la présence de 0028/0029 et `col_description(crawl_runs.template_groups)` exacte; tests de schéma PostgreSQL; gate complet.
+
+## D-039 — Empêcher les identifiants d'URL de contaminer les échantillons et empreintes
+
+**Décision :** après la seconde revue sceptique, supprimer l'inférence à partir de préfixes de slugs textuels; seuls les IDs explicites et suffixes numériques sont généralisés. Les exemples masquent email, dates, IDs numériques/UUID, suffixes numériques et tous les segments après un chemin sensible. Les groupes sans empreinte sont individuels et leur ID dérive de l'exemple assaini et de la position dans le crawl, jamais de l'URL brute avec query. Les contenus de `<template>` sont intégrés à l'empreinte. Les réponses `application/xhtml+xml` gardent des groupes URL seuls, car le parseur HTML5 ne reproduit pas les règles XML.
+
+**Raison :** la revue a prouvé qu'un hash stable de l'URL brute permet de tester des secrets à faible entropie, qu'un slug partagé dans `/articles` peut encore être statique, que des numéros/UUID étaient visibles, que le parseur HTML ne correspond pas au mode XML, et que le contenu `template` était ignoré.
+
+**Risque :** les motifs de données textuels ne sont plus groupés même s'ils sont dynamiques; les exemples de pages numériques peuvent se réduire à un même chemin `:private`, donc l'échantillon explique moins la route d'origine. Les groupes restent des formes observées, pas des templates établis. Les compteurs enfants `2` et `3` partagent volontairement la même classe.
+
+**Retour arrière :** désactiver les groupes URL seuls, ou revenir à l'inférence précédente uniquement avec une nouvelle preuve sceptique. Les anciens JSON de groupes restent compatibles avec les champs; le lecteur refuse désormais les nouvelles méthodes inattendues.
+
+**Preuve attendue :** fixture emails/IDs/UUID/share codes, attaques par candidat sur les hash IDs, routes `/articles/api-*`, XML XHTML, contenu `template`, groupement 200 pages, tests DB/API et revue sceptique indépendante.
+
+## D-040 — Ne jamais publier une valeur de chemin inconnue ni inférer un gabarit sur deux suffixes
+
+**Décision :** remplacer D-039 pour le comportement courant des routes. Les motifs affichés ne conservent que des segments d’une allowlist de noms de routes génériques; tout segment inconnu est rendu `:private` tant dans `routePattern` que dans `sampleUrls`. Les routes textuelles inconnues restent singleton, même si leur valeur masquée et leur signature HTML sont égales. Les exemples peuvent remplacer une forme connue d’ID par un marqueur générique (`story-001` devient `story-:id`) pour ne pas la divulguer; ce marqueur n’autorise pas de fusion. Une route dynamique ne rejoint un groupe de structure que si trois frères distincts ou plus démontrent la forme sous un parent de collection reconnu; un préfixe de suffixe n’est conservé que s’il vient de la même allowlist générique. Un groupe dont le hash est disponible mais qui reste séparé utilise `SEMANTIC_DOM_PRIVACY_SINGLETON_V1`. L’incertitude conserve des singletons. L’API vérifie les motifs, l’accord du motif avec les échantillons et refuse les résumés hérités non conformes.
+
+**Raison :** la revue sceptique a reproduit l’exposition `jane-doe-:id`, un numéro de téléphone partiel, un token court sous `/t/`, ainsi que la fusion des routes statiques `/guide/step-1` et `/guide/step-2`. Le hachage d’une valeur brute ne serait pas une solution : les IDs de groupe non secrets peuvent être attaqués par essais de candidats. La décision précédente autorisait donc trop d’information de chemin à entrer dans l’API et la clé du groupe.
+
+**Risque :** les routes métier personnalisées sont moins lisibles et les pages slug textuelles ne sont pas regroupées avant qu’une règle indépendante et testée ne prouve leur forme. L’allowlist de collections limite les motifs reconnus; elle ne garantit pas une identité CMS ni un gabarit réellement partagé.
+
+**Retour arrière :** retirer la fusion de route et afficher seulement le hash de structure, ou rétablir une allowlist après revue indépendante. Ne jamais republier des valeurs de chemin inconnues. Les données de groupe sont facultatives et peuvent être ignorées; aucune migration appliquée ne sera modifiée.
+
+**Preuve attendue :** tests adversariaux de PII/tokens dans motifs et échantillons, tests de singletons pour deux routes statiques numériques, trois IDs distincts exigés sous collection reconnue, fixture 200 pages avec cinq routes de collection, gate complet uncached et nouvelle revue sceptique.
+
+## D-041 — Versionner les identifiants sans empreinte et isoler le regroupement des preuves
+
+**Décision :** ne plus accepter les résumés `URL_PATTERN_ONLY_FINGERPRINT_UNAVAILABLE_V1` persistés. Le nouveau format `URL_PATTERN_ONLY_PRIVACY_SINGLETON_V2` n’est valable que pour un singleton expurgé. Une route ID telle que `/orders/:id` reste affichable comme singleton avec son empreinte HTML, mais ne peut pas être regroupée sans trois frères sous une collection explicitement reconnue. Les URL échantillons sont obligatoires et doivent correspondre exactement au motif expurgé. Un unique parseur partagé valide les groupes aussi bien lors des écritures et lectures PostgreSQL que dans l’adaptateur mémoire. Les quatre champs `templateId`, `templateRoutePattern`, `templateDomSignatureHash` et `templateGroupingMethod` ne sont plus ajoutés aux preuves générales; les anciennes Evidence sont filtrées à la lecture dans le store PostgreSQL, l’adaptateur mémoire et Action Center. L’historique de crawl est l’unique surface exposant les groupes.
+
+**Raison :** la revue indépendante a montré qu’un identifiant V1 de 16 caractères permettait de tester une URL complète hors ligne même si son échantillon n’avait plus la query; elle a aussi démontré le rejet à la lecture d’un singleton `/orders/:id` généré correctement. L’inspection du chemin Evidence a ensuite trouvé que les mêmes identifiants pouvaient être réexposés depuis des lignes historiques via le tiroir d’évidence.
+
+**Risque :** les anciens runs qui contiennent des groupes V1 ou des résumés invalides seront marqués indisponibles plutôt que publiés; les anciennes Evidence restent stockées mais les clés de regroupement ne sont pas retournées. Les parcours et comparaisons de groupes entre runs demeurent hors de portée de cette décision.
+
+**Retour arrière :** ne pas réactiver V1. Si l’historique V1 doit être récupéré, recalculer les groupes depuis les observations brutes avec le générateur courant puis sauvegarder un nouveau résumé versionné; ne jamais réutiliser l’ancien ID.
+
+**Preuve attendue :** test qui calcule réellement l’ancien hash depuis une URL `?token=...` et confirme son rejet, test API du singleton `/orders/:id`, tests de filtrage des quatre clés dans Evidence et Action Center, gate complète uncached, revue sceptique fraîche.

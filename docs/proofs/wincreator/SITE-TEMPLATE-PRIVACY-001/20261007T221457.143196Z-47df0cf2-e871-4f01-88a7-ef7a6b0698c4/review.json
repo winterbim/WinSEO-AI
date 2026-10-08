@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "SITE-TEMPLATE-PRIVACY-001",
+      "level": "Meso",
+      "text": "Persisted crawl groups reject legacy URL-derived IDs; generated redacted singleton groups remain readable; template grouping identifiers are excluded from project evidence and action evidence reads. This claim does not establish M3 template accuracy or CORE SaaS acceptance.",
+      "gate": "`bash scripts/verify-site-crawl-gate.sh`",
+      "row_sha256": "cfa9616259b890b3386fad944ca53ae01781a2689af8cb8e8048a60efce4471e",
+      "ledger_sha256_before": "02a3db35ba27f52d3329cb3027b2b6be1070e8b5b5053a1ebb09c7f6072667e1",
+      "status_before": "IN_PROGRESS"
+    },
+    "capture_digest": "a4495acc834da82b58eb325f00bc16302f928581b9c709b15c5ea584bd40cb19",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "skeptic-route-final",
+    "challenge": "Reconstructed SHA-256(\"budgeted\\\\n\" + URL) for https://fixture.example/articles/oversized?token=guess-me (legacy ID b88b57f0e552634e) and parseStoredTemplateGroups rejected the V1 record; generated /orders/123 through groupSitePagesByTemplate and parseStoredTemplateGroups accepted the redacted /orders/:id semantic singleton. Traced historic evidence through DB toStoredEvidence, packages/db/src/actions.ts hydrate, and memory list/getFinding; the exact four keys are stripped. Searched crawl-run readers, checked migration shape and matching DB/UI types. Verified all 22 captured file hashes and the linked challenge. Distill remains REVIEW_REQUIRED at +92 nonblank/+97 total lines; reviewed the added privacy rules and found no clear removable duplication or unnecessary dependency. Scope excludes M3 accuracy and CORE SaaS acceptance.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "cb4f25f9b373e34b9cb8e3d092f582ccc4119ad84fe0410e475d35d353a925b4"
+    },
+    "reviewed_at": "2026-10-07T22:22:07.795056Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "94e0cfc657d02c285ebdd21b76e7eacaed875651816e5fbc8a8ad6e210673153"
+  }
+}

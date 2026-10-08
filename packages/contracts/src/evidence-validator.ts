@@ -14,13 +14,7 @@ import type { EpistemicClass } from "@serpvera/contracts";
 
 // NEXUS-compatible verdicts (superset of WinSEO gate verdicts)
 export type EvidenceVerdict =
-  | "EVIDENCED"
-  | "INSUFFICIENT"
-  | "DISPROVEN"
-  | "PENDING"
-  | "BLOCKED"
-  | "WAIVED"
-  | "SUPERSEDED";
+  "EVIDENCED" | "INSUFFICIENT" | "DISPROVEN" | "PENDING" | "BLOCKED" | "WAIVED" | "SUPERSEDED";
 
 export interface FindingRecord {
   id: string;
@@ -163,7 +157,10 @@ export function validateFinding(record: UntrustedFindingRecord, line: number): V
   // 5. EVIDENCED requires evidence[]
   // Array.isArray also rejects non-array runtime values (e.g. `evidence: 42`),
   // which the old `length === 0` check silently accepted — a real validator gap.
-  if (record.verdict === "EVIDENCED" && (!Array.isArray(record.evidence) || record.evidence.length === 0)) {
+  if (
+    record.verdict === "EVIDENCED" &&
+    (!Array.isArray(record.evidence) || record.evidence.length === 0)
+  ) {
     errors.push({
       line,
       field: "evidence",
@@ -181,7 +178,8 @@ export function validateFinding(record: UntrustedFindingRecord, line: number): V
     errors.push({
       line,
       field: "claim",
-      message: "Certainty language detected in claim without direct observation/measurement/documentation.",
+      message:
+        "Certainty language detected in claim without direct observation/measurement/documentation.",
     });
   }
 

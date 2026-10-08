@@ -69,8 +69,12 @@ export default async function GscQueriesPage({
 
       <FreshnessLine freshness={breakdown.freshness} window={breakdown.window} />
 
-      {breakdown.rows.length === 0 ? (
-        <EmptyCard text="No measured query rows in this window. Nothing is filled in from other sources." />
+      {breakdown.syncCoverage === "INCOMPLETE" ? (
+        <EmptyCard text="This Search Console window is incomplete. Query rows are withheld until every date has a verified sync." />
+      ) : breakdown.syncCoverage === "NO_UNIQUE_PROPERTY" ? (
+        <EmptyCard text="Connect exactly one Search Console property to measure query performance." />
+      ) : breakdown.rows.length === 0 ? (
+        <EmptyCard text="No query rows were returned for this fully synchronized window. Nothing is filled in from other sources." />
       ) : (
         <section className="rounded-lg border border-line bg-panel p-5">
           <div className="overflow-x-auto">
@@ -78,12 +82,24 @@ export default async function GscQueriesPage({
               <caption className="sr-only">Clicks, impressions, CTR and position per query</caption>
               <thead>
                 <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                  <th scope="col" className="py-2 pr-4">Query</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Clicks</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Impressions</th>
-                  <th scope="col" className="py-2 pr-4 text-right">CTR</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Avg. position</th>
-                  <th scope="col" className="py-2 text-right">Days</th>
+                  <th scope="col" className="py-2 pr-4">
+                    Query
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Clicks
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Impressions
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    CTR
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Avg. position
+                  </th>
+                  <th scope="col" className="py-2 text-right">
+                    Days
+                  </th>
                 </tr>
               </thead>
               <tbody>

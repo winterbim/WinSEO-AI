@@ -1,0 +1,204 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "9c12d52274cbb9c9a14459329da7dc178000c17e8812a77d9622501c2f29d00d",
+    "claim": {
+      "id": "GSC-MIGRATION-FENCE-001",
+      "level": "Meso",
+      "text": "The migration chain blocks table and column write grants, forged-GUC writes, and cascade deletion until guards are removed, then restores the application DML baseline without PUBLIC writes.",
+      "gate": "Run the full DB package suite against disposable PostgreSQL after applying migrations; inspect the targeted malicious PUBLIC-ACL fixture, migration order, final effective privileges and schema catalog assertions.",
+      "row_sha256": "ad9f77d854d15d823bb4efe81c692eece97aee911d899548cdd198327403ee9b",
+      "ledger_sha256_before": "16bc9e72eea5f75250887f6f84e7cb8eebc7d2c68170c9cb8e5b5d7c2c8dbf80",
+      "status_before": "CLAIMED"
+    },
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "pnpm",
+      "test"
+    ],
+    "stdout": {
+      "sha256": "91728b379b8b4b440a71d1b91fb6e7a6b9c494250080e0e7d11f64f11238e3de",
+      "original_bytes": 7420,
+      "stored_bytes": 7420,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "ts (0.57707ms)\n  ✔ DB-06: POSITIVE CONTROL — bypass-capable role DOES see both tenants (proves isolation is RLS-caused, not missing data) (0.876104ms)\n  ✔ DB-05: tenant context does NOT leak across pooled connections (2.356418ms)\n✔ RLS isolation (real PostgreSQL) (61.135236ms)\n▶ DB-02 schema integrity (real PostgreSQL catalogs)\n  ✔ catalog contains all expected tables, including finding_evidence (5.420001ms)\n  ✔ migration is recorded in the ledger (1.494782ms)\n  ✔ removes the temporary GSC migration guard after the migration chain (1.616311ms)\n  ✔ restores runtime GSC writes only after the migration guard is removed (0.82652ms)\n  ✔ restores scoped parent deletes after the GSC cascade fence is removed (0.826851ms)\n  ✔ restores app DML without leaving PUBLIC table or column write grants (1.910397ms)\n  ✔ uses a monotonic per-property GSC claim order (4.733495ms)\n  ✔ allows at most one connected Search Console property per project (1.056254ms)\n  ✔ legacy evidence-link tenant trigger is installed and least-privileged (1.156303ms)\n  ✔ patch storage accepts the complete lifecycle vocabulary (0.928653ms)\n  ✔ the Action Center no longer accepts an unverified IMPLEMENTED state (0.981653ms)\n  ✔ every tenant-owned table has organization_id NOT NULL and its declared timestamp (19.240461ms)\n  ✔ primary keys exist on core tables (0.935746ms)\n  ✔ foreign keys enforce organization ownership on tenant tables (4.363297ms)\n  ✔ unique constraints: users.email, organizations.slug (1.19745ms)\n  ✔ indexes exist on hot columns (1.19188ms)\n  ✔ every tenant-owned table has ENABLED and FORCED RLS (0.671337ms)\n  ✔ every tenant-owned table has a tenant_isolation policy (0.769803ms)\n  ✔ finding_evidence has composite tenant foreign keys to both endpoints (0.544137ms)\n  ✔ runtime role is non-superuser and non-bypassrls (0.631322ms)\n✔ DB-02 schema integrity (real PostgreSQL catalogs) (59.458109ms)\nℹ tests 75\nℹ suites 9\nℹ pass 75\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1715.526273\n"
+    },
+    "stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "files": [
+      {
+        "path": "/tmp/winseo-gsc-distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "bc615142e7f1c30e85dee0630e92f6115bd9c5b5bf99433c8abc040494b506bd",
+        "bytes": 4504
+      },
+      {
+        "path": "/tmp/winseo-gsc-distill-report.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "e019e477e05041ead2278614ce31e08f20bcee4a87911bccaf463db281e8116f",
+        "bytes": 1665
+      },
+      {
+        "path": "/tmp/winseo-final-gate.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "e46562428e1c5218d6d00d36fbb480f9461b732304483532d930ee3e806e69d6",
+        "bytes": 972
+      },
+      {
+        "path": "migrations/0019w_gsc_effective_acl_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab",
+        "bytes": 4715
+      },
+      {
+        "path": "migrations/0019x_gsc_parent_delete_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "2fb140de2acb37f57682e2313bc1e21c637144bf035c9b8989c6222d2d4aa196",
+        "bytes": 1745
+      },
+      {
+        "path": "migrations/0019y_gsc_sync_write_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "1f3eb1d5d722caf4a1626ae597ea936ac0458e7b69cae16ee1b7fe846d9801c7",
+        "bytes": 1955
+      },
+      {
+        "path": "migrations/0019z_gsc_claim_order_preflight.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "64ffc165dab69926f64acbf3a33507a1ee8bb6bf46457c98da6f9b642a2652fb",
+        "bytes": 2074
+      },
+      {
+        "path": "migrations/0019zz_gsc_sync_migration_guard.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "47d2952ef32da520b9e71f5b48b280fe8d1c951c3bbb7ab127cb19932f456c6b",
+        "bytes": 3641
+      },
+      {
+        "path": "migrations/0020_gsc_sync_claim_order.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "9f3406bb29e1b7ec18cdbf4674d86ab003d25b936b0fbdba0d4b3631c20f9139",
+        "bytes": 1965
+      },
+      {
+        "path": "migrations/0021_remove_gsc_sync_migration_guard.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "45c69245e9b64e078eae4ffda36cbea4e0d3709ecc812be6eb68a4e3d714695e",
+        "bytes": 532
+      },
+      {
+        "path": "migrations/0022_restore_gsc_runtime_writes.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "916acc784370a3f0f88920882876ac1314339126bccb56366e792cb868b850b6",
+        "bytes": 850
+      },
+      {
+        "path": "migrations/0023_restore_gsc_parent_deletes.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "7ea3425832e60c8a1e7d10cf6320dd7055d8068b8ec172b6fb8d63c6a4dd2409",
+        "bytes": 912
+      },
+      {
+        "path": "migrations/0024_restore_gsc_acl_baseline.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "dc8b495a68fdf8070f6a762018a4dd8e64ce403174d94cd47c4146607f8f6a54",
+        "bytes": 1186
+      },
+      {
+        "path": "src/migrate.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "211a1ed07bcdef08b2d10f4b5dbb22899d2b814e2d625808acf2a7b1dffd3b11",
+        "bytes": 4650
+      },
+      {
+        "path": "src/gsc-claim-order-migration.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "b93a42916f4b91a78cf83f2fbcc37f2d636ce94c55cdd0eaa633abdf253ae511",
+        "bytes": 21410
+      },
+      {
+        "path": "src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "10ea1bf8042a05254f7bb7811e96af242195734b0e550814c4d53fdbe2283e4e",
+        "bytes": 23401
+      },
+      {
+        "path": "/tmp/winseo-publish/docs/autoreglage/DECISIONS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "15f4792ccf6aa7e3a38713261f050334f1afccee12c69e30f4f8e2a96c176d84",
+        "bytes": 31732
+      },
+      {
+        "path": "/tmp/winseo-publish/docs/autoreglage/PLAN.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "11aa2cec036271b89f3cd195b014b9e79fd9e397722e3c15b9be2dff5da4fb98",
+        "bytes": 81547
+      },
+      {
+        "path": "/tmp/winseo-publish/SKEPTIC_CATCHES.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "9ef6ebca7face87a63fb1f6e10e916a1f0c875090fca1ceac33ea436c5eaf7d5",
+        "bytes": 30967
+      },
+      {
+        "path": "/tmp/winseo-publish/docs/PROOF_LEDGER_RPLUS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "f10f1fec7f362cbe529f100b5be83a7edb717dda8f7b022cd3f3f356fdccaca5",
+        "bytes": 11848
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "1699eb3fb8656881cbab8225b9be6313f50cd59f13ef8226de85abb0be2276a8",
+      "worktree_digest": "2662723c55524801878bc3bf2b10eba287e4d5cb5704dbf57b41123555997dfc"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "1892d3081e72af06c19949120087af165155addf047f3095c62542ad81c55efc"
+}

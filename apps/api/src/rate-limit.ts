@@ -23,6 +23,9 @@ export interface RateLimitDecision {
   retryAfterSeconds: number;
 }
 
+export type RateLimitScope =
+  "public-scan-ip" | "mfa-ip" | "auth-login-ip" | "auth-register-ip" | "project-crawl-org";
+
 interface WindowEntry {
   count: number;
   windowStart: number;
@@ -32,32 +35,33 @@ const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const MAX_TRACKED_IPS = 10_000; // hard memory cap
 
 export function isLoopback(ip: string): boolean {
-  return (
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip === "::ffff:127.0.0.1" ||
-    ip.startsWith("127.")
-  );
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1" || ip.startsWith("127.");
 }
 
 export interface RateLimiter {
-  /** Record an attempt from `ip`. Returns whether the scan may proceed. */
-  hit(ip: string): RateLimitDecision;
+  /** Record an attempt from `ip` in one operation-specific window. */
+  hit(ip: string, scope?: RateLimitScope): RateLimitDecision;
+  /** Return one quota unit when admission fails after a successful hit. */
+  release(ip: string, scope?: RateLimitScope): void;
   /** Current remaining quota without consuming (for headers). */
-  peek(ip: string): number;
+  peek(ip: string, scope?: RateLimitScope): number;
   /** Test helper: drop all state. */
   reset(): void;
 }
 
-export function createRateLimiter(limitPerWindow: number, now: () => number = Date.now): RateLimiter {
+export function createRateLimiter(
+  limitPerWindow: number,
+  now: () => number = Date.now,
+): RateLimiter {
   const windows = new Map<string, WindowEntry>();
 
-  function current(ip: string): WindowEntry {
+  function current(ip: string, scope: RateLimitScope): WindowEntry {
     const t = now();
-    const existing = windows.get(ip);
+    const key = `${scope}\0${ip}`;
+    const existing = windows.get(key);
     if (existing && t - existing.windowStart < WINDOW_MS) return existing;
     const fresh: WindowEntry = { count: 0, windowStart: t };
-    windows.set(ip, fresh);
+    windows.set(key, fresh);
 
     // Bound memory: drop expired entries, then oldest if still over cap.
     if (windows.size > MAX_TRACKED_IPS) {
@@ -74,11 +78,11 @@ export function createRateLimiter(limitPerWindow: number, now: () => number = Da
   }
 
   return {
-    hit(ip) {
+    hit(ip, scope = "public-scan-ip") {
       if (isLoopback(ip)) {
         return { allowed: true, remaining: limitPerWindow, retryAfterSeconds: 0 };
       }
-      const entry = current(ip);
+      const entry = current(ip, scope);
       if (entry.count >= limitPerWindow) {
         const retryAfterSeconds = Math.max(
           1,
@@ -93,9 +97,14 @@ export function createRateLimiter(limitPerWindow: number, now: () => number = Da
         retryAfterSeconds: 0,
       };
     },
-    peek(ip) {
+    release(ip, scope = "public-scan-ip") {
+      if (isLoopback(ip)) return;
+      const entry = current(ip, scope);
+      entry.count = Math.max(0, entry.count - 1);
+    },
+    peek(ip, scope = "public-scan-ip") {
       if (isLoopback(ip)) return limitPerWindow;
-      const entry = current(ip);
+      const entry = current(ip, scope);
       return Math.max(0, limitPerWindow - entry.count);
     },
     reset() {

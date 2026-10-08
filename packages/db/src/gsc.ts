@@ -11,6 +11,7 @@
 //     (PRELIMINARY), so a re-synced window overwrites rather than double-counts.
 
 import { withTenant } from "./client.ts";
+import { randomUUID } from "node:crypto";
 
 /** A project's Google authorization. Ciphertext fields are envelope-encoded. */
 export interface GscCredentialRow {
@@ -45,6 +46,7 @@ export interface GscConnectionRow {
   credential_ref: string | null;
   status: string;
   connected_at: Date | null;
+  /** Derived from verified completed jobs by connection read methods. */
   last_sync_at: Date | null;
   created_at: Date;
 }
@@ -57,6 +59,7 @@ export interface GscSyncJobRow {
   window_start: string;
   window_end: string;
   status: string;
+  ingestion_version: number;
   requested_at: Date;
   started_at: Date | null;
   completed_at: Date | null;
@@ -85,6 +88,20 @@ export interface GscMetricFilters {
   page?: string;
   device?: string;
   country?: string;
+  /** Selects rows written by sync jobs for one authorized property. */
+  connectionId?: string;
+}
+
+export class GscMeasurementWindowTooLargeError extends Error {
+  readonly statusCode = 413;
+  readonly code = "GSC_MEASUREMENT_WINDOW_TOO_LARGE";
+
+  constructor(limit: number) {
+    super(
+      `This Search Console window exceeds the ${limit.toLocaleString("en-US")} row analysis limit. Narrow the date range or filters and retry.`,
+    );
+    this.name = "GscMeasurementWindowTooLargeError";
+  }
 }
 
 export interface GscWindow {
@@ -107,6 +124,17 @@ export class GscAlreadyConnectedError extends Error {
   }
 }
 
+/** A stale sync worker lost its claim and may no longer publish or finish. */
+export class GscSyncAttemptLostError extends Error {
+  constructor() {
+    super("This Search Console sync attempt is no longer current.");
+    this.name = "GscSyncAttemptLostError";
+  }
+}
+
+/** Stale RUNNING claims may be retried after workers exceed this lease. */
+export const GSC_SYNC_JOB_LEASE_MS = 30 * 60 * 1_000;
+
 // ═══════════ OAuth state (single-use, server-held) ═══════════
 
 /**
@@ -125,13 +153,7 @@ export async function createOauthState(input: GscOauthStateInput): Promise<void>
        SELECT $1, p.id, $3, $4, $5::timestamptz
          FROM projects p
         WHERE p.id = $2 AND p.organization_id = $1`,
-      [
-        input.organizationId,
-        input.projectId,
-        input.stateHash,
-        input.codeVerifier,
-        input.expiresAt,
-      ],
+      [input.organizationId, input.projectId, input.stateHash, input.codeVerifier, input.expiresAt],
     );
     if (res.rowCount === 0) {
       throw new GscTenantScopeError("Project not found in this organization.");
@@ -260,7 +282,10 @@ export async function updateCredentialTokens(input: {
 }
 
 /** Wipe token material (disconnect / revocation). Returns whether it existed. */
-export async function deleteCredential(organizationId: string, projectId: string): Promise<boolean> {
+export async function deleteCredential(
+  organizationId: string,
+  projectId: string,
+): Promise<boolean> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query(
       `DELETE FROM gsc_project_credentials WHERE organization_id = $1 AND project_id = $2`,
@@ -326,9 +351,19 @@ export async function listConnections(
 ): Promise<GscConnectionRow[]> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<GscConnectionRow>(
-      `SELECT * FROM gsc_connections
-        WHERE organization_id = $1 AND project_id = $2
-        ORDER BY created_at, id`,
+      `SELECT c.id, c.organization_id, c.project_id, c.external_property, c.scope,
+              c.credential_ref, c.status, c.connected_at, c.created_at,
+              (SELECT max(j.completed_at)
+                 FROM gsc_sync_jobs AS j
+                WHERE j.organization_id = c.organization_id
+                  AND j.project_id = c.project_id
+                  AND j.connection_id = c.id
+                  AND j.status = 'COMPLETED'
+                  AND j.completed_at IS NOT NULL
+                  AND j.ingestion_version >= 1) AS last_sync_at
+         FROM gsc_connections AS c
+        WHERE c.organization_id = $1 AND c.project_id = $2
+        ORDER BY c.created_at, c.id`,
       [organizationId, projectId],
     );
     return res.rows;
@@ -341,7 +376,18 @@ export async function getConnection(
 ): Promise<GscConnectionRow | null> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<GscConnectionRow>(
-      `SELECT * FROM gsc_connections WHERE organization_id = $1 AND id = $2`,
+      `SELECT c.id, c.organization_id, c.project_id, c.external_property, c.scope,
+              c.credential_ref, c.status, c.connected_at, c.created_at,
+              (SELECT max(j.completed_at)
+                 FROM gsc_sync_jobs AS j
+                WHERE j.organization_id = c.organization_id
+                  AND j.project_id = c.project_id
+                  AND j.connection_id = c.id
+                  AND j.status = 'COMPLETED'
+                  AND j.completed_at IS NOT NULL
+                  AND j.ingestion_version >= 1) AS last_sync_at
+         FROM gsc_connections AS c
+        WHERE c.organization_id = $1 AND c.id = $2`,
       [organizationId, connectionId],
     );
     return res.rows[0] ?? null;
@@ -364,7 +410,7 @@ export async function disconnectConnection(
   });
 }
 
-/** Mark a connection's last sync (freshness metadata). */
+/** Persist the raw sync timestamp for compatibility; read paths derive trusted freshness from jobs. */
 export async function markConnectionSynced(
   organizationId: string,
   connectionId: string,
@@ -382,10 +428,9 @@ export async function markConnectionSynced(
 // ═══════════ Sync jobs (retry + idempotency) ═══════════
 
 /**
- * Create, or re-arm, the job for a (connection, window).
- *
- * The idempotency key makes a retried window address the SAME row: a second
- * attempt cannot create a twin job that would double-count metrics.
+ * Return the in-flight job for a (connection, window), or create a fresh attempt
+ * after a completed job. Completed attempts stay available until the new one
+ * commits, so a failed refresh cannot erase the last verified measurement.
  */
 export async function createOrReuseJob(input: {
   organizationId: string;
@@ -396,23 +441,67 @@ export async function createOrReuseJob(input: {
   idempotencyKey: string;
 }): Promise<GscSyncJobRow> {
   return withTenant(input.organizationId, async (client) => {
-    const res = await client.query<GscSyncJobRow>(
-      `INSERT INTO gsc_sync_jobs
-         (organization_id, project_id, connection_id, window_start, window_end, idempotency_key)
-       VALUES ($1, $2, $3, $4::date, $5::date, $6)
-       ON CONFLICT (connection_id, idempotency_key) WHERE idempotency_key IS NOT NULL
-       DO UPDATE SET status = 'PENDING',
-                     error_code = NULL,
-                     error_message = NULL,
-                     next_retry_at = NULL
-       RETURNING *`,
+    const lockKey = `${input.organizationId}:${input.projectId}:${input.connectionId}`;
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [lockKey]);
+    const existing = await client.query<GscSyncJobRow>(
+      `SELECT *,
+              to_char(window_start, 'YYYY-MM-DD') AS window_start_iso,
+              to_char(window_end, 'YYYY-MM-DD') AS window_end_iso
+         FROM gsc_sync_jobs
+        WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
+          AND window_start = $4::date AND window_end = $5::date
+        ORDER BY requested_at DESC, id DESC
+        LIMIT 1
+        FOR UPDATE`,
       [
         input.organizationId,
         input.projectId,
         input.connectionId,
         input.windowStart,
         input.windowEnd,
-        input.idempotencyKey,
+      ],
+    );
+    const latest = existing.rows[0];
+    if (latest && latest.status !== "COMPLETED") {
+      if (latest.status === "PENDING") return latest;
+      if (latest.status === "RUNNING") {
+        const startedAt = latest.started_at?.getTime();
+        const leaseExpired =
+          startedAt !== undefined && Date.now() - startedAt >= GSC_SYNC_JOB_LEASE_MS;
+        if (!leaseExpired) return latest;
+      }
+      const rearmed = await client.query<GscSyncJobRow>(
+        `UPDATE gsc_sync_jobs
+            SET status = 'PENDING', started_at = NULL, completed_at = NULL,
+                row_count = 0, error_code = NULL, error_message = NULL,
+                next_retry_at = NULL
+          WHERE organization_id = $1 AND id = $2
+          RETURNING *,
+            to_char(window_start, 'YYYY-MM-DD') AS window_start_iso,
+            to_char(window_end, 'YYYY-MM-DD') AS window_end_iso`,
+        [input.organizationId, latest.id],
+      );
+      const row = rearmed.rows[0];
+      if (row) return row;
+    }
+
+    const idempotencyKey = latest
+      ? `${input.idempotencyKey}:attempt:${randomUUID()}`
+      : input.idempotencyKey;
+    const res = await client.query<GscSyncJobRow>(
+      `INSERT INTO gsc_sync_jobs
+         (organization_id, project_id, connection_id, window_start, window_end, idempotency_key)
+       VALUES ($1, $2, $3, $4::date, $5::date, $6)
+       RETURNING *,
+         to_char(window_start, 'YYYY-MM-DD') AS window_start_iso,
+         to_char(window_end, 'YYYY-MM-DD') AS window_end_iso`,
+      [
+        input.organizationId,
+        input.projectId,
+        input.connectionId,
+        input.windowStart,
+        input.windowEnd,
+        idempotencyKey,
       ],
     );
     const row = res.rows[0];
@@ -424,7 +513,10 @@ export async function createOrReuseJob(input: {
 export async function getJob(organizationId: string, jobId: string): Promise<GscSyncJobRow | null> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<GscSyncJobRow>(
-      `SELECT * FROM gsc_sync_jobs WHERE organization_id = $1 AND id = $2`,
+      `SELECT gsc_sync_jobs.*,
+              to_char(window_start, 'YYYY-MM-DD') AS window_start_iso,
+              to_char(window_end, 'YYYY-MM-DD') AS window_end_iso
+         FROM gsc_sync_jobs WHERE organization_id = $1 AND id = $2`,
       [organizationId, jobId],
     );
     return res.rows[0] ?? null;
@@ -437,12 +529,52 @@ export async function listJobs(
 ): Promise<GscSyncJobRow[]> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<GscSyncJobRow>(
-      `SELECT * FROM gsc_sync_jobs
+      `SELECT gsc_sync_jobs.*,
+              to_char(window_start, 'YYYY-MM-DD') AS window_start_iso,
+              to_char(window_end, 'YYYY-MM-DD') AS window_end_iso
+         FROM gsc_sync_jobs
         WHERE organization_id = $1 AND project_id = $2
         ORDER BY requested_at DESC, id DESC`,
       [organizationId, projectId],
     );
     return res.rows;
+  });
+}
+
+/** Claim a pending job once. All job writers take the property lock before row locks. */
+export async function claimJob(
+  organizationId: string,
+  jobId: string,
+  startedAt: string,
+): Promise<number | null> {
+  return withTenant(organizationId, async (client) => {
+    const job = await client.query<{ project_id: string; connection_id: string }>(
+      `SELECT project_id, connection_id
+         FROM gsc_sync_jobs
+        WHERE organization_id = $1 AND id = $2`,
+      [organizationId, jobId],
+    );
+    const current = job.rows[0];
+    if (!current) return null;
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      `${organizationId}:${current.project_id}:${current.connection_id}`,
+    ]);
+    const claimed = await client.query<{ attempt: number }>(
+      `UPDATE gsc_sync_jobs
+          SET status = 'RUNNING', started_at = $3::timestamptz,
+              completed_at = NULL, attempt = attempt + 1,
+              claim_order = (
+                SELECT COALESCE(MAX(previous.claim_order), 0) + 1
+                  FROM gsc_sync_jobs AS previous
+                 WHERE previous.organization_id = $1
+                   AND previous.project_id = $4
+                   AND previous.connection_id = $5
+              )
+        WHERE organization_id = $1 AND id = $2 AND status = 'PENDING'
+        RETURNING attempt`,
+      [organizationId, jobId, startedAt, current.project_id, current.connection_id],
+    );
+    return claimed.rows[0]?.attempt ?? null;
   });
 }
 
@@ -455,6 +587,8 @@ export interface GscJobPatch {
   errorMessage?: string | null;
   attempt?: number;
   nextRetryAt?: string | null;
+  ingestionVersion?: number;
+  expectedAttempt: number;
 }
 
 export async function updateJob(
@@ -463,6 +597,31 @@ export async function updateJob(
   patch: GscJobPatch,
 ): Promise<boolean> {
   return withTenant(organizationId, async (client) => {
+    const job = await client.query<{
+      project_id: string;
+      connection_id: string;
+      window_start: string;
+      window_end: string;
+      claim_order: string;
+    }>(
+      `SELECT project_id, connection_id,
+              to_char(window_start, 'YYYY-MM-DD') AS window_start,
+              to_char(window_end, 'YYYY-MM-DD') AS window_end,
+              claim_order::text AS claim_order
+         FROM gsc_sync_jobs
+        WHERE organization_id = $1 AND id = $2`,
+      [organizationId, jobId],
+    );
+    const current = job.rows[0];
+    if (!current) return false;
+    // Take locks in the same order as createOrReuseJob, claimJob and metric
+    // persistence: property advisory lock first, then any row lock from UPDATE.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      `${organizationId}:${current.project_id}:${current.connection_id}`,
+    ]);
+    if (patch.status === "RUNNING") {
+      throw new Error("RUNNING is acquired only through claimJob().");
+    }
     const res = await client.query(
       `UPDATE gsc_sync_jobs
           SET status          = COALESCE($3, status),
@@ -472,8 +631,12 @@ export async function updateJob(
               error_code      = CASE WHEN $7::boolean THEN $8 ELSE error_code END,
               error_message   = CASE WHEN $7::boolean THEN $9 ELSE error_message END,
               attempt         = COALESCE($10, attempt),
-              next_retry_at   = CASE WHEN $11::boolean THEN $12::timestamptz ELSE next_retry_at END
-        WHERE organization_id = $1 AND id = $2`,
+              next_retry_at   = CASE WHEN $11::boolean THEN $12::timestamptz ELSE next_retry_at END,
+              ingestion_version = CASE WHEN $14::boolean
+                                       THEN GREATEST(ingestion_version, $15)
+                                       ELSE ingestion_version END
+        WHERE organization_id = $1 AND id = $2
+          AND status = 'RUNNING' AND attempt = $13`,
       [
         organizationId,
         jobId,
@@ -487,9 +650,55 @@ export async function updateJob(
         patch.attempt ?? null,
         patch.nextRetryAt !== undefined,
         patch.nextRetryAt ?? null,
+        patch.expectedAttempt,
+        patch.status === "COMPLETED",
+        patch.ingestionVersion ?? 1,
       ],
     );
-    return (res.rowCount ?? 0) > 0;
+    if ((res.rowCount ?? 0) === 0) return false;
+    if (patch.status === "COMPLETED") {
+      // The fetch that started most recently owns dates covered by both
+      // completed windows, regardless of completion order. Retire older rows
+      // under the property lock in the same transaction as publishing this
+      // attempt, so readers never see duplicate or partially replaced data.
+      await client.query(
+        `DELETE FROM gsc_query_metrics AS m
+          USING gsc_sync_jobs AS old_job
+          WHERE old_job.id = m.sync_job_id
+            AND old_job.organization_id = $1
+            AND old_job.project_id = $2
+            AND old_job.connection_id = $3
+            AND old_job.status = 'COMPLETED'
+            AND old_job.id <> $4
+            AND ROW(old_job.claim_order, old_job.id) <= ROW($7::bigint, $4::uuid)
+            AND m.metric_date BETWEEN $5::date AND $6::date`,
+        [
+          organizationId,
+          current.project_id,
+          current.connection_id,
+          jobId,
+          current.window_start,
+          current.window_end,
+          current.claim_order,
+        ],
+      );
+      await client.query(
+        `DELETE FROM gsc_query_metrics AS m
+          USING gsc_sync_jobs AS newer_job
+          WHERE m.organization_id = $1
+            AND m.project_id = $2
+            AND m.sync_job_id = $4
+            AND newer_job.organization_id = $1
+            AND newer_job.project_id = $2
+            AND newer_job.connection_id = $3
+            AND newer_job.status = 'COMPLETED'
+            AND newer_job.id <> $4
+            AND ROW(newer_job.claim_order, newer_job.id) > ROW($5::bigint, $4::uuid)
+            AND m.metric_date BETWEEN newer_job.window_start AND newer_job.window_end`,
+        [organizationId, current.project_id, current.connection_id, jobId, current.claim_order],
+      );
+    }
+    return true;
   });
 }
 
@@ -509,15 +718,42 @@ export async function persistMetricWindow(input: {
   organizationId: string;
   projectId: string;
   syncJobId: string;
+  expectedAttempt: number;
   window: GscWindow;
   rows: readonly GscMetricInput[];
 }): Promise<number> {
   return withTenant(input.organizationId, async (client) => {
+    const job = await client.query<{ connection_id: string }>(
+      `SELECT connection_id FROM gsc_sync_jobs
+        WHERE organization_id = $1 AND project_id = $2 AND id = $3`,
+      [input.organizationId, input.projectId, input.syncJobId],
+    );
+    const connectionId = job.rows[0]?.connection_id;
+    if (!connectionId) throw new GscTenantScopeError("Sync job not found in this project.");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      `${input.organizationId}:${input.projectId}:${connectionId}`,
+    ]);
+    const claim = await client.query<{ status: string; attempt: number }>(
+      `SELECT status, attempt FROM gsc_sync_jobs
+        WHERE organization_id = $1 AND project_id = $2 AND id = $3`,
+      [input.organizationId, input.projectId, input.syncJobId],
+    );
+    const currentClaim = claim.rows[0];
+    if (currentClaim?.status !== "RUNNING" || currentClaim.attempt !== input.expectedAttempt) {
+      throw new GscSyncAttemptLostError();
+    }
     await client.query(
       `DELETE FROM gsc_query_metrics
-        WHERE organization_id = $1 AND project_id = $2
-          AND metric_date BETWEEN $3::date AND $4::date`,
-      [input.organizationId, input.projectId, input.window.startDate, input.window.endDate],
+       WHERE organization_id = $1 AND project_id = $2
+         AND metric_date BETWEEN $3::date AND $4::date
+         AND sync_job_id = $5`,
+      [
+        input.organizationId,
+        input.projectId,
+        input.window.startDate,
+        input.window.endDate,
+        input.syncJobId,
+      ],
     );
     if (input.rows.length === 0) return 0;
     const dates = input.rows.map((r) => r.date);
@@ -572,6 +808,16 @@ function filterClauses(
   add("page", filters?.page);
   add("device", filters?.device);
   add("country", filters?.country);
+  if (filters?.connectionId) {
+    clauses.push(
+      `sync_job_id IN (
+         SELECT id FROM gsc_sync_jobs
+          WHERE organization_id = $1 AND project_id = $2 AND connection_id = $${index}
+       )`,
+    );
+    params.push(filters.connectionId);
+    index += 1;
+  }
   return { clauses, params };
 }
 
@@ -589,17 +835,24 @@ export async function loadMetricRows(
       `organization_id = $1`,
       `project_id = $2`,
       `metric_date BETWEEN $3::date AND $4::date`,
+      `sync_job_id IN (
+         SELECT id FROM gsc_sync_jobs
+          WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED'
+            AND ingestion_version >= 1
+       )`,
       ...filter.clauses,
     ];
+    const maxRows = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 200_000;
     const res = await client.query<GscMetricInput & { id: string }>(
       `SELECT id, metric_date::text AS date, query, page, country, device,
               clicks, impressions, ctr, position
          FROM gsc_query_metrics
         WHERE ${clauses.join(" AND ")}
-        ORDER BY metric_date, query, page, country, device
-        LIMIT ${Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 200_000}`,
+        ORDER BY metric_date, query, page, country, device, sync_job_id
+        LIMIT ${maxRows + 1}`,
       [organizationId, projectId, window.startDate, window.endDate, ...filter.params],
     );
+    if (res.rows.length > maxRows) throw new GscMeasurementWindowTooLargeError(maxRows);
     return res.rows;
   });
 }
@@ -625,9 +878,20 @@ export async function metricSeries(
       `organization_id = $1`,
       `project_id = $2`,
       `metric_date BETWEEN $3::date AND $4::date`,
+      `sync_job_id IN (
+         SELECT id FROM gsc_sync_jobs
+          WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED'
+            AND ingestion_version >= 1
+       )`,
       ...filter.clauses,
     ];
-    const res = await client.query<{ date: string; clicks: number; impressions: number; ctr: number; position: number }>(
+    const res = await client.query<{
+      date: string;
+      clicks: number;
+      impressions: number;
+      ctr: number;
+      position: number;
+    }>(
       `SELECT metric_date::text AS date,
               sum(clicks)::float8 AS clicks,
               sum(impressions)::float8 AS impressions,
@@ -648,7 +912,7 @@ export async function metricSeries(
 export interface GscFreshness {
   /** Latest metric_date actually persisted for the project (null = no data). */
   latestMetricDate: string | null;
-  /** Most recent completed sync, ISO. */
+  /** Most recent completed, trusted ingestion, ISO. */
   lastSyncAt: string | null;
   /** Rows persisted for the project in total. */
   totalRows: number;
@@ -658,6 +922,7 @@ export interface GscFreshness {
 export async function metricFreshness(
   organizationId: string,
   projectId: string,
+  connectionId?: string,
 ): Promise<GscFreshness> {
   return withTenant(organizationId, async (client) => {
     const res = await client.query<{
@@ -666,12 +931,27 @@ export async function metricFreshness(
       total: number;
     }>(
       `SELECT (SELECT max(metric_date)::text FROM gsc_query_metrics
-                WHERE organization_id = $1 AND project_id = $2) AS latest,
-              (SELECT max(last_sync_at) FROM gsc_connections
-                WHERE organization_id = $1 AND project_id = $2) AS last_sync,
+                WHERE organization_id = $1 AND project_id = $2
+                  AND sync_job_id IN (
+                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED' AND ingestion_version >= 1
+                  )
+                  AND ($3::uuid IS NULL OR sync_job_id IN (
+                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
+                  ))) AS latest,
+              (SELECT max(completed_at) FROM gsc_sync_jobs
+                WHERE organization_id = $1 AND project_id = $2
+                  AND status = 'COMPLETED' AND completed_at IS NOT NULL
+                  AND ingestion_version >= 1
+                  AND ($3::uuid IS NULL OR connection_id = $3)) AS last_sync,
               (SELECT count(*)::int FROM gsc_query_metrics
-                WHERE organization_id = $1 AND project_id = $2) AS total`,
-      [organizationId, projectId],
+                WHERE organization_id = $1 AND project_id = $2
+                  AND sync_job_id IN (
+                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND status = 'COMPLETED' AND ingestion_version >= 1
+                  )
+                  AND ($3::uuid IS NULL OR sync_job_id IN (
+                    SELECT id FROM gsc_sync_jobs WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
+                  ))) AS total`,
+      [organizationId, projectId, connectionId ?? null],
     );
     const row = res.rows[0];
     return {

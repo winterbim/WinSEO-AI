@@ -14,7 +14,17 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    env:
+      DATABASE_URL: postgresql://serpvera:serpvera@localhost:5432/serpvera_test
+      PG_SOCKET_DIR: localhost
+      PGPORT: "5432"
+      PGUSER: serpvera
+      PGPASSWORD: serpvera
+      PGDATABASE: serpvera_test
 
     services:
       postgres:
@@ -35,13 +45,13 @@ jobs:
         ports: ["6379:6379"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
-          version: 9
+          version: 9.15.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -57,25 +67,36 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Build
+        run: pnpm build
+
+      - name: Prepare PostgreSQL roles and schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/bootstrap.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE serpvera_dev"
+          pnpm --filter @serpvera/db db:migrate
+
       - name: Test
         run: pnpm test
-        env:
-          DATABASE_URL: postgresql://serpvera:serpvera@localhost:5432/serpvera_test
-          REDIS_URL: redis://localhost:6379
 
   security:
     name: Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
         with:
-          version: 9
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -84,10 +105,25 @@ jobs:
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high
-        continue-on-error: true
 
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          config-path: .gitleaks.toml
-        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+      - name: Scan all new commits, including merged side branches
+        env:
+          SCAN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCAN_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ! [[ "$SCAN_BASE_SHA" =~ ^[0-9a-f]{40}$ && "$SCAN_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Secret scan received invalid base/head commit identifiers."
+            exit 1
+          fi
+          gitleaks git --config .gitleaks.toml --redact --exit-code 2 \
+            --log-opts="$SCAN_HEAD_SHA ^$SCAN_BASE_SHA" .
+
+      - name: Verify side-branch secret detection
+        run: bash scripts/security/test-gitleaks-branch-scan.sh

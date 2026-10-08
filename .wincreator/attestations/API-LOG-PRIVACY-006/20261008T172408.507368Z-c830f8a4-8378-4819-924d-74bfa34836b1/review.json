@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "API-LOG-PRIVACY-006",
+      "level": "Meso",
+      "text": "The OAuth request-log privacy gate fails closed on raw, encoded, recursively nested, stringified JSON, decode-budget exhaustion, and malformed percent encoding exposed at 1, 9, and 10 decoding layers; it emits generic markers, runs PostgreSQL callback tests, and removes its private temporary directory",
+      "gate": "`env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-postgres-socket PGPORT=5432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-oauth-log-privacy.sh`",
+      "row_sha256": "e99d7552964ba72d9a8da33e5bc1b823fff74051ff845250d50cde088e421e8f",
+      "ledger_sha256_before": "c054db6e9f7ccf2147eb6d2ec9f8221714a69935fd78bf1a9488773f65a8daf2",
+      "status_before": "PENDING"
+    },
+    "capture_digest": "957856747d49192538ce9365ed6fc499b7b1f14e154548cf50346f6e45ef5ec6",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "audit_security_ci",
+    "challenge": "Independently verified the exact attestation and bound challenge packet; current source hashes match. Exercised the scanner with malformed OAuth JSON at 1, 9 and 10 percent-encoding layers, a valid 21-layer payload, nested arrays/objects, and JSON-stringified content; each secret-bearing case returns a leak. The tenth-pass lookahead marks a remaining malformed percent as exhausted. The captured output shows 10 scanner/DB-guard tests and route_tests=21. The route suite builds Fastify with driver postgres and injects the OAuth callback; server.ts installs serializeRequestForLogs, which removes the query. Error and leak paths return generic markers only. The runner sets umask 077, creates and mode-checks a random 0700 temp directory, and removes it on exit; no matching directory remained after capture. Google transport is a test double, so this evidence covers the PostgreSQL callback route, not live Google exchange.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "5a5341088d9544619f55ecb71bdcb8bb797b6f7742830a50fa6c3b79769f1c57"
+    },
+    "reviewed_at": "2026-10-08T17:25:06.020601Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "ec81c3014ca55ec260afa921f714e4fb8f291d53efde41b7f36f66283ced7b89"
+  }
+}

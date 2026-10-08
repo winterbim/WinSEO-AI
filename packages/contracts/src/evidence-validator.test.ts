@@ -129,7 +129,10 @@ void describe("evidence-validator", () => {
     });
 
     void it("rejects invalid classification", () => {
-      const record = { ...validFinding, classification: "MAGICAL_SCORE" } as unknown as FindingRecord;
+      const record = {
+        ...validFinding,
+        classification: "MAGICAL_SCORE",
+      } as unknown as FindingRecord;
       const errors = validateFinding(record, 1);
       const classError = errors.find((e) => e.field === "classification");
       assert.ok(classError);

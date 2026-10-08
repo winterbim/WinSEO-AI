@@ -1,0 +1,129 @@
+{
+  "schema": "wincreator.challenge-packet/v1",
+  "payload": {
+    "attestation_digest": "fec6c07b1084200ef32cceac6affcac4c17368e1dae46968a6edae3664fe5244",
+    "claim": {
+      "id": "GSC-MIGRATION-FENCE-001",
+      "level": "Meso",
+      "text": "The migration chain disables runtime table/column DML on organizations, projects, GSC connections/jobs/metrics during the cleanup barrier, blocks parent cascades, then restores those five tables' runtime DML after guards are removed without PUBLIC write ACLs. Credential and OAuth-state direct writes are outside this fence.",
+      "gate": "Run the full DB package suite against disposable PostgreSQL after applying migrations; inspect the targeted malicious PUBLIC-ACL fixture, migration order, parent-cascade tests, and effective privilege/schema assertions for the five protected tables.",
+      "row_sha256": "fa2fad63a89ed291d14364c8373382d264a7fb6eabe6762467474cd671f588ea",
+      "ledger_sha256_before": "8070f445b0df9caeea358afb3d1590721ab2046f5032e28fc4b81eca03950ec1",
+      "status_before": "PENDING"
+    },
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "pnpm",
+      "--filter",
+      "@serpvera/db",
+      "test"
+    ],
+    "stdout": {
+      "sha256": "260229a14b7807b10eee8cc49276a8420b5fe6cfafae8a3d0aef4a032b1328a2",
+      "original_bytes": 7420,
+      "stored_bytes": 7420,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "ts (0.57282ms)\n  ✔ DB-06: POSITIVE CONTROL — bypass-capable role DOES see both tenants (proves isolation is RLS-caused, not missing data) (0.762438ms)\n  ✔ DB-05: tenant context does NOT leak across pooled connections (2.245116ms)\n✔ RLS isolation (real PostgreSQL) (70.466563ms)\n▶ DB-02 schema integrity (real PostgreSQL catalogs)\n  ✔ catalog contains all expected tables, including finding_evidence (5.383616ms)\n  ✔ migration is recorded in the ledger (1.215744ms)\n  ✔ removes the temporary GSC migration guard after the migration chain (1.607973ms)\n  ✔ restores runtime GSC writes only after the migration guard is removed (0.773539ms)\n  ✔ restores scoped parent deletes after the GSC cascade fence is removed (0.766466ms)\n  ✔ restores app DML without leaving PUBLIC table or column write grants (1.886689ms)\n  ✔ uses a monotonic per-property GSC claim order (4.50071ms)\n  ✔ allows at most one connected Search Console property per project (0.783819ms)\n  ✔ legacy evidence-link tenant trigger is installed and least-privileged (0.876504ms)\n  ✔ patch storage accepts the complete lifecycle vocabulary (0.921107ms)\n  ✔ the Action Center no longer accepts an unverified IMPLEMENTED state (1.18748ms)\n  ✔ every tenant-owned table has organization_id NOT NULL and its declared timestamp (18.743089ms)\n  ✔ primary keys exist on core tables (0.913864ms)\n  ✔ foreign keys enforce organization ownership on tenant tables (3.79534ms)\n  ✔ unique constraints: users.email, organizations.slug (1.208039ms)\n  ✔ indexes exist on hot columns (1.175498ms)\n  ✔ every tenant-owned table has ENABLED and FORCED RLS (0.670294ms)\n  ✔ every tenant-owned table has a tenant_isolation policy (0.851065ms)\n  ✔ finding_evidence has composite tenant foreign keys to both endpoints (0.780012ms)\n  ✔ runtime role is non-superuser and non-bypassrls (0.675194ms)\n✔ DB-02 schema integrity (real PostgreSQL catalogs) (57.498219ms)\nℹ tests 75\nℹ suites 9\nℹ pass 75\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1729.876897\n"
+    },
+    "stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "files": [
+      {
+        "path": "packages/db/migrations/0019w_gsc_effective_acl_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab",
+        "bytes": 4715
+      },
+      {
+        "path": "packages/db/migrations/0019x_gsc_parent_delete_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "2fb140de2acb37f57682e2313bc1e21c637144bf035c9b8989c6222d2d4aa196",
+        "bytes": 1745
+      },
+      {
+        "path": "packages/db/migrations/0020_gsc_sync_claim_order.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "9f3406bb29e1b7ec18cdbf4674d86ab003d25b936b0fbdba0d4b3631c20f9139",
+        "bytes": 1965
+      },
+      {
+        "path": "packages/db/migrations/0021_remove_gsc_sync_migration_guard.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "45c69245e9b64e078eae4ffda36cbea4e0d3709ecc812be6eb68a4e3d714695e",
+        "bytes": 532
+      },
+      {
+        "path": "packages/db/migrations/0022_restore_gsc_runtime_writes.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "916acc784370a3f0f88920882876ac1314339126bccb56366e792cb868b850b6",
+        "bytes": 850
+      },
+      {
+        "path": "packages/db/migrations/0023_restore_gsc_parent_deletes.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "7ea3425832e60c8a1e7d10cf6320dd7055d8068b8ec172b6fb8d63c6a4dd2409",
+        "bytes": 912
+      },
+      {
+        "path": "packages/db/migrations/0024_restore_gsc_acl_baseline.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "dc8b495a68fdf8070f6a762018a4dd8e64ce403174d94cd47c4146607f8f6a54",
+        "bytes": 1186
+      },
+      {
+        "path": "packages/db/src/gsc-claim-order-migration.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "b93a42916f4b91a78cf83f2fbcc37f2d636ce94c55cdd0eaa633abdf253ae511",
+        "bytes": 21410
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "10ea1bf8042a05254f7bb7811e96af242195734b0e550814c4d53fdbe2283e4e",
+        "bytes": 23401
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "submodules": "",
+      "untracked_digest": "3eaac1175572c8a922a299b028f111c1e2aa282b81ddf4d591dfe39b423589c3",
+      "worktree_digest": "0bc4768f536158bc6134ea1bc25804db3f4c295c0fe83ae98f95eb1cdd8e8424"
+    },
+    "policy": {
+      "tier": "standard",
+      "private": false
+    }
+  },
+  "digest": "aa92f332b0f3c37c341f5db1c5f243c462c7f62d2ff0d430a316db68b9821932"
+}

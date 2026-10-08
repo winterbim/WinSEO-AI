@@ -69,7 +69,8 @@ export default async function SearchPerformancePage({
   }
 
   const connected = connections.find((c) => c.status === "CONNECTED");
-  const hasData = summary.freshness.totalRows > 0;
+  const hasData =
+    summary.syncCoverage === "SYNCED" && summary.series.length > 0 && summary.totals !== null;
 
   return (
     <div className="space-y-6">
@@ -107,7 +108,9 @@ export default async function SearchPerformancePage({
                 >
                   {c.status}
                 </span>
-                <span className="text-xs text-slate-700">last sync {fmtDateTime(c.lastSyncAt)}</span>
+                <span className="text-xs text-slate-700">
+                  last sync {fmtDateTime(c.lastSyncAt)}
+                </span>
               </li>
             ))}
           </ul>
@@ -117,8 +120,12 @@ export default async function SearchPerformancePage({
         </div>
       </section>
 
-      {!hasData ? (
-        <EmptyCard text="No measured Search Analytics rows for this project yet. Connect a property and run a sync — until then this page stays empty by design." />
+      {summary.syncCoverage === "INCOMPLETE" ? (
+        <EmptyCard text="The Search Console sync does not cover this entire window. Metrics are withheld; sync the missing dates before using them." />
+      ) : summary.syncCoverage === "NO_UNIQUE_PROPERTY" ? (
+        <EmptyCard text="Connect exactly one Search Console property to measure this project. No metrics are shown until a property is connected." />
+      ) : !hasData || !summary.totals ? (
+        <EmptyCard text="No Search Analytics rows were returned for this fully synchronized window. That is not evidence that each metric was zero." />
       ) : (
         <>
           <section aria-label="Totals" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -143,24 +150,40 @@ export default async function SearchPerformancePage({
               impressions.
             </p>
             <div className="mt-3">
-              <MetricTable rows={summary.series} label="Daily clicks, impressions, CTR and average position" />
+              <MetricTable
+                rows={summary.series}
+                label="Daily clicks, impressions, CTR and average position"
+              />
             </div>
           </section>
         </>
       )}
 
       {jobs.length > 0 && (
-        <section className="rounded-lg border border-line bg-panel p-5" aria-label="Synchronization jobs">
+        <section
+          className="rounded-lg border border-line bg-panel p-5"
+          aria-label="Synchronization jobs"
+        >
           <h2 className="font-semibold">Synchronization jobs</h2>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-                  <th scope="col" className="py-2 pr-4">Window</th>
-                  <th scope="col" className="py-2 pr-4">Status</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Rows</th>
-                  <th scope="col" className="py-2 pr-4 text-right">Attempt</th>
-                  <th scope="col" className="py-2">Detail</th>
+                  <th scope="col" className="py-2 pr-4">
+                    Window
+                  </th>
+                  <th scope="col" className="py-2 pr-4">
+                    Status
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Rows
+                  </th>
+                  <th scope="col" className="py-2 pr-4 text-right">
+                    Attempt
+                  </th>
+                  <th scope="col" className="py-2">
+                    Detail
+                  </th>
                 </tr>
               </thead>
               <tbody>

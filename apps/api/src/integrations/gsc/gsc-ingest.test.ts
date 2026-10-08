@@ -107,21 +107,55 @@ void describe("GSC-005 ingestion — happy path and idempotency", () => {
     assert.ok(refreshed?.lastSyncAt, "connection freshness advances on completion");
   });
 
-  void it("reuses ONE job per (connection, window) — retries cannot double-count", async () => {
+  void it("keeps completed attempts immutable and replaces the window on a fresh sync", async () => {
     const { store, deps } = await harness({
       analyticsRows: [metricRow({ date: "2026-09-15" })],
     });
 
     const first = await runGscIngest(deps, FIXTURE_WINDOW);
     const second = await runGscIngest(deps, FIXTURE_WINDOW);
-    assert.equal(first.jobId, second.jobId, "the same window re-arms the same job row");
-    assert.equal((await store.listJobs(ORG, PROJECT)).length, 1);
+    assert.notEqual(first.jobId, second.jobId, "a completed attempt remains immutable history");
+    assert.equal((await store.listJobs(ORG, PROJECT)).length, 2);
     assert.equal(
       store.jobs.get(first.jobId)?.idempotencyKey,
       `${FIXTURE_WINDOW.startDate}:${FIXTURE_WINDOW.endDate}`,
       "the idempotency key is derived from the window itself",
     );
-    assert.equal(store.metrics.length, 1, "window replacement, not accumulation");
+    assert.equal(store.metrics.length, 1, "the completed refresh replaces, not accumulates, rows");
+  });
+
+  void it("only one concurrent request fetches a shared in-flight window", async () => {
+    const { store, transport, deps } = await harness({
+      analyticsRows: [metricRow({ date: "2026-09-15" })],
+    });
+    const originalQuery = transport.querySearchAnalytics.bind(transport);
+    let releaseQuery!: () => void;
+    let markQueryStarted!: () => void;
+    const queryGate = new Promise<void>((resolve) => {
+      releaseQuery = resolve;
+    });
+    const queryStarted = new Promise<void>((resolve) => {
+      markQueryStarted = resolve;
+    });
+    let queryCalls = 0;
+    transport.querySearchAnalytics = async (accessToken, property, request) => {
+      queryCalls += 1;
+      markQueryStarted();
+      await queryGate;
+      return originalQuery(accessToken, property, request);
+    };
+
+    const firstRun = runGscIngest(deps, FIXTURE_WINDOW);
+    await queryStarted;
+    const competingRun = await runGscIngest(deps, FIXTURE_WINDOW);
+    assert.equal(competingRun.status, "RUNNING");
+    assert.equal(queryCalls, 1, "the competing request does not call Google");
+
+    releaseQuery();
+    const firstOutcome = await firstRun;
+    assert.equal(firstOutcome.status, "COMPLETED");
+    assert.equal((await store.listJobs(ORG, PROJECT)).length, 1);
+    assert.equal(store.metrics.length, 1);
   });
 
   void it("atomically replaces a window (Google revises PRELIMINARY data)", async () => {
@@ -142,14 +176,58 @@ void describe("GSC-005 ingestion — happy path and idempotency", () => {
     assert.equal(store.metrics[0]?.clicks, 7, "revised values overwrite stale ones");
   });
 
-  void it("caps collection at maxRows so one job cannot exhaust memory", async () => {
+  void it("fails without persisting when results exceed the cap", async () => {
     const rows = Array.from({ length: 5 }, (_, i) =>
       metricRow({ date: `2026-09-1${i}`, query: `q${i}`, page: `https://example.com/p${i}` }),
     );
-    const { deps } = await harness({ analyticsRows: rows }, { rowLimit: 2, maxRows: 3 });
+    const { store, deps } = await harness({ analyticsRows: rows }, { rowLimit: 2, maxRows: 3 });
+    const outcome = await runGscIngest(deps, FIXTURE_WINDOW);
+    assert.equal(outcome.status, "FAILED");
+    assert.equal(outcome.error?.code, "RESULT_LIMIT_EXCEEDED");
+    assert.equal(outcome.error.retryable, false);
+    assert.equal(outcome.rowCount, 0);
+    assert.equal(store.metrics.length, 0, "a truncated window is never persisted as complete");
+  });
+
+  void it("accepts exactly the row cap only after an empty sentinel page", async () => {
+    const rows = Array.from({ length: 3 }, (_, i) =>
+      metricRow({ date: `2026-09-1${i}`, query: `q${i}`, page: `https://example.com/p${i}` }),
+    );
+    const { store, transport, deps } = await harness(
+      { analyticsRows: rows },
+      { rowLimit: 2, maxRows: 3 },
+    );
     const outcome = await runGscIngest(deps, FIXTURE_WINDOW);
     assert.equal(outcome.status, "COMPLETED");
     assert.equal(outcome.rowCount, 3);
+    assert.deepEqual(
+      transport.analyticsRequests.map((request) => [request.startRow, request.rowLimit]),
+      [
+        [0, 2],
+        [2, 2],
+        [3, 1],
+      ],
+      "the final one-row request proves the cap was not silently truncated",
+    );
+    assert.equal(store.metrics.length, 3);
+  });
+
+  void it("accepts a short final page below the cap without skipping the empty terminator", async () => {
+    const rows = Array.from({ length: 3 }, (_, i) =>
+      metricRow({ date: `2026-09-1${i}`, query: `q${i}`, page: `https://example.com/p${i}` }),
+    );
+    const { store, transport, deps } = await harness(
+      { analyticsRows: rows },
+      { rowLimit: 4, maxRows: 5 },
+    );
+    const outcome = await runGscIngest(deps, FIXTURE_WINDOW);
+    assert.equal(outcome.status, "COMPLETED");
+    assert.equal(outcome.rowCount, 3);
+    assert.deepEqual(
+      transport.analyticsRequests.map((request) => request.startRow),
+      [0, 3],
+    );
+    assert.equal(store.metrics.length, 3);
   });
 });
 
@@ -215,7 +293,11 @@ void describe("GSC-005 ingestion — credentials, retries and quota", () => {
     assert.equal(failure.retryable, false);
     assert.equal(outcome.nextRetryAt, null);
     assert.equal(outcome.rowCount, 0);
-    assert.equal(store.metrics.length, 0, "an empty input yields an empty output — never a fixture");
+    assert.equal(
+      store.metrics.length,
+      0,
+      "an empty input yields an empty output — never a fixture",
+    );
     assert.equal(store.persistCalls.length, 0, "nothing is persisted without data");
     const job = await store.getJob(ORG, outcome.jobId);
     assert.equal(job?.status, "CREDENTIALS_REQUIRED");
@@ -327,6 +409,26 @@ void describe("GSC-005 ingestion — credentials, retries and quota", () => {
     assert.equal(canRetryJob({ status: "FAILED", nextRetryAt: null }, NOW), true);
     assert.equal(canRetryJob({ status: "FAILED", nextRetryAt: future }, NOW), false);
     assert.equal(canRetryJob({ status: "RUNNING", nextRetryAt: null }, NOW), false);
+    assert.equal(
+      canRetryJob(
+        { status: "RUNNING", nextRetryAt: null, startedAt: new Date(NOW - 60_000).toISOString() },
+        NOW,
+      ),
+      false,
+      "an active lease is not manually retryable",
+    );
+    assert.equal(
+      canRetryJob(
+        {
+          status: "RUNNING",
+          nextRetryAt: null,
+          startedAt: new Date(NOW - 60 * 60_000).toISOString(),
+        },
+        NOW,
+      ),
+      true,
+      "an expired lease can be reclaimed",
+    );
     assert.equal(canRetryJob({ status: "COMPLETED", nextRetryAt: null }, NOW), false);
     assert.equal(canRetryJob({ status: "CREDENTIALS_REQUIRED", nextRetryAt: null }, NOW), false);
   });

@@ -12,6 +12,7 @@ export {
 export type { DbConfig } from "./client.ts";
 
 export { setTenant, clearTenant } from "./tenant.ts";
+export { publicEvidenceMetadata } from "./evidence-metadata.ts";
 
 export {
   createUser,
@@ -22,6 +23,7 @@ export {
   getMembershipRole,
   listOrganizationsForUser,
   createProject,
+  createProjectWithIdempotencyKey,
   getProject,
   listProjects,
   createPublicScan,
@@ -38,11 +40,15 @@ export {
   listEvidence,
   listCrawlRuns,
   createDetectedAction,
+  createMeasuredGscWorkflow,
+  GscMeasurementSnapshotChangedError,
+  GscMeasurementWorkflowAdvancedError,
 } from "./repositories.ts";
 export type {
   UserRow,
   OrganizationRow,
   ProjectRow,
+  IdempotentProjectCreation,
   PublicScanRow,
   FindingInsert,
   FindingRow,
@@ -76,6 +82,7 @@ export {
   createOrReuseJob,
   getJob,
   listJobs,
+  claimJob,
   updateJob,
   persistMetricWindow,
   loadMetricRows,
@@ -83,6 +90,9 @@ export {
   metricFreshness,
   GscTenantScopeError,
   GscAlreadyConnectedError,
+  GscMeasurementWindowTooLargeError,
+  GscSyncAttemptLostError,
+  GSC_SYNC_JOB_LEASE_MS,
 } from "./gsc.ts";
 export type {
   GscCredentialRow,
@@ -97,7 +107,7 @@ export type {
   GscOauthStateInput,
 } from "./gsc.ts";
 
-export { consumePublicScanRateLimit } from "./rate-limit.ts";
+export { consumeRateLimitWindow, releaseRateLimitWindow } from "./rate-limit.ts";
 export type { RateLimitWindowHit } from "./rate-limit.ts";
 
 export { createPatch, getPatch, listPatches, updatePatch } from "./patches.ts";
@@ -110,3 +120,15 @@ export {
   disableMfa,
 } from "./mfa.ts";
 export type { MfaRow } from "./mfa.ts";
+
+export {
+  createAiVisibilityImport,
+  getAiVisibilityImport,
+  listAiVisibilityCaptures,
+  listAiVisibilityImports,
+  listAiVisibilityStats,
+  AiVisibilityDuplicateImportError,
+  AiVisibilityPermissionError,
+  AiVisibilityProjectScopeError,
+} from "./ai-visibility.ts";
+export type { AiVisibilityCaptureRow, AiVisibilityImportRow } from "./ai-visibility.ts";

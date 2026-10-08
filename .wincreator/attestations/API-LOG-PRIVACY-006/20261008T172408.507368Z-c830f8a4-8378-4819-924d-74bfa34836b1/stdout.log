@@ -1,0 +1,24 @@
+▶ disposable PostgreSQL target guard
+  ✔ accepts loopback URLs for the development and test databases (1.188733ms)
+  ✔ rejects remote hosts, production database names, and malformed URLs (0.370039ms)
+✔ disposable PostgreSQL target guard (3.270223ms)
+▶ OAuth request log scanner
+  ✔ accepts a callback request after the entire query string is stripped (6.365465ms)
+  ✔ rejects a callback query even when parameter names are encoded (0.308772ms)
+  ✔ rejects structured code and state fields (0.4132ms)
+  ✔ rejects JSON-stringified and percent-encoded credential objects inside log fields (0.313592ms)
+  ✔ fails closed when a log field remains percent-encoded beyond the decode limit (0.345522ms)
+  ✔ fails closed on malformed percent encoding at every bounded decode boundary (0.407419ms)
+  ✔ rejects a code or state query on any logged request URL (0.236136ms)
+  ✔ fails closed on unreadable logs and detects matching content without exposing it (1.733122ms)
+✔ OAuth request log scanner (12.575526ms)
+ℹ tests 10
+ℹ suites 2
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 126.174384
+OAUTH_QUERY_LOG_SCAN_OK route_tests=21
+GSC_ROUTE_TESTS_OK

@@ -5,6 +5,7 @@
 // production connects as serpvera_app with a vault-provided password.
 
 import { createHmac } from "node:crypto";
+import { parseStoredTemplateGroups } from "./template-groups.ts";
 import {
   configurePool,
   closePool,
@@ -15,6 +16,7 @@ import {
   getOrganizationForMember,
   getMembershipRole,
   createProject,
+  createProjectWithIdempotencyKey,
   getProject,
   createPublicScan,
   getPublicScan,
@@ -23,6 +25,7 @@ import {
   finishCrawlRun as finishCrawlRunRow,
   addFinding as insertFindingRow,
   addEvidence as insertEvidenceRow,
+  createMeasuredGscWorkflow as insertMeasuredGscWorkflow,
   listFindings as selectFindingRows,
   getFinding as selectFindingRow,
   getFindingEvidence as selectFindingEvidence,
@@ -47,6 +50,7 @@ import {
   disconnectConnection as markConnectionDisconnected,
   markConnectionSynced as touchConnectionSync,
   createOrReuseJob as insertOrReuseJob,
+  claimJob as claimGscJob,
   getJob as selectJob,
   listJobs as selectJobs,
   updateJob as updateJobRow,
@@ -64,11 +68,23 @@ import {
   consumeMfaCounter as consumeMfaRowCounter,
   disableMfa as disableMfaRow,
   query,
-  consumePublicScanRateLimit,
+  consumeRateLimitWindow,
+  releaseRateLimitWindow,
+  healthCheck,
+  createAiVisibilityImport as insertAiVisibilityImport,
+  getAiVisibilityImport as selectAiVisibilityImport,
+  listAiVisibilityCaptures as selectAiVisibilityCaptures,
+  listAiVisibilityImports as selectAiVisibilityImports,
+  listAiVisibilityStats as selectAiVisibilityStats,
+  type AiVisibilityCaptureRow,
+  type AiVisibilityImportRow,
   type DbConfig,
+  publicEvidenceMetadata,
 } from "@serpvera/db";
 import type {
   ApiStores,
+  StoredAiVisibilityCapture,
+  StoredAiVisibilityImport,
   StoredGscConnection,
   StoredGscCredential,
   StoredGscJob,
@@ -80,6 +96,272 @@ import type {
 import type { PatchProposal } from "../autofix/workflow.ts";
 import { DuplicateEmailError, DuplicateSlugError } from "./types.ts";
 import { isLoopback } from "../rate-limit.ts";
+
+export const REQUIRED_SCHEMA_MARKERS = [
+  "proven_patch_lifecycle",
+  "tenant_safe_finding_evidence",
+] as const;
+
+export const REQUIRED_PATCH_STATUSES = [
+  "detected",
+  "proposed",
+  "previewed",
+  "approved",
+  "deploying",
+  "deployed",
+  "deployed_manually",
+  "live_verified",
+  "google_observed",
+  "measuring",
+  "measured",
+  "rolled_back",
+  "superseded",
+  "drifted",
+  "failed",
+  "rejected",
+] as const;
+
+export const REQUIRED_LATEST_MIGRATION = "0032_gsc_trust_reset";
+
+export type RequiredSchemaMarker = (typeof REQUIRED_SCHEMA_MARKERS)[number];
+
+export interface RequiredSchemaCatalogRow {
+  patchLifecycle: boolean;
+  evidenceTableExists: boolean;
+  evidenceOrganizationId: boolean;
+  evidenceOrganizationIdNotNull: boolean;
+  evidenceRlsEnabled: boolean;
+  evidenceRlsForced: boolean;
+  evidenceFindingTenantForeignKey: boolean;
+  evidenceItemTenantForeignKey: boolean;
+  evidenceTenantPolicy: boolean;
+}
+
+export interface DatabaseReadiness {
+  database: "ready" | "unavailable";
+  migrationState: "ready" | "pending" | "unavailable" | "not_checked";
+  latestMigration: string | null;
+  requiredMigration: string;
+  requiredSchemaChecks: "ready" | "pending" | "unavailable" | "not_checked";
+  verifiedSchemaMarkers: RequiredSchemaMarker[];
+  requiredSchemaMarkers: readonly RequiredSchemaMarker[];
+}
+
+export interface MigrationReadinessCatalogRow {
+  patchLifecycleApplied: boolean;
+  findingEvidenceRlsApplied: boolean;
+  readinessViewMigrationApplied: boolean;
+  projectCreateIdempotencyApplied: boolean;
+  currentReadinessViewApplied: boolean;
+  gscPropertyScopingApplied: boolean;
+  latestVersion: string | null;
+}
+
+interface SchemaCatalogQueryRow extends Omit<RequiredSchemaCatalogRow, "patchLifecycle"> {
+  patchLifecycleDefinition: string | null;
+}
+
+export function hasCompletePatchLifecycleConstraint(definition: string | null): boolean {
+  return (
+    definition !== null &&
+    REQUIRED_PATCH_STATUSES.every((status) => definition.includes(`'${status}'`))
+  );
+}
+
+export function verifiedSchemaMarkers(row: RequiredSchemaCatalogRow): RequiredSchemaMarker[] {
+  const markers: RequiredSchemaMarker[] = [];
+  if (row.patchLifecycle) markers.push("proven_patch_lifecycle");
+  if (
+    row.evidenceTableExists &&
+    row.evidenceOrganizationId &&
+    row.evidenceOrganizationIdNotNull &&
+    row.evidenceRlsEnabled &&
+    row.evidenceRlsForced &&
+    row.evidenceFindingTenantForeignKey &&
+    row.evidenceItemTenantForeignKey &&
+    row.evidenceTenantPolicy
+  ) {
+    markers.push("tenant_safe_finding_evidence");
+  }
+  return markers;
+}
+
+export function readinessFromSchemaCatalog(row: RequiredSchemaCatalogRow): DatabaseReadiness {
+  const markers = verifiedSchemaMarkers(row);
+  const complete = REQUIRED_SCHEMA_MARKERS.every((marker) => markers.includes(marker));
+  return {
+    database: "ready",
+    migrationState: "not_checked",
+    latestMigration: null,
+    requiredMigration: REQUIRED_LATEST_MIGRATION,
+    requiredSchemaChecks: complete ? "ready" : "pending",
+    verifiedSchemaMarkers: markers,
+    requiredSchemaMarkers: REQUIRED_SCHEMA_MARKERS,
+  };
+}
+
+export function migrationReadinessFromCatalog(
+  row: MigrationReadinessCatalogRow,
+): Pick<DatabaseReadiness, "migrationState" | "latestMigration" | "requiredMigration"> {
+  const versionNumber = (version: string | null): number | null => {
+    const match = version?.match(/^(\d+)_/);
+    return match ? Number(match[1]) : null;
+  };
+  const latestNumber = versionNumber(row.latestVersion);
+  const requiredNumber = versionNumber(REQUIRED_LATEST_MIGRATION);
+  const ready =
+    row.patchLifecycleApplied &&
+    row.findingEvidenceRlsApplied &&
+    row.readinessViewMigrationApplied &&
+    row.projectCreateIdempotencyApplied &&
+    row.currentReadinessViewApplied &&
+    row.gscPropertyScopingApplied &&
+    latestNumber !== null &&
+    requiredNumber !== null &&
+    latestNumber >= requiredNumber;
+  return {
+    migrationState: ready ? "ready" : "pending",
+    latestMigration: row.latestVersion,
+    requiredMigration: REQUIRED_LATEST_MIGRATION,
+  };
+}
+
+async function readRequiredSchemaCatalog(): Promise<RequiredSchemaCatalogRow> {
+  // The restricted runtime role cannot read schema_migrations. Check the
+  // required application schema directly through catalogs. This deliberately
+  // reports schema markers, not the migration ledger.
+  const { rows } = await query<SchemaCatalogQueryRow>(
+    `SELECT
+       (
+         SELECT pg_get_constraintdef(oid) FROM pg_constraint
+          WHERE conrelid = to_regclass('public.patch_proposals')
+            AND conname = 'patch_proposals_status_check'
+            AND convalidated
+       ) AS "patchLifecycleDefinition",
+       c.oid IS NOT NULL AS "evidenceTableExists",
+       EXISTS (
+         SELECT 1 FROM pg_attribute
+          WHERE attrelid = c.oid AND attname = 'organization_id'
+            AND attnum > 0 AND NOT attisdropped
+       ) AS "evidenceOrganizationId",
+       EXISTS (
+         SELECT 1 FROM pg_attribute
+          WHERE attrelid = c.oid AND attname = 'organization_id'
+            AND attnum > 0 AND NOT attisdropped AND attnotnull
+       ) AS "evidenceOrganizationIdNotNull",
+       COALESCE(c.relrowsecurity, false) AS "evidenceRlsEnabled",
+       COALESCE(c.relforcerowsecurity, false) AS "evidenceRlsForced",
+       EXISTS (
+         SELECT 1 FROM pg_constraint
+          WHERE conrelid = c.oid AND contype = 'f'
+            AND convalidated
+            AND regexp_replace(lower(pg_get_constraintdef(oid)), '[[:space:]]|::(text|uuid)', '', 'g')
+                LIKE '%foreignkey(organization_id,finding_id)referencesfindings(organization_id,id)%'
+       ) AS "evidenceFindingTenantForeignKey",
+       EXISTS (
+         SELECT 1 FROM pg_constraint
+          WHERE conrelid = c.oid AND contype = 'f'
+            AND convalidated
+            AND regexp_replace(lower(pg_get_constraintdef(oid)), '[[:space:]]|::(text|uuid)', '', 'g')
+                LIKE '%foreignkey(organization_id,evidence_id)referencesevidence_items(organization_id,id)%'
+       ) AS "evidenceItemTenantForeignKey",
+       EXISTS (
+         SELECT 1 FROM pg_policies p
+          WHERE p.schemaname = 'public'
+            AND p.tablename = 'finding_evidence'
+            AND p.policyname = 'tenant_isolation'
+            AND p.cmd = 'ALL'
+            AND regexp_replace(lower(coalesce(p.qual, '')), '[[:space:]()]|::(text|uuid)', '', 'g')
+                = 'organization_id=nullifcurrent_setting' || chr(39) || 'app.current_organization_id' || chr(39) || ',true,' || chr(39) || chr(39)
+            AND regexp_replace(lower(coalesce(p.with_check, '')), '[[:space:]()]|::(text|uuid)', '', 'g')
+                = 'organization_id=nullifcurrent_setting' || chr(39) || 'app.current_organization_id' || chr(39) || ',true,' || chr(39) || chr(39)
+       ) AS "evidenceTenantPolicy"
+     FROM (SELECT to_regclass('public.finding_evidence') AS oid) rel
+     LEFT JOIN pg_class c ON c.oid = rel.oid`,
+  );
+  if (!rows[0]) throw new Error("Required schema catalog query returned no row.");
+  const { patchLifecycleDefinition, ...schema } = rows[0];
+  return {
+    ...schema,
+    patchLifecycle: hasCompletePatchLifecycleConstraint(patchLifecycleDefinition),
+  };
+}
+
+async function readMigrationReadinessCatalog(): Promise<MigrationReadinessCatalogRow> {
+  const { rows } = await query<MigrationReadinessCatalogRow>(
+    `SELECT patch_lifecycle_applied AS "patchLifecycleApplied",
+            finding_evidence_rls_applied AS "findingEvidenceRlsApplied",
+            readiness_view_migration_applied AS "readinessViewMigrationApplied",
+            project_create_idempotency_applied AS "projectCreateIdempotencyApplied",
+            current_readiness_view_applied AS "currentReadinessViewApplied",
+            gsc_property_scoping_applied AS "gscPropertyScopingApplied",
+            latest_version AS "latestVersion"
+       FROM public.runtime_schema_migration_state`,
+  );
+  if (!rows[0]) throw new Error("Runtime migration readiness view returned no row.");
+  return rows[0];
+}
+
+export interface DatabaseReadinessDependencies {
+  healthCheck: () => Promise<boolean>;
+  readSchemaCatalog: () => Promise<RequiredSchemaCatalogRow>;
+  readMigrationCatalog: () => Promise<MigrationReadinessCatalogRow>;
+}
+
+export async function inspectDatabaseReadiness(
+  dependencies: DatabaseReadinessDependencies = {
+    healthCheck,
+    readSchemaCatalog: readRequiredSchemaCatalog,
+    readMigrationCatalog: readMigrationReadinessCatalog,
+  },
+): Promise<DatabaseReadiness> {
+  let available = false;
+  try {
+    available = await dependencies.healthCheck();
+  } catch {
+    // A failed ping is an unavailable database, not an endpoint exception.
+  }
+  if (!available) {
+    return {
+      database: "unavailable",
+      migrationState: "not_checked",
+      latestMigration: null,
+      requiredMigration: REQUIRED_LATEST_MIGRATION,
+      requiredSchemaChecks: "not_checked",
+      verifiedSchemaMarkers: [],
+      requiredSchemaMarkers: REQUIRED_SCHEMA_MARKERS,
+    };
+  }
+
+  const [schemaResult, migrationResult] = await Promise.allSettled([
+    dependencies.readSchemaCatalog(),
+    dependencies.readMigrationCatalog(),
+  ]);
+  const schema =
+    schemaResult.status === "fulfilled"
+      ? readinessFromSchemaCatalog(schemaResult.value)
+      : {
+          requiredSchemaChecks: "unavailable" as const,
+          verifiedSchemaMarkers: [] as RequiredSchemaMarker[],
+          requiredSchemaMarkers: REQUIRED_SCHEMA_MARKERS,
+        };
+  const migration =
+    migrationResult.status === "fulfilled"
+      ? migrationReadinessFromCatalog(migrationResult.value)
+      : {
+          migrationState:
+            (migrationResult.reason as { code?: string } | null)?.code === "42P01"
+              ? ("pending" as const)
+              : ("unavailable" as const),
+          latestMigration: null,
+          requiredMigration: REQUIRED_LATEST_MIGRATION,
+        };
+  return {
+    database: "ready",
+    ...schema,
+    ...migration,
+  };
+}
 
 /**
  * Translate a PostgreSQL unique violation (SQLSTATE 23505) into a typed domain
@@ -175,6 +457,17 @@ export function createDbStores(): ApiStores {
         const row = await createProject(organizationId, name, primaryDomain);
         return toStoredProject(row);
       },
+      async createProjectWithIdempotencyKey(organizationId, name, primaryDomain, idempotencyKey) {
+        const result = await createProjectWithIdempotencyKey(
+          organizationId,
+          name,
+          primaryDomain,
+          idempotencyKey,
+        );
+        return result.kind === "conflict"
+          ? result
+          : { kind: result.kind, project: toStoredProject(result.project) };
+      },
       async getProject(organizationId, projectId) {
         // withTenant sets the GUC to organizationId; RLS filters foreign rows to
         // zero, so this returns null for another tenant's project.
@@ -205,7 +498,7 @@ export function createDbStores(): ApiStores {
     },
 
     rateLimits: {
-      async hit(ip, limitPerWindow) {
+      async hit(ip, limitPerWindow, scope = "public-scan-ip") {
         if (isLoopback(ip)) {
           return { allowed: true, remaining: limitPerWindow, retryAfterSeconds: 0 };
         }
@@ -214,15 +507,27 @@ export function createDbStores(): ApiStores {
           throw new Error("AUTH_SECRET is required for privacy-preserving rate-limit keys.");
         }
         const bucketKey = createHmac("sha256", secret)
-          .update("public-scan-ip:v1:")
+          .update(`${scope}:v1:`)
           .update(ip)
           .digest("hex");
-        const hit = await consumePublicScanRateLimit(bucketKey, limitPerWindow);
+        const hit = await consumeRateLimitWindow(bucketKey, limitPerWindow);
         return {
           allowed: hit.count <= limitPerWindow,
           remaining: Math.max(0, limitPerWindow - hit.count),
           retryAfterSeconds: hit.count <= limitPerWindow ? 0 : hit.retryAfterSeconds,
         };
+      },
+      async release(ip, _limitPerWindow, scope = "public-scan-ip") {
+        if (isLoopback(ip)) return;
+        const secret = process.env.AUTH_SECRET;
+        if (!secret) {
+          throw new Error("AUTH_SECRET is required for privacy-preserving rate-limit keys.");
+        }
+        const bucketKey = createHmac("sha256", secret)
+          .update(`${scope}:v1:`)
+          .update(ip)
+          .digest("hex");
+        await releaseRateLimitWindow(bucketKey);
       },
     },
 
@@ -327,8 +632,28 @@ export function createDbStores(): ApiStores {
       async createCrawlRun(organizationId, projectId, mode) {
         return createCrawlRunRow(organizationId, projectId, mode);
       },
-      async finishCrawlRun(organizationId, runId, status, pagesCrawled, pagesFailed) {
-        await finishCrawlRunRow(organizationId, runId, status, pagesCrawled, pagesFailed);
+      async finishCrawlRun(
+        organizationId,
+        runId,
+        status,
+        pagesCrawled,
+        pagesFailed,
+        pageLimit,
+        stopReason,
+        templateGroups,
+      ) {
+        await finishCrawlRunRow(
+          organizationId,
+          runId,
+          status,
+          pagesCrawled,
+          pagesFailed,
+          pageLimit,
+          stopReason,
+          templateGroups === undefined || templateGroups === null
+            ? templateGroups
+            : parseStoredTemplateGroups(templateGroups),
+        );
       },
       async addFinding(organizationId, projectId, finding) {
         return insertFindingRow({
@@ -357,6 +682,34 @@ export function createDbStores(): ApiStores {
           metadata_json: evidence.metadata ?? {},
           crawl_run_id: evidence.crawlRunId,
         });
+      },
+      async createMeasuredGscWorkflow(organizationId, projectId, finding, evidence) {
+        return insertMeasuredGscWorkflow(
+          {
+            organization_id: organizationId,
+            project_id: projectId,
+            rule_id: finding.ruleId,
+            rule_version: finding.ruleVersion,
+            title: finding.title,
+            epistemic_class: finding.epistemicClass,
+            severity: finding.severity,
+            explanation: finding.explanation,
+            recommendation: finding.recommendation,
+            affected_urls: finding.affectedUrls,
+            verification_gate: finding.verificationGate,
+            crawl_run_id: finding.crawlRunId,
+          },
+          {
+            organization_id: organizationId,
+            project_id: projectId,
+            kind: evidence.kind,
+            source_ref: evidence.sourceRef,
+            content_hash: evidence.contentHash,
+            object_key: evidence.objectKey,
+            metadata_json: evidence.metadata ?? {},
+            crawl_run_id: evidence.crawlRunId,
+          },
+        );
       },
       async listFindings(organizationId, projectId) {
         const rows = await selectFindingRows(organizationId, projectId);
@@ -389,6 +742,9 @@ export function createDbStores(): ApiStores {
           completedAt: r.completed_at ? r.completed_at.toISOString() : null,
           pagesCrawled: r.pages_crawled,
           pagesFailed: r.pages_failed,
+          pageLimit: r.page_limit,
+          stopReason: r.stop_reason,
+          templateGroups: parseStoredTemplateGroups(r.template_groups),
         }));
       },
       async createDetectedAction(organizationId, projectId, findingId) {
@@ -446,6 +802,28 @@ export function createDbStores(): ApiStores {
       },
     },
 
+    aiVisibility: {
+      async createImport(input) {
+        const row = await insertAiVisibilityImport(input);
+        return toStoredAiVisibilityImport(row);
+      },
+      async listImports(organizationId, projectId, limit, offset) {
+        const rows = await selectAiVisibilityImports(organizationId, projectId, limit, offset);
+        return rows.map(toStoredAiVisibilityImport);
+      },
+      async getImport(organizationId, projectId, importId) {
+        const row = await selectAiVisibilityImport(organizationId, projectId, importId);
+        return row ? toStoredAiVisibilityImport(row) : null;
+      },
+      async listCaptures(organizationId, projectId, importId) {
+        const rows = await selectAiVisibilityCaptures(organizationId, projectId, importId);
+        return rows.map(toStoredAiVisibilityCapture);
+      },
+      async listStats(organizationId, projectId, importId) {
+        return selectAiVisibilityStats(organizationId, projectId, importId);
+      },
+    },
+
     // Present ONLY on the PostgreSQL driver: Google token material must exist
     // as encrypted rows, never in process memory of a throwaway driver.
     gsc: {
@@ -496,6 +874,9 @@ export function createDbStores(): ApiStores {
         const rows = await selectJobs(organizationId, projectId);
         return rows.map(toStoredJob);
       },
+      async claimJob(organizationId, jobId, startedAt) {
+        return claimGscJob(organizationId, jobId, startedAt);
+      },
       async updateJob(organizationId, jobId, patch) {
         return updateJobRow(organizationId, jobId, patch);
       },
@@ -508,10 +889,38 @@ export function createDbStores(): ApiStores {
       async metricSeries(organizationId, projectId, window, filters) {
         return selectMetricSeries(organizationId, projectId, window, filters);
       },
-      async metricFreshness(organizationId, projectId) {
-        return selectMetricFreshness(organizationId, projectId);
+      async metricFreshness(organizationId, projectId, connectionId) {
+        return selectMetricFreshness(organizationId, projectId, connectionId);
       },
     },
+  };
+}
+
+function toStoredAiVisibilityImport(row: AiVisibilityImportRow): StoredAiVisibilityImport {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    uploadedBy: row.uploaded_by,
+    csvSha256: row.csv_sha256,
+    rowCount: row.row_count,
+    provenance: row.provenance,
+    epistemicClass: row.epistemic_class,
+    unverifiedByProvider: row.unverified_by_provider,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function toStoredAiVisibilityCapture(row: AiVisibilityCaptureRow): StoredAiVisibilityCapture {
+  return {
+    id: row.id,
+    importId: row.import_id,
+    rowNumber: row.row_number,
+    engine: row.engine,
+    promptId: row.prompt_id,
+    brandMentioned: row.brand_mentioned,
+    clientCited: row.client_cited,
+    citationDomains: row.citation_domains,
+    sampledAt: row.sampled_at.toISOString(),
   };
 }
 
@@ -544,6 +953,9 @@ function toStoredJob(r: {
   connection_id: string;
   window_start: string | Date;
   window_end: string | Date;
+  ingestion_version: number;
+  window_start_iso?: string;
+  window_end_iso?: string;
   status: string;
   row_count: number;
   attempt: number;
@@ -558,9 +970,10 @@ function toStoredJob(r: {
     id: r.id,
     projectId: r.project_id,
     connectionId: r.connection_id,
-    windowStart: toIsoDate(r.window_start),
-    windowEnd: toIsoDate(r.window_end),
+    windowStart: r.window_start_iso ?? toIsoDate(r.window_start),
+    windowEnd: r.window_end_iso ?? toIsoDate(r.window_end),
     status: r.status,
+    ingestionVersion: r.ingestion_version,
     rowCount: r.row_count,
     attempt: r.attempt,
     errorCode: r.error_code,
@@ -649,10 +1062,7 @@ function toStoredEvidence(r: {
     contentHash: r.content_hash,
     objectKey: r.object_key,
     capturedAt: r.captured_at.toISOString(),
-    metadata:
-      r.metadata_json && typeof r.metadata_json === "object"
-        ? (r.metadata_json as Record<string, unknown>)
-        : {},
+    metadata: publicEvidenceMetadata(r.metadata_json),
   };
 }
 

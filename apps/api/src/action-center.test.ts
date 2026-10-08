@@ -135,12 +135,10 @@ void describe("Action Center API + verification loop (real PostgreSQL)", () => {
   });
 
   void it("rejects the former IMPLEMENTED label because it did not prove a site write", async () => {
-    const res = await inject(
-      "POST",
-      `/v1/actions/${ctx.action}/transitions`,
-      ctx.cookieA,
-      { expectedVersion: 1, toState: "IMPLEMENTED" },
-    );
+    const res = await inject("POST", `/v1/actions/${ctx.action}/transitions`, ctx.cookieA, {
+      expectedVersion: 1,
+      toState: "IMPLEMENTED",
+    });
     assert.equal(res.statusCode, 400, res.body);
   });
 

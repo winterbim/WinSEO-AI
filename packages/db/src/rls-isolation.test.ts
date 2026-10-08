@@ -20,6 +20,10 @@ import {
   createUser,
   createOrganization,
   createProject,
+  addEvidence,
+  addFinding,
+  getFindingEvidence,
+  linkFindingEvidence,
   getProject,
   listProjects,
 } from "./index.ts";
@@ -32,7 +36,18 @@ const ctx: {
   orgB: string;
   projectA: string;
   projectB: string;
-} = { orgA: "", orgB: "", projectA: "", projectB: "" };
+  findingA: string;
+  findingB: string;
+  evidenceA: string;
+} = {
+  orgA: "",
+  orgB: "",
+  projectA: "",
+  projectB: "",
+  findingA: "",
+  findingB: "",
+  evidenceA: "",
+};
 
 void describe("RLS isolation (real PostgreSQL)", () => {
   before(async () => {
@@ -75,6 +90,37 @@ void describe("RLS isolation (real PostgreSQL)", () => {
     const projB = await createProject(ctx.orgB, "Beta Site", "beta.example.com");
     ctx.projectA = projA.id;
     ctx.projectB = projB.id;
+
+    const finding = await addFinding({
+      organization_id: ctx.orgA,
+      project_id: ctx.projectA,
+      rule_id: "TEST-LINK",
+      rule_version: "1.0.0",
+      title: "Alpha finding",
+      epistemic_class: "OBSERVED",
+      severity: "low",
+    });
+    const foreignTenantFinding = await addFinding({
+      organization_id: ctx.orgB,
+      project_id: ctx.projectB,
+      rule_id: "TEST-LINK-B",
+      rule_version: "1.0.0",
+      title: "Beta finding",
+      epistemic_class: "OBSERVED",
+      severity: "low",
+    });
+    const evidence = await addEvidence({
+      organization_id: ctx.orgA,
+      project_id: ctx.projectA,
+      kind: "http_response",
+      source_ref: "https://alpha.example.com/",
+      content_hash: "sha256:test-link-alpha",
+      object_key: `${ctx.orgA}/${ctx.projectA}/test-link-alpha`,
+    });
+    ctx.findingA = finding.id;
+    ctx.findingB = foreignTenantFinding.id;
+    ctx.evidenceA = evidence.id;
+    await linkFindingEvidence(ctx.orgA, finding.id, evidence.id);
   });
 
   after(async () => {
@@ -169,6 +215,27 @@ void describe("RLS isolation (real PostgreSQL)", () => {
     assert.equal(deleted, 0, "cross-tenant DELETE must affect 0 rows under RLS");
   });
 
+  void it("DB-03h2: the legacy evidence-link insert derives its tenant under RLS", async () => {
+    const evidence = await addEvidence({
+      organization_id: ctx.orgA,
+      project_id: ctx.projectA,
+      kind: "http_response",
+      source_ref: "https://alpha.example.com/legacy-insert",
+      content_hash: "sha256:test-legacy-link-alpha",
+      object_key: `${ctx.orgA}/${ctx.projectA}/test-legacy-link-alpha`,
+    });
+    const inserted = await withTenant(ctx.orgA, async (client) => {
+      const result = await client.query<{ organization_id: string }>(
+        `INSERT INTO finding_evidence (finding_id, evidence_id, relation)
+         VALUES ($1, $2, 'supports')
+         RETURNING organization_id::text`,
+        [ctx.findingA, evidence.id],
+      );
+      return result.rows[0]?.organization_id;
+    });
+    assert.equal(inserted, ctx.orgA);
+  });
+
   void it("DB-03i: cross-tenant foreign-key INSERT fails even for a known org id", async () => {
     await assert.rejects(
       async () => {
@@ -183,6 +250,75 @@ void describe("RLS isolation (real PostgreSQL)", () => {
       /row-level security|violates row-level/i,
       "inserting a finding scoped to tenant B must be blocked by RLS",
     );
+  });
+
+  void it("DB-07: tenant B cannot read tenant A's finding-evidence link", async () => {
+    const visibleLinks = await withTenant(ctx.orgB, async (client) => {
+      const result = await client.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM finding_evidence`,
+      );
+      return result.rows[0]?.n ?? -1;
+    });
+    assert.equal(visibleLinks, 0, "RLS must hide finding-evidence rows belonging to tenant A");
+  });
+
+  void it("DB-08: tenant B cannot stamp a link with tenant A's organization id", async () => {
+    await assert.rejects(
+      withTenant(ctx.orgB, async (client) =>
+        client.query(
+          `INSERT INTO finding_evidence (organization_id, finding_id, evidence_id, relation)
+           VALUES ($1, $2, $3, 'supports')`,
+          [ctx.orgA, ctx.findingA, ctx.evidenceA],
+        ),
+      ),
+      /row-level security|policy/i,
+    );
+  });
+
+  void it("DB-09: composite foreign keys reject a tenant B link to tenant A endpoints", async () => {
+    await assert.rejects(
+      withTenant(ctx.orgB, async (client) =>
+        client.query(
+          `INSERT INTO finding_evidence (organization_id, finding_id, evidence_id, relation)
+           VALUES ($1, $2, $3, 'supports')`,
+          [ctx.orgB, ctx.findingB, ctx.evidenceA],
+        ),
+      ),
+      /foreign key/i,
+    );
+  });
+
+  void it("DB-10: repository linking and evidence reads remain tenant-scoped", async () => {
+    await linkFindingEvidence(ctx.orgB, ctx.findingA, ctx.evidenceA);
+
+    const ownEvidence = await getFindingEvidence(ctx.orgA, ctx.findingA);
+    const foreignEvidence = await getFindingEvidence(ctx.orgB, ctx.findingA);
+    assert.equal(
+      ownEvidence.length,
+      2,
+      "tenant A should read its original and legacy linked evidence",
+    );
+    assert.ok(
+      ownEvidence.some((evidence) => evidence.id === ctx.evidenceA),
+      "the original evidence relation remains visible to its tenant",
+    );
+    assert.deepEqual(
+      foreignEvidence,
+      [],
+      "tenant B must not read evidence linked to tenant A's finding",
+    );
+
+    const counts = await withAdmin(async (client) => {
+      const result = await client.query<{ organization_id: string; n: number }>(
+        `SELECT organization_id, count(*)::int AS n
+           FROM finding_evidence
+          GROUP BY organization_id
+          ORDER BY organization_id`,
+      );
+      return Object.fromEntries(result.rows.map((row) => [row.organization_id, row.n]));
+    });
+    assert.equal(counts[ctx.orgA], 2);
+    assert.equal(counts[ctx.orgB] ?? 0, 0, "repository must not create a cross-tenant link");
   });
 
   void it("DB-04: runtime role cannot bypass RLS to see all projects", async () => {
@@ -240,8 +376,14 @@ void describe("RLS isolation (real PostgreSQL)", () => {
     const bSeen = await listProjects(ctx.orgB);
     const aSeenAgain = await listProjects(ctx.orgA);
 
-    assert.equal(aSeen.find((p) => p.id === ctx.projectB), undefined);
-    assert.equal(bSeen.find((p) => p.id === ctx.projectA), undefined);
+    assert.equal(
+      aSeen.find((p) => p.id === ctx.projectB),
+      undefined,
+    );
+    assert.equal(
+      bSeen.find((p) => p.id === ctx.projectA),
+      undefined,
+    );
     assert.deepEqual(
       aSeenAgain.map((p) => p.id),
       [ctx.projectA],

@@ -37,10 +37,7 @@ export type RenderResult =
   | { ok: false; error: string; durationMs: number };
 
 // ─── Concurrency semaphore (bounded browser workload) ───
-const MAX_CONCURRENT = Math.max(
-  1,
-  parseInt(process.env.RENDER_MAX_CONCURRENCY ?? "2", 10) || 2,
-);
+const MAX_CONCURRENT = Math.max(1, parseInt(process.env.RENDER_MAX_CONCURRENCY ?? "2", 10) || 2);
 let active = 0;
 const queue: (() => void)[] = [];
 
@@ -83,9 +80,7 @@ async function launchBrowser(): Promise<Browser> {
   const executablePath = process.env.RENDERER_EXECUTABLE_PATH;
   const channel = process.env.RENDERER_CHANNEL ?? "chrome";
   const browser = await chromium.launch(
-    executablePath
-      ? { executablePath, headless: true }
-      : { channel, headless: true },
+    executablePath ? { executablePath, headless: true } : { channel, headless: true },
   );
   liveBrowsers.add(browser);
   return browser;
@@ -121,7 +116,11 @@ export async function renderUrl(url: string, opts: RenderOptions = {}): Promise<
   try {
     guardUrl(url);
   } catch (err) {
-    return { ok: false, error: `pre-navigation SSRF: ${(err as Error).message}`, durationMs: Date.now() - started };
+    return {
+      ok: false,
+      error: `pre-navigation SSRF: ${(err as Error).message}`,
+      durationMs: Date.now() - started,
+    };
   }
 
   await acquire();
@@ -156,7 +155,11 @@ export async function renderUrl(url: string, opts: RenderOptions = {}): Promise<
       if (opts.routeFulfillHtml !== undefined) {
         // TEST-ONLY fixture: never touches the network.
         await route
-          .fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: opts.routeFulfillHtml })
+          .fulfill({
+            status: 200,
+            contentType: "text/html; charset=utf-8",
+            body: opts.routeFulfillHtml,
+          })
           .catch(() => undefined);
         return;
       }

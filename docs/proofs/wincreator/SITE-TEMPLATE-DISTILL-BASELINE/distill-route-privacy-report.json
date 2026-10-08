@@ -1,0 +1,58 @@
+{
+  "baseline_digest": "be8f13892fa2dc113651666ce818a67e18e22c986f676847fe0081e4efcb5f5b",
+  "current_snapshot_digest": "5b04ab84e818f871af0825262f4a973c5e3c18a68bd28915e4b88149a5d50495",
+  "delta": {
+    "declared_dependencies": 0,
+    "duplicate_fingerprints": 0,
+    "largest_file_lines": 87,
+    "nonblank_lines": 82,
+    "source_bytes": 3321,
+    "source_files": 0,
+    "source_lines": 87
+  },
+  "dependency_changes": {
+    "added": [],
+    "removed": [],
+    "unparsed_manifest_changes": []
+  },
+  "digest": "79d6f03b80c36c2284fa828737da11706f1f3c66a048b645823dd00e0ef0c95a",
+  "file_changes": {
+    "added": [],
+    "changed": [
+      "services/crawler/src/site-template.ts"
+    ],
+    "removed": []
+  },
+  "improved_dimensions": [],
+  "limits": [
+    "structural metrics are proxies, not a code-quality score",
+    "UNCHANGED does not prove that no simpler implementation exists",
+    "behavioral equivalence requires a separate WinCreator proof gate"
+  ],
+  "metrics_after": {
+    "declared_dependencies": 12,
+    "duplicate_fingerprints": 0,
+    "largest_file_lines": 411,
+    "nonblank_lines": 376,
+    "source_bytes": 13961,
+    "source_files": 1,
+    "source_lines": 411
+  },
+  "metrics_before": {
+    "declared_dependencies": 12,
+    "duplicate_fingerprints": 0,
+    "largest_file_lines": 324,
+    "nonblank_lines": 294,
+    "source_bytes": 10640,
+    "source_files": 1,
+    "source_lines": 324
+  },
+  "policy_digest": "78eef27d5de49a0d903f94956f3d1233fd682325ea5c97b0a4cb3bacfee1cda3",
+  "regressed_dimensions": [
+    "nonblank_lines",
+    "largest_file_lines"
+  ],
+  "schema": "wincreator.distill-report/v1",
+  "verdict": "REVIEW_REQUIRED",
+  "warnings": []
+}

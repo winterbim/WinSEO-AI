@@ -31,13 +31,21 @@ const MEASUREMENT_WINDOW = {
 
 interface FindingPayload {
   module: string;
-  subject: { query?: string; page?: string };
+  subject: {
+    query?: string;
+    page?: string;
+    device?: string;
+    country?: string;
+    property?: string;
+  };
   title: string;
   rationale: string;
   datasetWindow: { startDate: string; endDate: string };
   filters: Record<string, string | number | boolean>;
   comparisonWindow?: { startDate: string; endDate: string };
   observed: Record<string, number | string>;
+  baseline?: Record<string, number | string>;
+  delta?: Record<string, number>;
   evidenceClass: "MEASURED";
   verificationGate: {
     type: "gsc_window";
@@ -47,6 +55,9 @@ interface FindingPayload {
       threshold: number;
       query?: string;
       page?: string;
+      device?: string;
+      country?: string;
+      connectionId?: string;
       minImpressions: number;
       windowDays: number;
     };
@@ -88,10 +99,14 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
     projectA?: string;
     cookieA?: string;
     cookieB?: string;
+    connectionA?: string;
+    septemberJobA?: string;
     verified?: string;
     rejected?: string;
     inconclusiveSample?: string;
     inconclusiveNoData?: string;
+    inconclusiveRunning?: string;
+    inconclusiveFailed?: string;
     control?: string;
   } = {};
 
@@ -122,39 +137,58 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
       slug: `gscver-${TAG}-${tag}-${suffix}`,
     });
     assert.equal(org.statusCode, 201, org.body);
-    const organizationId = (JSON.parse(org.body) as { organization: { id: string } }).organization.id;
+    const organizationId = (JSON.parse(org.body) as { organization: { id: string } }).organization
+      .id;
     const selected = await inject("POST", "/v1/auth/select-organization", baseCookie, {
       organizationId,
     });
     return { organizationId, cookie: sessionOf(selected) };
   }
 
-  /** Promote a MEASURED recommendation → finding + evidence + DETECTED action. */
-  async function createFinding(payload: FindingPayload): Promise<{
+  /** Seed a workflow fixture without exercising the GSC promotion boundary. */
+  async function createFixtureFinding(payload: FindingPayload): Promise<{
     actionId: string;
     findingId: string;
-    evidenceId?: string;
-    contentHash?: string;
-    created: boolean;
-    epistemicClass?: string;
-    verificationGate?: string;
   }> {
-    const res = await inject(
-      "POST",
-      `/v1/projects/${ctx.projectA}/gsc/findings`,
-      ctx.cookieA,
-      payload,
-    );
-    assert.ok(res.statusCode === 201 || res.statusCode === 200, res.body);
-    return JSON.parse(res.body) as {
-      actionId: string;
-      findingId: string;
-      evidenceId?: string;
-      contentHash?: string;
-      created: boolean;
-      epistemicClass?: string;
-      verificationGate?: string;
+    assert.ok(ctx.orgA && ctx.projectA);
+    const scopedPayload: FindingPayload = {
+      ...payload,
+      verificationGate: {
+        ...payload.verificationGate,
+        spec: {
+          ...payload.verificationGate.spec,
+          ...(ctx.connectionA ? { connectionId: ctx.connectionA } : {}),
+        },
+      },
     };
+    const ruleId = `GSC.fixture.${scopedPayload.module}::${scopedPayload.subject.query}`;
+    const finding = await app.stores.crawl.addFinding(ctx.orgA, ctx.projectA, {
+      ruleId,
+      ruleVersion: "test-fixture",
+      title: scopedPayload.title,
+      epistemicClass: scopedPayload.evidenceClass,
+      severity: scopedPayload.severity,
+      explanation: scopedPayload.rationale,
+      recommendation: scopedPayload.title,
+      affectedUrls: [scopedPayload.subject.page ?? "https://example.com/"],
+      verificationGate: scopedPayload.verificationGate.type,
+    });
+    const contentHash = createHash("sha256").update(JSON.stringify(scopedPayload)).digest("hex");
+    const evidence = await app.stores.crawl.addEvidence(ctx.orgA, ctx.projectA, {
+      kind: "gsc_data",
+      sourceRef: `fixture://gsc/${contentHash}`,
+      contentHash,
+      objectKey: `${ctx.orgA}/${ctx.projectA}/test-fixtures/${contentHash}`,
+      metadata: { ...scopedPayload },
+    });
+    await app.stores.crawl.linkFindingEvidence(ctx.orgA, finding.id, evidence.id);
+    const action = await app.stores.crawl.createDetectedAction(ctx.orgA, ctx.projectA, finding.id);
+    return { actionId: action.id, findingId: finding.id };
+  }
+
+  async function promoteRecommendation(payload: unknown, cookie = ctx.cookieA): Promise<Response> {
+    assert.ok(ctx.projectA && cookie);
+    return inject("POST", `/v1/projects/${ctx.projectA}/gsc/findings`, cookie, payload);
   }
 
   function transition(
@@ -169,7 +203,14 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
   }
 
   /** Walk finding → … → MEASURING so EVALUATE has a waiting window recorded. */
-  async function walkToMeasuring(actionId: string, gate: FindingPayload["verificationGate"]): Promise<void> {
+  async function walkToMeasuring(
+    actionId: string,
+    gate: FindingPayload["verificationGate"],
+  ): Promise<void> {
+    const propertyGate: FindingPayload["verificationGate"] = {
+      ...gate,
+      spec: { ...gate.spec, connectionId: ctx.connectionA },
+    };
     let v = 1;
     for (const step of [
       { toState: "EVIDENCED" },
@@ -178,7 +219,7 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
         recommendation: {
           summary: "Apply the measured change.",
           rationale: "The MEASURED finding shows the gap.",
-          verificationGate: gate,
+          verificationGate: propertyGate,
         },
       },
       { toState: "APPROVED", approvalDecision: "APPROVE" },
@@ -232,6 +273,7 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
       externalProperty: "sc-domain:example.com",
       credentialRef: "cred-fixture",
     });
+    ctx.connectionA = connection.id;
     const jobSept = await gsc.createOrReuseJob({
       organizationId: a.organizationId,
       projectId: ctx.projectA,
@@ -240,6 +282,7 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
       windowEnd: SEPTEMBER.endDate,
       idempotencyKey: `${SEPTEMBER.startDate}:${SEPTEMBER.endDate}`,
     });
+    ctx.septemberJobA = jobSept.id;
     const jobAug = await gsc.createOrReuseJob({
       organizationId: a.organizationId,
       projectId: ctx.projectA,
@@ -248,172 +291,647 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
       windowEnd: AUGUST.endDate,
       idempotencyKey: `${AUGUST.startDate}:${AUGUST.endDate}`,
     });
+    const septAttempt = await gsc.claimJob(
+      a.organizationId,
+      jobSept.id,
+      "2026-10-01T00:00:00.000Z",
+    );
+    const augAttempt = await gsc.claimJob(a.organizationId, jobAug.id, "2026-09-01T00:00:00.000Z");
+    assert.ok(septAttempt);
+    assert.ok(augAttempt);
     await gsc.persistMetricWindow({
       organizationId: a.organizationId,
       projectId: ctx.projectA,
       syncJobId: jobSept.id,
+      expectedAttempt: septAttempt,
       window: SEPTEMBER,
       rows: [
         // ctr 5/49 ≈ 0.1020, weighted position (4·40 + 8·9)/49 ≈ 4.7347
-        metricRow({ date: "2026-09-15", query: "verified q", page: "https://example.com/v", clicks: 4, impressions: 40, ctr: 0.1, position: 4 }),
-        metricRow({ date: "2026-09-16", query: "verified q", page: "https://example.com/v", clicks: 1, impressions: 9, ctr: 0.111, position: 8 }),
-        metricRow({ date: "2026-09-15", query: "rejected q", page: "https://example.com/r", clicks: 4, impressions: 40, ctr: 0.1, position: 4 }),
-        metricRow({ date: "2026-09-16", query: "rejected q", page: "https://example.com/r", clicks: 1, impressions: 9, ctr: 0.111, position: 8 }),
-        metricRow({ date: "2026-09-15", query: "thin q", page: "https://example.com/t", clicks: 1, impressions: 10, ctr: 0.1, position: 5 }),
+        metricRow({
+          date: "2026-09-15",
+          query: "verified q",
+          page: "https://example.com/v",
+          clicks: 4,
+          impressions: 40,
+          ctr: 0.1,
+          position: 4,
+        }),
+        metricRow({
+          date: "2026-09-16",
+          query: "verified q",
+          page: "https://example.com/v",
+          clicks: 1,
+          impressions: 9,
+          ctr: 0.111,
+          position: 8,
+        }),
+        metricRow({
+          date: "2026-09-15",
+          query: "rejected q",
+          page: "https://example.com/r",
+          clicks: 4,
+          impressions: 40,
+          ctr: 0.1,
+          position: 4,
+        }),
+        metricRow({
+          date: "2026-09-16",
+          query: "rejected q",
+          page: "https://example.com/r",
+          clicks: 1,
+          impressions: 9,
+          ctr: 0.111,
+          position: 8,
+        }),
+        metricRow({
+          date: "2026-09-15",
+          query: "thin q",
+          page: "https://example.com/t",
+          clicks: 1,
+          impressions: 10,
+          ctr: 0.1,
+          position: 5,
+        }),
+        metricRow({
+          date: "2026-09-15",
+          query: "measured low ctr",
+          page: "https://example.com/low",
+          country: "fra",
+          clicks: 5,
+          impressions: 800,
+          ctr: 0.00625,
+          position: 8,
+        }),
+        metricRow({
+          date: "2026-09-15",
+          query: "measured low ctr",
+          page: "https://example.com/low",
+          country: "can",
+          clicks: 100,
+          impressions: 800,
+          ctr: 0.125,
+          position: 8,
+        }),
       ],
     });
     await gsc.persistMetricWindow({
       organizationId: a.organizationId,
       projectId: ctx.projectA,
       syncJobId: jobAug.id,
+      expectedAttempt: augAttempt,
       window: AUGUST,
       rows: [
-        metricRow({ date: "2026-08-15", query: "verified q", page: "https://example.com/v", clicks: 10, impressions: 100, ctr: 0.1, position: 6 }),
-      ],
-    });
-
-    ctx.verified = (await createFinding(
-      measuredFinding({
-        query: "verified q",
-        page: "https://example.com/v",
-        gate: {
-          metric: "ctr",
-          operator: "gte",
-          threshold: 0.05,
+        metricRow({
+          date: "2026-08-15",
           query: "verified q",
           page: "https://example.com/v",
-          minImpressions: 30,
-          windowDays: 30,
-        },
+          clicks: 10,
+          impressions: 100,
+          ctr: 0.1,
+          position: 6,
+        }),
+      ],
+    });
+    assert.equal(
+      await gsc.updateJob(a.organizationId, jobSept.id, {
+        status: "COMPLETED",
+        expectedAttempt: septAttempt,
+        rowCount: 7,
+        completedAt: "2026-10-01T00:00:00.000Z",
       }),
-    )).actionId;
-    ctx.rejected = (await createFinding(
-      measuredFinding({
-        query: "rejected q",
-        page: "https://example.com/r",
-        module: "ranking_opportunity",
-        gate: {
-          metric: "position",
-          operator: "lte",
-          threshold: 2,
+      true,
+    );
+    assert.equal(
+      await gsc.updateJob(a.organizationId, jobAug.id, {
+        status: "COMPLETED",
+        expectedAttempt: augAttempt,
+        rowCount: 1,
+        completedAt: "2026-09-01T00:00:00.000Z",
+      }),
+      true,
+    );
+
+    assert.deepEqual(
+      (await gsc.listJobs(a.organizationId, ctx.projectA))
+        .map(({ status, windowStart, windowEnd }) => ({ status, windowStart, windowEnd }))
+        .sort(
+          (left, right) =>
+            left.windowStart.localeCompare(right.windowStart) ||
+            left.status.localeCompare(right.status),
+        ),
+      [
+        { status: "COMPLETED", windowStart: AUGUST.startDate, windowEnd: AUGUST.endDate },
+        { status: "COMPLETED", windowStart: SEPTEMBER.startDate, windowEnd: SEPTEMBER.endDate },
+      ],
+    );
+
+    ctx.verified = (
+      await createFixtureFinding(
+        measuredFinding({
+          query: "verified q",
+          page: "https://example.com/v",
+          gate: {
+            metric: "ctr",
+            operator: "gte",
+            threshold: 0.05,
+            query: "verified q",
+            page: "https://example.com/v",
+            minImpressions: 30,
+            windowDays: 30,
+          },
+        }),
+      )
+    ).actionId;
+    ctx.rejected = (
+      await createFixtureFinding(
+        measuredFinding({
           query: "rejected q",
           page: "https://example.com/r",
-          minImpressions: 30,
-          windowDays: 30,
-        },
-      }),
-    )).actionId;
-    ctx.inconclusiveSample = (await createFinding(
-      measuredFinding({
-        query: "thin q",
-        page: "https://example.com/t",
-        module: "emerging_queries",
-        gate: {
-          metric: "ctr",
-          operator: "gte",
-          threshold: 0.05,
+          module: "ranking_opportunity",
+          gate: {
+            metric: "position",
+            operator: "lte",
+            threshold: 2,
+            query: "rejected q",
+            page: "https://example.com/r",
+            minImpressions: 30,
+            windowDays: 30,
+          },
+        }),
+      )
+    ).actionId;
+    ctx.inconclusiveSample = (
+      await createFixtureFinding(
+        measuredFinding({
           query: "thin q",
           page: "https://example.com/t",
-          minImpressions: 1_000,
-          windowDays: 30,
-        },
-      }),
-    )).actionId;
-    ctx.inconclusiveNoData = (await createFinding(
-      measuredFinding({
-        query: "absent q",
-        page: "https://example.com/absent",
-        module: "winners_losers",
-        gate: {
-          metric: "impressions",
-          operator: "gte",
-          threshold: 1,
+          module: "emerging_queries",
+          gate: {
+            metric: "ctr",
+            operator: "gte",
+            threshold: 0.05,
+            query: "thin q",
+            page: "https://example.com/t",
+            minImpressions: 1_000,
+            windowDays: 30,
+          },
+        }),
+      )
+    ).actionId;
+    ctx.inconclusiveNoData = (
+      await createFixtureFinding(
+        measuredFinding({
           query: "absent q",
           page: "https://example.com/absent",
-          minImpressions: 0,
-          windowDays: 30,
-        },
-      }),
-    )).actionId;
+          module: "winners_losers",
+          gate: {
+            metric: "impressions",
+            operator: "gte",
+            threshold: 1,
+            query: "absent q",
+            page: "https://example.com/absent",
+            minImpressions: 0,
+            windowDays: 30,
+          },
+        }),
+      )
+    ).actionId;
+    ctx.inconclusiveFailed = (
+      await createFixtureFinding(
+        measuredFinding({
+          query: "failed q",
+          page: "https://example.com/failed",
+          module: "winners_losers",
+          gate: {
+            metric: "impressions",
+            operator: "gte",
+            threshold: 1,
+            query: "failed q",
+            page: "https://example.com/failed",
+            minImpressions: 0,
+            windowDays: 30,
+          },
+        }),
+      )
+    ).actionId;
+    ctx.inconclusiveRunning = (
+      await createFixtureFinding(
+        measuredFinding({
+          query: "running-only q",
+          page: "https://example.com/running-only",
+          module: "winners_losers",
+          gate: {
+            metric: "impressions",
+            operator: "gte",
+            threshold: 1,
+            query: "running-only q",
+            page: "https://example.com/running-only",
+            minImpressions: 0,
+            windowDays: 30,
+          },
+        }),
+      )
+    ).actionId;
   });
 
   after(async () => {
     await withAdmin(async (client) => {
-      await client.query(`DELETE FROM organizations WHERE name LIKE $1`, [
-        `GSC Verify ${TAG}%`,
-      ]);
+      await client.query(`DELETE FROM organizations WHERE name LIKE $1`, [`GSC Verify ${TAG}%`]);
       await client.query(`DELETE FROM users WHERE email LIKE $1`, [`%${TAG}%@test.local`]);
     });
     await app.close();
   });
 
-  void it("promotes a MEASURED recommendation into finding + evidence + DETECTED action", async () => {
-    const first = await createFinding(
-      measuredFinding({
-        query: "dup q",
-        page: "https://example.com/d",
-        gate: {
-          metric: "ctr",
-          operator: "gte",
-          threshold: 0.05,
-          query: "dup q",
-          page: "https://example.com/d",
-          minImpressions: 30,
-          windowDays: 30,
-        },
-      }),
+  void it("promotes only a server-recomputed GSC recommendation and rejects stale subjects", async () => {
+    assert.ok(ctx.projectA && ctx.cookieA && ctx.orgA);
+    const intelligence = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/intelligence?startDate=${SEPTEMBER.startDate}&endDate=${SEPTEMBER.endDate}&module=high_impressions_low_ctr&country=fra`,
+      ctx.cookieA,
     );
-    assert.equal(first.created, true);
-    assert.equal(first.epistemicClass, "MEASURED");
-    assert.equal(first.verificationGate, "gsc_window");
+    assert.equal(intelligence.statusCode, 200, intelligence.body);
+    const measured = (
+      JSON.parse(intelligence.body) as { recommendations: FindingPayload[] }
+    ).recommendations.find((candidate) => candidate.subject.query === "measured low ctr");
+    assert.ok(measured, "recommendation must be derived from the fixture's persisted GSC row");
+    assert.equal(measured.subject.country, "fra");
+    assert.equal(measured.subject.property, "sc-domain:example.com");
+    assert.equal(measured.verificationGate.spec.country, "fra");
+    assert.equal(measured.verificationGate.spec.connectionId !== undefined, true);
+
+    const forged = {
+      ...measured,
+      sourceFilters: { country: "fra" },
+      title: "Invented title from caller",
+      rationale: "Invented source and explanation",
+      observed: { impressions: 999_999, clicks: 999_999, ctr: 1, position: 1, days: 30 },
+      severity: "critical",
+      verificationGate: {
+        type: "gsc_window",
+        spec: { ...measured.verificationGate.spec, threshold: 0.99 },
+      },
+    };
+    const unfiltered = await promoteRecommendation({ ...forged, sourceFilters: {} });
+    assert.equal(unfiltered.statusCode, 409, unfiltered.body);
     assert.equal(
-      first.contentHash,
+      (JSON.parse(unfiltered.body) as { error: { code: string } }).error.code,
+      "MEASUREMENT_STALE",
+      "a filtered analysis cannot be promoted using unfiltered project rows",
+    );
+
+    const missingBaseline = await promoteRecommendation({
+      module: "emerging_queries",
+      subject: { query: "measured low ctr", page: "https://example.com/low" },
+      datasetWindow: SEPTEMBER,
+      comparisonWindow: { startDate: "2026-07-01", endDate: "2026-07-31" },
+      sourceFilters: { country: "fra" },
+    });
+    assert.equal(missingBaseline.statusCode, 409, missingBaseline.body);
+    assert.equal(
+      (JSON.parse(missingBaseline.body) as { error: { code: string } }).error.code,
+      "COMPARISON_WINDOW_NOT_SYNCED",
+      "missing comparison coverage is never treated as zero impressions",
+    );
+
+    const [promoted, concurrentReplay] = await Promise.all([
+      promoteRecommendation(forged),
+      promoteRecommendation(forged),
+    ]);
+    assert.ok([201, 200].includes(promoted.statusCode), promoted.body);
+    assert.ok([201, 200].includes(concurrentReplay.statusCode), concurrentReplay.body);
+    const promotedBody = JSON.parse(promoted.body) as {
+      created: boolean;
+      findingId: string;
+      evidenceId?: string;
+      actionId: string;
+    };
+    const replayBody = JSON.parse(concurrentReplay.body) as {
+      created: boolean;
+      findingId: string;
+      evidenceId?: string;
+      actionId: string;
+    };
+    const created = (promotedBody.created ? promotedBody : replayBody) as {
+      created: boolean;
+      findingId: string;
+      evidenceId: string;
+      actionId: string;
+      contentHash: string;
+      epistemicClass: string;
+      verificationGate: string;
+    };
+    const concurrentDuplicate = promotedBody.created ? replayBody : promotedBody;
+    assert.equal(created.created, true);
+    assert.equal(concurrentDuplicate.created, false);
+    assert.equal(concurrentDuplicate.findingId, created.findingId);
+    assert.equal(concurrentDuplicate.actionId, created.actionId);
+    assert.equal(created.epistemicClass, "MEASURED");
+    assert.equal(created.verificationGate, "gsc_window");
+
+    const stored = await app.stores.crawl.getFinding(ctx.orgA, created.findingId);
+    assert.ok(stored);
+    assert.equal(stored.title, measured.title, "caller-supplied title is not persisted");
+    assert.equal(stored.explanation, measured.rationale);
+    assert.equal(stored.severity, measured.severity);
+    const storedEvidence = stored.evidence[0];
+    assert.ok(storedEvidence);
+    assert.deepEqual(storedEvidence.metadata.observed, measured.observed);
+    assert.deepEqual(storedEvidence.metadata.verificationGate, measured.verificationGate);
+    assert.ok(app.stores.gsc);
+    const gscStore = app.stores.gsc;
+    assert.ok(gscStore);
+    const organizationId = ctx.orgA;
+    const projectId = ctx.projectA;
+    assert.ok(organizationId && projectId);
+    const selectedConnection = (await gscStore.listConnections(organizationId, projectId)).find(
+      (connection) => connection.status === "CONNECTED",
+    );
+    assert.ok(selectedConnection);
+    const replaceSeptemberRows = async (
+      rows: Awaited<ReturnType<typeof gscStore.loadMetricRows>>,
+    ): Promise<void> => {
+      const replacement = await gscStore.createOrReuseJob({
+        organizationId,
+        projectId,
+        connectionId: selectedConnection.id,
+        windowStart: SEPTEMBER.startDate,
+        windowEnd: SEPTEMBER.endDate,
+        idempotencyKey: `${SEPTEMBER.startDate}:${SEPTEMBER.endDate}`,
+      });
+      const expectedAttempt = await gscStore.claimJob(
+        organizationId,
+        replacement.id,
+        new Date().toISOString(),
+      );
+      assert.ok(expectedAttempt);
+      await gscStore.persistMetricWindow({
+        organizationId,
+        projectId,
+        syncJobId: replacement.id,
+        expectedAttempt,
+        window: SEPTEMBER,
+        rows,
+      });
+      assert.equal(
+        await gscStore.updateJob(organizationId, replacement.id, {
+          status: "COMPLETED",
+          expectedAttempt,
+          completedAt: new Date().toISOString(),
+        }),
+        true,
+      );
+    };
+    const sourceProperty = {
+      connectionId: selectedConnection.id,
+      externalProperty: selectedConnection.externalProperty,
+    };
+    const persistedRows = await app.stores.gsc.loadMetricRows(ctx.orgA, ctx.projectA, SEPTEMBER, {
+      country: "fra",
+      connectionId: selectedConnection.id,
+    });
+    const sourceRows = {
+      current: persistedRows
+        .map((row) => ({
+          date: row.date,
+          query: row.query,
+          page: row.page,
+          country: row.country,
+          device: row.device,
+          clicks: row.clicks,
+          impressions: row.impressions,
+          ctr: row.ctr,
+          position: row.position,
+        }))
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      baseline: [],
+    };
+    const measurementSource = {
+      sha256: createHash("sha256")
+        .update(JSON.stringify({ sourceProperty, sourceRows }))
+        .digest("hex"),
+      sourceProperty,
+      currentRowCount: sourceRows.current.length,
+      baselineRowCount: 0,
+    };
+    assert.deepEqual(storedEvidence.metadata.measurementSource, measurementSource);
+    assert.deepEqual(storedEvidence.metadata.sourceFilters, { country: "fra" });
+    assert.deepEqual(storedEvidence.metadata.sourceProperty, sourceProperty);
+    assert.equal(measured.verificationGate.spec.connectionId, selectedConnection.id);
+    assert.equal(
+      created.contentHash,
       createHash("sha256")
         .update(
           JSON.stringify({
-            module: "high_impressions_low_ctr",
-            subject: { query: "dup q", page: "https://example.com/d" },
-            datasetWindow: SEPTEMBER,
-            filters: { minImpressions: 30, maxCtr: 0.02 },
-            comparisonWindow: AUGUST,
-            observed: { impressions: 49, clicks: 5, ctr: 0.102041, position: 4.734694, days: 2 },
-            evidenceClass: "MEASURED",
-            verificationGate: {
-              type: "gsc_window",
-              spec: {
-                metric: "ctr",
-                operator: "gte",
-                threshold: 0.05,
-                query: "dup q",
-                page: "https://example.com/d",
-                minImpressions: 30,
-                windowDays: 30,
-              },
-            },
+            module: measured.module,
+            subject: measured.subject,
+            sourceProperty,
+            datasetWindow: measured.datasetWindow,
+            sourceFilters: { country: "fra" },
+            filters: measured.filters,
+            comparisonWindow: measured.comparisonWindow ?? null,
+            baseline: measured.baseline ?? null,
+            delta: measured.delta ?? null,
+            measurementSource,
+            observed: measured.observed,
+            evidenceClass: measured.evidenceClass,
+            verificationGate: measured.verificationGate,
           }),
         )
         .digest("hex"),
-      "the evidence hash is reproducible from the measured claim",
+      "the hash covers the server-derived measurement, not the caller's values",
     );
 
-    // Re-running the intelligence modules must NOT spawn duplicate workflows.
-    const duplicate = await createFinding(
-      measuredFinding({
-        query: "dup q",
-        page: "https://example.com/d",
-        gate: {
-          metric: "ctr",
-          operator: "gte",
-          threshold: 0.05,
-          query: "dup q",
-          page: "https://example.com/d",
-          minImpressions: 30,
-          windowDays: 30,
-        },
-      }),
+    // A sync may replace a window after the API computed its recommendation.
+    // The persistence boundary must reject that stale snapshot, while a fresh
+    // promotion refreshes the still-unstarted workflow with new evidence.
+    const oldEvidence = stored.evidence.find((item) => item.kind === "gsc_data");
+    assert.ok(oldEvidence);
+    const allSeptemberRows = await gscStore.loadMetricRows(organizationId, projectId, SEPTEMBER, {
+      connectionId: selectedConnection.id,
+    });
+    await replaceSeptemberRows(
+      allSeptemberRows.map((row) =>
+        row.query === "measured low ctr" && row.country === "fra"
+          ? { ...row, clicks: 10, ctr: 0.0125 }
+          : row,
+      ),
     );
-    assert.equal(duplicate.created, false);
-    assert.equal(duplicate.findingId, first.findingId);
+    await assert.rejects(
+      app.stores.crawl.createMeasuredGscWorkflow(
+        ctx.orgA,
+        ctx.projectA,
+        {
+          ruleId: stored.ruleId,
+          ruleVersion: "1.0.0",
+          title: measured.title,
+          epistemicClass: "MEASURED",
+          severity: measured.severity,
+          explanation: measured.rationale,
+          recommendation: measured.title,
+          affectedUrls: ["https://example.com/low"],
+          verificationGate: measured.verificationGate.type,
+        },
+        {
+          kind: "gsc_data",
+          sourceRef: oldEvidence.sourceRef,
+          contentHash: oldEvidence.contentHash,
+          objectKey: oldEvidence.objectKey,
+          metadata: oldEvidence.metadata,
+        },
+      ),
+      (error: unknown) => (error as { code?: string }).code === "MEASUREMENT_SNAPSHOT_CHANGED",
+    );
+
+    const refreshed = await promoteRecommendation(forged);
+    assert.equal(refreshed.statusCode, 200, refreshed.body);
+    const refreshedBody = JSON.parse(refreshed.body) as {
+      created: boolean;
+      updated: boolean;
+      findingId: string;
+      evidenceId: string;
+      actionId: string;
+      contentHash: string;
+    };
+    assert.equal(refreshedBody.created, false);
+    assert.equal(refreshedBody.updated, true);
+    assert.equal(refreshedBody.findingId, created.findingId);
+    assert.equal(refreshedBody.actionId, created.actionId);
+    assert.notEqual(refreshedBody.evidenceId, oldEvidence.id);
+    assert.notEqual(refreshedBody.contentHash, created.contentHash);
+    const refreshedFinding = await app.stores.crawl.getFinding(ctx.orgA, created.findingId);
+    assert.ok(refreshedFinding);
+    assert.equal(
+      refreshedFinding.evidence.filter((item) => item.kind === "gsc_data").length,
+      2,
+      "superseded evidence stays in the append-only evidence ledger",
+    );
+
+    const evidenced = await transition(created.actionId, 1, { toState: "EVIDENCED" });
+    assert.equal(evidenced.statusCode, 200, evidenced.body);
+    const tamperedGate = {
+      ...measured.verificationGate,
+      spec: { ...measured.verificationGate.spec, threshold: 0 },
+    };
+    const changedGate = await transition(created.actionId, 2, {
+      toState: "PROPOSED",
+      recommendation: {
+        summary: "A proposal with a weakened verification gate.",
+        verificationGate: tamperedGate,
+      },
+    });
+    assert.equal(changedGate.statusCode, 409, changedGate.body);
+    assert.equal(
+      (JSON.parse(changedGate.body) as { error: { code: string } }).error.code,
+      "RECOMMENDATION_REQUIRED",
+    );
+    const exactGateProposal = await transition(created.actionId, 2, {
+      toState: "PROPOSED",
+      recommendation: {
+        summary: "Apply the measured change under its recorded verification gate.",
+        verificationGate: measured.verificationGate,
+      },
+    });
+    assert.equal(exactGateProposal.statusCode, 200, exactGateProposal.body);
+
+    const rowsAfterProposal = await gscStore.loadMetricRows(organizationId, projectId, SEPTEMBER, {
+      connectionId: selectedConnection.id,
+    });
+    await replaceSeptemberRows(
+      rowsAfterProposal.map((row) =>
+        row.query === "measured low ctr" && row.country === "fra"
+          ? { ...row, clicks: 11, ctr: 0.01375 }
+          : row,
+      ),
+    );
+    const changedDuringAction = await promoteRecommendation(forged);
+    assert.equal(changedDuringAction.statusCode, 409, changedDuringAction.body);
+    assert.equal(
+      (JSON.parse(changedDuringAction.body) as { error: { code: string } }).error.code,
+      "MEASUREMENT_WORKFLOW_ADVANCED",
+      "new measurements cannot silently replace evidence after an action is proposed",
+    );
+
+    // Continue from the action created by the real promotion route. Its
+    // verification gate must retain the analysis country filter: including
+    // the Canadian row would incorrectly turn this French low-CTR finding
+    // into a PASS.
+    const approved = await transition(created.actionId, 3, {
+      toState: "APPROVED",
+      approvalDecision: "APPROVE",
+    });
+    assert.equal(approved.statusCode, 200, approved.body);
+    const manuallyReported = await transition(created.actionId, 4, {
+      toState: "REPORTED_MANUALLY",
+      implementation: { whatChanged: "Updated the result title.", how: "Fixture release." },
+      rollback: { strategy: "Restore the previous title.", trigger: "CTR remains below target." },
+    });
+    assert.equal(manuallyReported.statusCode, 200, manuallyReported.body);
+    const measuring = await transition(created.actionId, 5, {
+      toState: "MEASURING",
+      baselineSnapshot: { source: "gsc_query_metrics", window: AUGUST },
+      comparisonWindow: {
+        startsAt: `${SEPTEMBER.startDate}T00:00:00.000Z`,
+        endsAt: `${SEPTEMBER.endDate}T23:59:59.000Z`,
+      },
+    });
+    assert.equal(measuring.statusCode, 200, measuring.body);
+    const evaluated = await transition(created.actionId, 6, { toState: "EVALUATE" });
+    assert.equal(evaluated.statusCode, 200, evaluated.body);
+    const promotedOutcome = (
+      JSON.parse(evaluated.body) as {
+        action: {
+          state: string;
+          verification: { verdict: string; filters: Record<string, unknown> };
+        };
+      }
+    ).action;
+    assert.equal(promotedOutcome.state, "REJECTED");
+    assert.equal(promotedOutcome.verification.verdict, "FAIL");
+    assert.equal(promotedOutcome.verification.filters.country, "fra");
+
+    const viewerEmail = `${TAG}_viewer@test.local`;
+    const viewerRegistration = await inject("POST", "/v1/auth/register", undefined, {
+      email: viewerEmail,
+      password: PW,
+    });
+    assert.equal(viewerRegistration.statusCode, 201, viewerRegistration.body);
+    const viewerBaseCookie = sessionOf(viewerRegistration);
+    await withAdmin(async (client) => {
+      await client.query(
+        `INSERT INTO memberships (user_id, organization_id, role)
+         SELECT id, $1, 'VIEWER' FROM users WHERE email = $2`,
+        [ctx.orgA, viewerEmail],
+      );
+    });
+    const viewerSelected = await inject("POST", "/v1/auth/select-organization", viewerBaseCookie, {
+      organizationId: ctx.orgA,
+    });
+    assert.equal(viewerSelected.statusCode, 200, viewerSelected.body);
+    const viewerCookie = sessionOf(viewerSelected);
+    const evidenceBeforeViewerAttempt = await app.stores.crawl.listEvidence(ctx.orgA, ctx.projectA);
+    const viewerAttempt = await promoteRecommendation(forged, viewerCookie);
+    assert.equal(viewerAttempt.statusCode, 403, viewerAttempt.body);
+    const evidenceAfterViewerAttempt = await app.stores.crawl.listEvidence(ctx.orgA, ctx.projectA);
+    assert.equal(evidenceAfterViewerAttempt.length, evidenceBeforeViewerAttempt.length);
+
+    const stale = await promoteRecommendation({
+      ...measured,
+      subject: { query: "query-without-persisted-metrics", page: "https://example.com/missing" },
+    });
+    assert.equal(stale.statusCode, 409, stale.body);
+    assert.equal(
+      (JSON.parse(stale.body) as { error: { code: string } }).error.code,
+      "MEASUREMENT_STALE",
+    );
+
+    // Once the action has reached a terminal outcome, changed measurements
+    // require a new review instead of rewriting the historical workflow.
+    const duplicate = await promoteRecommendation(forged);
+    assert.equal(duplicate.statusCode, 409, duplicate.body);
+    assert.equal(
+      (JSON.parse(duplicate.body) as { error: { code: string } }).error.code,
+      "MEASUREMENT_WORKFLOW_ADVANCED",
+    );
   });
 
   void it("VERIFIED: approval → modification → waiting window → measured gate passes", async () => {
@@ -434,23 +952,29 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
 
     const evaluated = await transition(ctx.verified, 6, { toState: "EVALUATE" });
     assert.equal(evaluated.statusCode, 200, evaluated.body);
-    const action = (JSON.parse(evaluated.body) as {
-      action: {
-        state: string;
-        verification: {
-          verdict: string;
-          comparedValue: number;
-          observed: Record<string, number>;
-          window: { startDate: string; endDate: string };
-          source: string;
+    const action = (
+      JSON.parse(evaluated.body) as {
+        action: {
+          state: string;
+          verification: {
+            verdict: string;
+            comparedValue: number;
+            observed: Record<string, number>;
+            window: { startDate: string; endDate: string };
+            source: string;
+          };
+          history: unknown[];
         };
-        history: unknown[];
-      };
-    }).action;
+      }
+    ).action;
     assert.equal(action.state, "VERIFIED");
     assert.equal(action.verification.verdict, "PASS");
     assert.equal(action.verification.source, "gsc_query_metrics");
-    assert.deepEqual(action.verification.window, SEPTEMBER, "the declared window is measured exactly");
+    assert.deepEqual(
+      action.verification.window,
+      SEPTEMBER,
+      "the declared window is measured exactly",
+    );
     assert.equal(action.verification.observed.impressions, 49);
     assert.equal(action.verification.observed.clicks, 5);
     assert.ok(Math.abs(action.verification.comparedValue - 5 / 49) < 1e-9, "ctr 5/49 ≥ 0.05");
@@ -474,9 +998,11 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
 
     const evaluated = await transition(ctx.rejected, 6, { toState: "EVALUATE" });
     assert.equal(evaluated.statusCode, 200, evaluated.body);
-    const action = (JSON.parse(evaluated.body) as {
-      action: { state: string; verification: { verdict: string; comparedValue: number } };
-    }).action;
+    const action = (
+      JSON.parse(evaluated.body) as {
+        action: { state: string; verification: { verdict: string; comparedValue: number } };
+      }
+    ).action;
     assert.equal(action.state, "REJECTED");
     assert.equal(action.verification.verdict, "FAIL");
     assert.ok(
@@ -502,9 +1028,14 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
 
     const evaluated = await transition(ctx.inconclusiveSample, 6, { toState: "EVALUATE" });
     assert.equal(evaluated.statusCode, 200, evaluated.body);
-    const action = (JSON.parse(evaluated.body) as {
-      action: { state: string; verification: { verdict: string; reason: string; observed: { impressions: number } } };
-    }).action;
+    const action = (
+      JSON.parse(evaluated.body) as {
+        action: {
+          state: string;
+          verification: { verdict: string; reason: string; observed: { impressions: number } };
+        };
+      }
+    ).action;
     assert.equal(action.state, "INCONCLUSIVE");
     assert.equal(action.verification.verdict, "INCONCLUSIVE");
     assert.equal(action.verification.reason, "insufficient_sample");
@@ -528,15 +1059,118 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
 
     const evaluated = await transition(ctx.inconclusiveNoData, 6, { toState: "EVALUATE" });
     assert.equal(evaluated.statusCode, 200, evaluated.body);
-    const action = (JSON.parse(evaluated.body) as {
-      action: { state: string; verification: { verdict: string; reason: string } };
-    }).action;
+    const action = (
+      JSON.parse(evaluated.body) as {
+        action: { state: string; verification: { verdict: string; reason: string } };
+      }
+    ).action;
     assert.equal(action.state, "INCONCLUSIVE");
     assert.equal(action.verification.reason, "no_gsc_data_in_window");
   });
 
+  void it("does not verify against rows from RUNNING or FAILED sync jobs", async () => {
+    assert.ok(ctx.inconclusiveRunning && ctx.inconclusiveFailed);
+    assert.ok(ctx.orgA && ctx.projectA && ctx.connectionA && app.stores.gsc);
+    const gscStore = app.stores.gsc;
+    const incompleteJob = await gscStore.createOrReuseJob({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: SEPTEMBER.startDate,
+      windowEnd: SEPTEMBER.endDate,
+      idempotencyKey: `${SEPTEMBER.startDate}:${SEPTEMBER.endDate}`,
+    });
+    const incompleteAttempt = await gscStore.claimJob(
+      ctx.orgA,
+      incompleteJob.id,
+      new Date().toISOString(),
+    );
+    assert.ok(incompleteAttempt);
+    await gscStore.persistMetricWindow({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      syncJobId: incompleteJob.id,
+      expectedAttempt: incompleteAttempt,
+      window: SEPTEMBER,
+      rows: [
+        metricRow({
+          date: "2026-09-15",
+          query: "running-only q",
+          page: "https://example.com/running-only",
+          clicks: 50,
+          impressions: 50,
+          ctr: 1,
+          position: 1,
+        }),
+        metricRow({
+          date: "2026-09-15",
+          query: "failed q",
+          page: "https://example.com/failed",
+          clicks: 50,
+          impressions: 50,
+          ctr: 1,
+          position: 1,
+        }),
+      ],
+    });
+
+    await walkToMeasuring(ctx.inconclusiveRunning, {
+      type: "gsc_window",
+      spec: {
+        metric: "impressions",
+        operator: "gte",
+        threshold: 1,
+        query: "running-only q",
+        page: "https://example.com/running-only",
+        minImpressions: 0,
+        windowDays: 30,
+      },
+    });
+    const runningEvaluation = await transition(ctx.inconclusiveRunning, 6, { toState: "EVALUATE" });
+    assert.equal(runningEvaluation.statusCode, 200, runningEvaluation.body);
+    const runningAction = (
+      JSON.parse(runningEvaluation.body) as {
+        action: { state: string; verification: { verdict: string; reason: string } };
+      }
+    ).action;
+    assert.equal(runningAction.state, "INCONCLUSIVE");
+    assert.equal(runningAction.verification.verdict, "INCONCLUSIVE");
+    assert.equal(runningAction.verification.reason, "no_gsc_data_in_window");
+
+    assert.equal(
+      await gscStore.updateJob(ctx.orgA, incompleteJob.id, {
+        status: "FAILED",
+        expectedAttempt: incompleteAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
+    await walkToMeasuring(ctx.inconclusiveFailed, {
+      type: "gsc_window",
+      spec: {
+        metric: "impressions",
+        operator: "gte",
+        threshold: 1,
+        query: "failed q",
+        page: "https://example.com/failed",
+        minImpressions: 0,
+        windowDays: 30,
+      },
+    });
+    const failedEvaluation = await transition(ctx.inconclusiveFailed, 6, { toState: "EVALUATE" });
+    assert.equal(failedEvaluation.statusCode, 200, failedEvaluation.body);
+    const failedAction = (
+      JSON.parse(failedEvaluation.body) as {
+        action: { state: string; verification: { verdict: string; reason: string } };
+      }
+    ).action;
+    assert.equal(failedAction.state, "INCONCLUSIVE");
+    assert.equal(failedAction.verification.verdict, "INCONCLUSIVE");
+    assert.equal(failedAction.verification.reason, "no_gsc_data_in_window");
+  });
+
   void it("refuses to verify before a waiting window is recorded", async () => {
-    const finding = await createFinding(
+    const finding = await createFixtureFinding(
       measuredFinding({
         query: "control q",
         page: "https://example.com/c",
@@ -567,7 +1201,7 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
     assert.ok(ctx.verified && ctx.cookieA);
     const res = await inject("GET", `/v1/gsc/actions/${ctx.verified}/before-after`, ctx.cookieA);
     assert.equal(res.statusCode, 200, res.body);
-    const body = (JSON.parse(res.body) as {
+    const body = JSON.parse(res.body) as {
       state: string;
       gate: string;
       subject: Record<string, string>;
@@ -581,7 +1215,7 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
       } | null;
       verification: { verdict: string };
       freshness: { totalRows: number; latestMetricDate: string | null };
-    });
+    };
     assert.equal(body.state, "VERIFIED");
     assert.equal(body.gate, "gsc_window");
     assert.deepEqual(body.measurementWindow, SEPTEMBER);
@@ -593,7 +1227,155 @@ void describe("GSC-007 Action Center verification via GSC measurements (real Pos
     assert.equal(rec.observed.impressions, 49);
     assert.equal(rec.delta.clicks, -0.5, "10 → 5 clicks, measured");
     assert.equal(body.verification.verdict, "PASS");
-    assert.equal(body.freshness.latestMetricDate, "2026-09-16", "freshness never overstates recency");
+    assert.equal(
+      body.freshness.latestMetricDate,
+      "2026-09-16",
+      "freshness never overstates recency",
+    );
+  });
+
+  void it("withholds before/after metrics when a trusted sync covers only part of the baseline window", async () => {
+    assert.ok(ctx.verified && ctx.cookieA && ctx.connectionA && ctx.projectA && ctx.orgA);
+    await withAdmin(async (client) => {
+      const legacy = await client.query(
+        `UPDATE gsc_sync_jobs
+            SET ingestion_version = 0
+          WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
+            AND window_start <= $4::date AND window_end >= $5::date
+          RETURNING id`,
+        [ctx.orgA, ctx.projectA, ctx.connectionA, AUGUST.endDate, AUGUST.startDate],
+      );
+      assert.ok((legacy.rowCount ?? 0) >= 1, "the fixture has trusted August coverage to reset");
+    });
+    const gsc = app.stores.gsc;
+    assert.ok(gsc);
+    const partial = await gsc.createOrReuseJob({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-08-02",
+      windowEnd: "2026-08-15",
+      idempotencyKey: "action-before-after-partial-baseline-window",
+    });
+    const attempt = await gsc.claimJob(ctx.orgA, partial.id, "2026-10-02T00:00:00.000Z");
+    assert.ok(attempt);
+    await gsc.persistMetricWindow({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      syncJobId: partial.id,
+      expectedAttempt: attempt,
+      window: { startDate: "2026-08-02", endDate: "2026-08-15" },
+      rows: [
+        metricRow({
+          date: "2026-08-15",
+          query: "verified q",
+          page: "https://example.com/v",
+          clicks: 2,
+          impressions: 20,
+          ctr: 0.1,
+          position: 4,
+        }),
+      ],
+    });
+    assert.equal(
+      await gsc.updateJob(ctx.orgA, partial.id, {
+        status: "COMPLETED",
+        expectedAttempt: attempt,
+        rowCount: 1,
+        completedAt: "2026-10-02T00:00:00.000Z",
+        ingestionVersion: 1,
+      }),
+      true,
+    );
+
+    const res = await inject("GET", `/v1/gsc/actions/${ctx.verified}/before-after`, ctx.cookieA);
+    assert.equal(res.statusCode, 409, res.body);
+    assert.equal(
+      (JSON.parse(res.body) as { error: { code: string } }).error.code,
+      "COMPARISON_WINDOW_NOT_SYNCED",
+    );
+    assert.equal(
+      res.body.includes("MEASURED"),
+      false,
+      "partial baseline metrics never reach the caller",
+    );
+  });
+
+  void it("withholds before/after metrics when a trusted sync covers only part of the action window", async () => {
+    assert.ok(ctx.verified && ctx.cookieA && ctx.connectionA && ctx.projectA && ctx.orgA);
+    await withAdmin(async (client) => {
+      const legacy = await client.query(
+        `UPDATE gsc_sync_jobs
+            SET ingestion_version = 0
+          WHERE organization_id = $1 AND project_id = $2 AND connection_id = $3
+            AND window_start <= $4::date AND window_end >= $5::date
+          RETURNING id`,
+        [ctx.orgA, ctx.projectA, ctx.connectionA, SEPTEMBER.endDate, SEPTEMBER.startDate],
+      );
+      assert.ok((legacy.rowCount ?? 0) >= 1, "the fixture has trusted September coverage to reset");
+    });
+    const gsc = app.stores.gsc;
+    assert.ok(gsc);
+    const partial = await gsc.createOrReuseJob({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: SEPTEMBER.startDate,
+      windowEnd: "2026-09-15",
+      idempotencyKey: "action-before-after-partial-window",
+    });
+    const attempt = await gsc.claimJob(ctx.orgA, partial.id, "2026-10-02T00:00:00.000Z");
+    assert.ok(attempt);
+    await gsc.persistMetricWindow({
+      organizationId: ctx.orgA,
+      projectId: ctx.projectA,
+      syncJobId: partial.id,
+      expectedAttempt: attempt,
+      window: { startDate: SEPTEMBER.startDate, endDate: "2026-09-15" },
+      rows: [
+        metricRow({
+          date: "2026-09-15",
+          query: "verified q",
+          page: "https://example.com/v",
+          clicks: 1,
+          impressions: 10,
+          ctr: 0.1,
+          position: 4,
+        }),
+      ],
+    });
+    assert.equal(
+      await gsc.updateJob(ctx.orgA, partial.id, {
+        status: "COMPLETED",
+        expectedAttempt: attempt,
+        rowCount: 1,
+        completedAt: "2026-10-02T00:00:00.000Z",
+        ingestionVersion: 1,
+      }),
+      true,
+    );
+
+    const res = await inject("GET", `/v1/gsc/actions/${ctx.verified}/before-after`, ctx.cookieA);
+    assert.equal(res.statusCode, 409, res.body);
+    assert.equal(
+      (JSON.parse(res.body) as { error: { code: string } }).error.code,
+      "MEASUREMENT_WINDOW_NOT_SYNCED",
+    );
+    assert.equal(res.body.includes("MEASURED"), false, "partial metrics never reach the caller");
+  });
+
+  void it("withholds action comparisons when the action property is no longer active", async () => {
+    assert.ok(ctx.verified && ctx.cookieA && ctx.orgA && ctx.connectionA);
+    const gsc = app.stores.gsc;
+    assert.ok(gsc);
+    assert.equal(await gsc.disconnectConnection(ctx.orgA, ctx.connectionA), true);
+    const res = await inject("GET", `/v1/gsc/actions/${ctx.verified}/before-after`, ctx.cookieA);
+    assert.equal(res.statusCode, 409, res.body);
+    assert.equal(
+      (JSON.parse(res.body) as { error: { code: string } }).error.code,
+      "GSC_PROPERTY_NOT_CONNECTED",
+    );
+    assert.equal(res.body.includes("MEASURED"), false);
   });
 
   void it("cross-tenant before/after is a uniform 404", async () => {

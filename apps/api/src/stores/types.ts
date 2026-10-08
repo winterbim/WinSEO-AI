@@ -6,8 +6,9 @@
 // explicitly labeled as such.
 
 import type { OrgRole } from "@serpvera/contracts";
+import type { AiVisibilityCapture, AiVisibilityStat } from "@serpvera/contracts";
 import type { ActionActor, ActionRecord, ActionTransitionInput } from "@serpvera/db";
-import type { RateLimitDecision } from "../rate-limit.ts";
+import type { RateLimitDecision, RateLimitScope } from "../rate-limit.ts";
 import type { PatchActor, PatchProposal } from "../autofix/workflow.ts";
 
 export interface StoredUser {
@@ -29,6 +30,9 @@ export interface StoredProject {
   name: string;
   primaryDomain: string;
 }
+
+export type IdempotentProjectCreation =
+  { kind: "created" | "replayed"; project: StoredProject } | { kind: "conflict" };
 
 export interface StoredPublicScan {
   id: string;
@@ -78,6 +82,12 @@ export interface ProjectStore {
     name: string,
     primaryDomain: string,
   ): Promise<StoredProject>;
+  createProjectWithIdempotencyKey(
+    organizationId: string,
+    name: string,
+    primaryDomain: string,
+    idempotencyKey: string,
+  ): Promise<IdempotentProjectCreation>;
   /** RLS/tenant-scoped: returns null when the project belongs to another org. */
   getProject(organizationId: string, projectId: string): Promise<StoredProject | null>;
   /** All projects of the active org (RLS-filtered). */
@@ -98,8 +108,10 @@ export interface ScanStore {
 }
 
 export interface RateLimitStore {
-  /** Atomically consume one IP quota unit in the shared backing store. */
-  hit(ip: string, limitPerWindow: number): Promise<RateLimitDecision>;
+  /** Atomically consume one IP quota unit in an operation-specific shared window. */
+  hit(ip: string, limitPerWindow: number, scope?: RateLimitScope): Promise<RateLimitDecision>;
+  /** Return a consumed unit when the operation is rejected by a later admission gate. */
+  release(ip: string, limitPerWindow: number, scope?: RateLimitScope): Promise<void>;
 }
 
 // ─── Server-side sessions (P-GAP-05) ───
@@ -191,6 +203,7 @@ export interface ApiStores {
   crawl: CrawlStore;
   actions: ActionStore;
   patches: PatchStore;
+  aiVisibility: AiVisibilityStore;
   /**
    * Google Search Console access. Deliberately OPTIONAL: the in-memory driver
    * provides no GSC store, because Google token material must exist only as
@@ -198,6 +211,56 @@ export interface ApiStores {
    * than degrading to an in-process placeholder that a restart would erase.
    */
   gsc?: GscStore;
+}
+
+export interface StoredAiVisibilityImport {
+  id: string;
+  projectId: string;
+  uploadedBy: string | null;
+  csvSha256: string;
+  rowCount: number;
+  provenance: "USER_SUPPLIED";
+  epistemicClass: "DOCUMENTED";
+  unverifiedByProvider: true;
+  createdAt: string;
+}
+
+export interface StoredAiVisibilityCapture extends AiVisibilityCapture {
+  id: string;
+  importId: string;
+  rowNumber: number;
+  sampledAt: string;
+}
+
+export interface AiVisibilityStore {
+  createImport(input: {
+    organizationId: string;
+    projectId: string;
+    uploadedBy: string;
+    csvSha256: string;
+    captures: readonly AiVisibilityCapture[];
+  }): Promise<StoredAiVisibilityImport>;
+  listImports(
+    organizationId: string,
+    projectId: string,
+    limit: number,
+    offset: number,
+  ): Promise<StoredAiVisibilityImport[]>;
+  getImport(
+    organizationId: string,
+    projectId: string,
+    importId: string,
+  ): Promise<StoredAiVisibilityImport | null>;
+  listCaptures(
+    organizationId: string,
+    projectId: string,
+    importId: string,
+  ): Promise<StoredAiVisibilityCapture[]>;
+  listStats(
+    organizationId: string,
+    projectId: string,
+    importId: string,
+  ): Promise<AiVisibilityStat[]>;
 }
 
 // ─── Project crawl runs / findings / evidence (P-GAP-04, Evidence Ledger) ───
@@ -263,6 +326,21 @@ export interface StoredCrawlRun {
   completedAt: string | null;
   pagesCrawled: number;
   pagesFailed: number;
+  pageLimit: number | null;
+  stopReason: string | null;
+  templateGroups: StoredTemplateGroup[] | null;
+}
+
+export interface StoredTemplateGroup {
+  id: string;
+  routePattern: string;
+  domSignatureHash: string | null;
+  pageCount: number;
+  sampleUrls: string[];
+  groupingMethod:
+    | "URL_PATTERN_AND_SEMANTIC_DOM_V2"
+    | "URL_PATTERN_ONLY_PRIVACY_SINGLETON_V2"
+    | "SEMANTIC_DOM_PRIVACY_SINGLETON_V1";
 }
 
 export interface StoredFindingDetail extends StoredFinding {
@@ -272,13 +350,21 @@ export interface StoredFindingDetail extends StoredFinding {
 }
 
 export interface CrawlStore {
-  createCrawlRun(organizationId: string, projectId: string, mode: string): Promise<{ id: string }>;
+  /** Atomically enforce one active crawl per project; null means one is already running. */
+  createCrawlRun(
+    organizationId: string,
+    projectId: string,
+    mode: string,
+  ): Promise<{ id: string } | null>;
   finishCrawlRun(
     organizationId: string,
     runId: string,
     status: "completed" | "failed",
     pagesCrawled: number,
     pagesFailed: number,
+    pageLimit?: number | null,
+    stopReason?: string | null,
+    templateGroups?: StoredTemplateGroup[] | null,
   ): Promise<void>;
   listCrawlRuns(organizationId: string, projectId: string): Promise<StoredCrawlRun[]>;
   addFinding(
@@ -291,6 +377,18 @@ export interface CrawlStore {
     projectId: string,
     evidence: EvidenceInput,
   ): Promise<{ id: string }>;
+  createMeasuredGscWorkflow(
+    organizationId: string,
+    projectId: string,
+    finding: FindingInput,
+    evidence: EvidenceInput,
+  ): Promise<{
+    created: boolean;
+    updated: boolean;
+    findingId: string;
+    evidenceId: string;
+    actionId: string;
+  }>;
   listFindings(organizationId: string, projectId: string): Promise<StoredFinding[]>;
   /** Finding detail incl. linked evidence (RLS-scoped; null when foreign). */
   getFinding(organizationId: string, findingId: string): Promise<StoredFindingDetail | null>;
@@ -346,6 +444,7 @@ export interface StoredGscJob {
   windowStart: string;
   windowEnd: string;
   status: string;
+  ingestionVersion: number;
   rowCount: number;
   attempt: number;
   errorCode: string | null;
@@ -402,6 +501,7 @@ export interface GscMetricFilter {
   page?: string;
   device?: string;
   country?: string;
+  connectionId?: string;
 }
 
 export interface GscCredentialInput {
@@ -461,6 +561,8 @@ export interface GscStore {
   }): Promise<StoredGscJob>;
   getJob(organizationId: string, jobId: string): Promise<StoredGscJob | null>;
   listJobs(organizationId: string, projectId: string): Promise<StoredGscJob[]>;
+  /** Atomically claims a PENDING job and returns its fencing attempt. */
+  claimJob(organizationId: string, jobId: string, startedAt: string): Promise<number | null>;
   updateJob(
     organizationId: string,
     jobId: string,
@@ -473,6 +575,8 @@ export interface GscStore {
       errorMessage?: string | null;
       attempt?: number;
       nextRetryAt?: string | null;
+      ingestionVersion?: number;
+      expectedAttempt: number;
     },
   ): Promise<boolean>;
 
@@ -480,6 +584,7 @@ export interface GscStore {
     organizationId: string;
     projectId: string;
     syncJobId: string;
+    expectedAttempt: number;
     window: GscWindowRange;
     rows: readonly GscMetricPoint[];
   }): Promise<number>;
@@ -495,5 +600,9 @@ export interface GscStore {
     window: GscWindowRange,
     filters?: GscMetricFilter,
   ): Promise<GscDailyPoint[]>;
-  metricFreshness(organizationId: string, projectId: string): Promise<GscFreshness>;
+  metricFreshness(
+    organizationId: string,
+    projectId: string,
+    connectionId?: string,
+  ): Promise<GscFreshness>;
 }

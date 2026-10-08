@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "Meso",
+      "text": "The current branch passes formatting, uncached workspace lint, typecheck, PostgreSQL-backed tests, production build, and high-severity dependency audit using the disposable PostgreSQL database with the migration chain applied.",
+      "gate": "Run the captured final gate script; require correct database identity and migration ledger, format check, diff check, uncached lint/typecheck/test/build, and dependency audit to exit 0.",
+      "row_sha256": "104328243d318c5af543d4801602172a455c1fedec4c1e3ae71c26a2fdeb8d8f",
+      "ledger_sha256_before": "245e87734342c1fe91262e6c88d18eba8e34eba4e31ee161b938f1799ffc6e78",
+      "status_before": "PENDING"
+    },
+    "capture_digest": "4eec4e3667cf5fecfc19c77190b19fd1f11dcdd0d76c4b9c19a5bfc25eab2700",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "audit_product_ux",
+    "challenge": "Verified full bound stdout and script; independently checked database identity, migration ledger, explicit start/pass markers, uncached Turbo counts, suite totals, build completion, and dependency audit result.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "0bf632abfa4e7e398938a6482c9de3e26f435174786a7ef8ed04d9aa05795f6b"
+    },
+    "reviewed_at": "2026-10-07T14:41:20.163722Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "058076505a856336876de71e98b2c73a675dff9557ffd521e49ec091896ac418"
+  }
+}

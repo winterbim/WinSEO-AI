@@ -15,13 +15,7 @@ const TABS = [
   { slug: "/changes", label: "Changes" },
 ] as const;
 
-export function GscSubNav({
-  projectId,
-  current,
-}: {
-  projectId: string;
-  current: string;
-}) {
+export function GscSubNav({ projectId, current }: { projectId: string; current: string }) {
   return (
     <nav aria-label="Search Performance" className="flex flex-wrap gap-4 text-sm">
       {TABS.map((tab) => (
@@ -52,7 +46,11 @@ export function FreshnessLine({
     <p className="text-xs text-slate-700">
       {window && (
         <>
-          Dataset window <span className="font-mono">{fmtDate(window.startDate)} → {fmtDate(window.endDate)}</span> ·{" "}
+          Dataset window{" "}
+          <span className="font-mono">
+            {fmtDate(window.startDate)} → {fmtDate(window.endDate)}
+          </span>{" "}
+          ·{" "}
         </>
       )}
       latest measured day <span className="font-mono">{fmtDate(freshness.latestMetricDate)}</span> ·
@@ -67,8 +65,8 @@ export function BlockedCard({ message }: { message: string }) {
       <p className="font-semibold">BLOCKED — Google Search Console is not connected</p>
       <p className="mt-2 text-sm text-slate-700">{message}</p>
       <p className="mt-2 text-xs text-slate-700">
-        No metrics are synthesized while blocked: every number on these pages must
-        come from Google Search Console rows ingested for this project.
+        No metrics are synthesized while blocked: every number on these pages must come from Google
+        Search Console rows ingested for this project.
       </p>
     </div>
   );
@@ -93,9 +91,11 @@ function gate(g: GscMeasuredRecommendation["verificationGate"]): string {
 export function RecommendationCard({
   projectId,
   recommendation: rec,
+  sourceFilters,
 }: {
   projectId: string;
   recommendation: GscMeasuredRecommendation;
+  sourceFilters: Record<string, string>;
 }) {
   const window = rec.comparisonWindow
     ? {
@@ -115,7 +115,11 @@ export function RecommendationCard({
           </span>
           <span className="font-mono text-xs text-slate-700">{rec.module}</span>
         </div>
-        <PromoteFindingButton projectId={projectId} recommendation={rec} />
+        <PromoteFindingButton
+          projectId={projectId}
+          recommendation={rec}
+          sourceFilters={sourceFilters}
+        />
       </div>
       <h3 className="mt-3 font-semibold">{rec.title}</h3>
       <p className="mt-1 text-sm text-slate-700">{rec.rationale}</p>
@@ -136,8 +140,12 @@ export function RecommendationCard({
           </div>
         )}
         <div>
-          <dt className="uppercase tracking-wide text-slate-700">Filters</dt>
+          <dt className="uppercase tracking-wide text-slate-700">Rule thresholds</dt>
           <dd className="break-all font-mono">{JSON.stringify(rec.filters)}</dd>
+        </div>
+        <div>
+          <dt className="uppercase tracking-wide text-slate-700">Dataset filters</dt>
+          <dd className="break-all font-mono">{JSON.stringify(sourceFilters)}</dd>
         </div>
         <div>
           <dt className="uppercase tracking-wide text-slate-700">Verification gate</dt>
@@ -177,11 +185,21 @@ export function MetricTable({
         <caption className="sr-only">{label}</caption>
         <thead>
           <tr className="border-b border-line text-xs uppercase tracking-wide text-slate-700">
-            <th scope="col" className="py-2 pr-4">Date</th>
-            <th scope="col" className="py-2 pr-4 text-right">Clicks</th>
-            <th scope="col" className="py-2 pr-4 text-right">Impressions</th>
-            <th scope="col" className="py-2 pr-4 text-right">CTR</th>
-            <th scope="col" className="py-2 text-right">Avg. position</th>
+            <th scope="col" className="py-2 pr-4">
+              Date
+            </th>
+            <th scope="col" className="py-2 pr-4 text-right">
+              Clicks
+            </th>
+            <th scope="col" className="py-2 pr-4 text-right">
+              Impressions
+            </th>
+            <th scope="col" className="py-2 pr-4 text-right">
+              CTR
+            </th>
+            <th scope="col" className="py-2 text-right">
+              Avg. position
+            </th>
           </tr>
         </thead>
         <tbody>

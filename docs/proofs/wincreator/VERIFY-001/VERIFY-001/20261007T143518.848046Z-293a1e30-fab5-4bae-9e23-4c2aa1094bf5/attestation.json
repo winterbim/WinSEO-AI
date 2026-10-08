@@ -1,0 +1,89 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "Meso",
+      "text": "The current branch passes formatting, complete workspace verification, production build, and high-severity dependency audit using the disposable PostgreSQL database with the migration chain applied.",
+      "gate": "Run the captured final gate script; require correct database identity and migration ledger, format check, diff check, workspace verify, production build, and dependency audit to exit 0.",
+      "row_sha256": "57e37366a1e8f3fe0eed3782c58e544c3f4e4c451ca50d07bf9267c340b77757",
+      "ledger_sha256_before": "55a3c61f932bbe74e8301f2db04af93a4da90b71589a93b256100f420478b0a5",
+      "status_before": "INSUFFICIENT"
+    },
+    "ledger": "winseo-gsc-proof-ledger.md",
+    "builder": "wina",
+    "command": [
+      "env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh"
+    ],
+    "command_string": "'env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh'",
+    "capture": {
+      "status": "CAPTURE_ERROR",
+      "exit_code": null,
+      "error": "cannot execute 'env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh': [Errno 2] No such file or directory: 'env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh'"
+    },
+    "started_at": "2026-10-07T14:35:18.848210Z",
+    "finished_at": "2026-10-07T14:35:18.848935Z",
+    "duration_ms": 0,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "stored_bytes": 0,
+      "truncated": false,
+      "body_stored": true,
+      "tail": ""
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "4246c0c1179f70d41fde5525b1201073ab8ed3c55be53bc4d81127ea24043e6f",
+      "original_bytes": 350,
+      "stored_bytes": 350,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "cannot execute 'env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh': [Errno 2] No such file or directory: 'env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh'"
+    },
+    "files": [
+      {
+        "path": "scripts/verify-disposable-db-gates.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "67bcf761780f19876fa8c0d5fbcc99e041d3a00205a7d8ed7f519f5cbd63baab",
+        "bytes": 2145
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "4feb61f738f2b443fc73790669dd70a90577b27d3843040b7e16f56dd9b64f71",
+      "worktree_digest": "756a69547b76ee2b45904f414c539b5f2804f1997aba165072f6a250b6c58499"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 500000,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "e12714dec7c949e38c3a809d60017e05eae40e75a9bccaf368d4647c95419928"
+  }
+}

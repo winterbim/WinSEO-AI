@@ -1,0 +1,57 @@
+{
+  "baseline_digest": "a9c1543b9fffea12fbe1aef7e25d1e327718428ed510e477f312e94d3e8ed835",
+  "current_snapshot_digest": "daca233d47b32688f69a3616d93f46b2d0aa6f3cc64cebee1e47e712fad4bec5",
+  "delta": {
+    "declared_dependencies": 0,
+    "duplicate_fingerprints": 0,
+    "largest_file_lines": 0,
+    "nonblank_lines": 58,
+    "source_bytes": 2397,
+    "source_files": 0,
+    "source_lines": 64
+  },
+  "dependency_changes": {
+    "added": [],
+    "removed": [],
+    "unparsed_manifest_changes": []
+  },
+  "digest": "b4f35fa05c38e0cd1ccf60ccca7db2c8165e10f67395b8532119d9835c40846d",
+  "file_changes": {
+    "added": [],
+    "changed": [
+      "packages/db/src/gsc-claim-order-migration.test.ts"
+    ],
+    "removed": []
+  },
+  "improved_dimensions": [],
+  "limits": [
+    "structural metrics are proxies, not a code-quality score",
+    "UNCHANGED does not prove that no simpler implementation exists",
+    "behavioral equivalence requires a separate WinCreator proof gate"
+  ],
+  "metrics_after": {
+    "declared_dependencies": 12,
+    "duplicate_fingerprints": 5,
+    "largest_file_lines": 606,
+    "nonblank_lines": 1198,
+    "source_bytes": 50712,
+    "source_files": 4,
+    "source_lines": 1266
+  },
+  "metrics_before": {
+    "declared_dependencies": 12,
+    "duplicate_fingerprints": 5,
+    "largest_file_lines": 606,
+    "nonblank_lines": 1140,
+    "source_bytes": 48315,
+    "source_files": 4,
+    "source_lines": 1202
+  },
+  "policy_digest": "78eef27d5de49a0d903f94956f3d1233fd682325ea5c97b0a4cb3bacfee1cda3",
+  "regressed_dimensions": [
+    "nonblank_lines"
+  ],
+  "schema": "wincreator.distill-report/v1",
+  "verdict": "REVIEW_REQUIRED",
+  "warnings": []
+}

@@ -43,6 +43,13 @@ void describe("rate-limit unit semantics", () => {
     assert.equal(rl.hit("198.51.100.2").allowed, true, "another IP must have its own quota");
   });
 
+  void it("keeps operation scopes independent for one IP", () => {
+    const rl = createRateLimiter(1);
+    assert.equal(rl.hit("198.51.100.4", "auth-login-ip").allowed, true);
+    assert.equal(rl.hit("198.51.100.4", "auth-login-ip").allowed, false);
+    assert.equal(rl.hit("198.51.100.4", "auth-register-ip").allowed, true);
+  });
+
   void it("loopback is exempt (operator/dev) and cannot be exhausted", () => {
     const rl = createRateLimiter(1);
     for (let i = 0; i < 50; i++) {
@@ -59,6 +66,82 @@ void describe("rate-limit unit semantics", () => {
     assert.ok(!isLoopback("203.0.113.7"));
     assert.ok(!isLoopback("8.8.8.8"));
     assert.ok(!isLoopback("128.0.0.1"), "128.x is NOT loopback");
+  });
+});
+
+void describe("authentication rate limits on real Fastify routes", () => {
+  let app: FastifyInstance;
+  const remoteAddress = "203.0.113.109";
+
+  void it("throttles register and login by IP using separate scopes", async () => {
+    app = await buildApp({ driver: "memory" });
+    await app.ready();
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/v1/auth/register",
+        payload: { email: "login-fixture@test.local", password: "valid-password-123" },
+      });
+      assert.equal(registered.statusCode, 201, registered.body);
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const response = await app.inject({
+          method: "POST",
+          url: "/v1/auth/register",
+          remoteAddress,
+          payload: {
+            email: `register-${attempt}@test.local`,
+            password: "valid-password-123",
+          },
+        });
+        assert.equal(response.statusCode, 201, response.body);
+      }
+      const blockedRegistration = await app.inject({
+        method: "POST",
+        url: "/v1/auth/register",
+        remoteAddress,
+        payload: { email: "register-extra@test.local", password: "valid-password-123" },
+      });
+      assert.equal(blockedRegistration.statusCode, 429);
+      assert.equal(
+        blockedRegistration.json<{ error: { code: string } }>().error.code,
+        "AUTH_RATE_LIMITED",
+      );
+      assert.ok(blockedRegistration.headers["retry-after"]);
+
+      const login = await app.inject({
+        method: "POST",
+        url: "/v1/auth/login",
+        remoteAddress,
+        payload: { email: "login-fixture@test.local", password: "valid-password-123" },
+      });
+      assert.equal(login.statusCode, 200, "register quota must not block login quota");
+
+      for (let attempt = 1; attempt < 20; attempt++) {
+        const response = await app.inject({
+          method: "POST",
+          url: "/v1/auth/login",
+          remoteAddress,
+          payload: { email: "missing@test.local", password: "wrong-password" },
+        });
+        assert.equal(response.statusCode, 401, response.body);
+      }
+      const blockedLogin = await app.inject({
+        method: "POST",
+        url: "/v1/auth/login",
+        remoteAddress,
+        payload: { email: "missing@test.local", password: "wrong-password" },
+      });
+      assert.equal(blockedLogin.statusCode, 429);
+      assert.equal(
+        blockedLogin.json<{ error: { code: string } }>().error.code,
+        "AUTH_RATE_LIMITED",
+      );
+      assert.ok(blockedLogin.headers["retry-after"]);
+    } finally {
+      await app.close();
+    }
   });
 });
 

@@ -16,14 +16,18 @@ import {
   createConnection,
   createOauthState,
   createOrReuseJob,
+  claimJob,
   createProject,
   createUser,
   deleteCredential,
   getJob,
   loadMetricRows,
+  GscMeasurementWindowTooLargeError,
+  GscSyncAttemptLostError,
   metricFreshness,
   metricSeries,
   persistMetricWindow,
+  updateJob,
   upsertCredential,
   withAdmin,
   withTenant,
@@ -35,11 +39,20 @@ const ORG_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const STATE_HASH_A = `hash-${TAG}-a`;
 const TOMORROW_ISO = new Date(Date.now() + 86_400_000).toISOString();
 
-const ctx: { projectA: string; projectB: string; connectionA: string; jobA: string } = {
+const ctx: {
+  projectA: string;
+  projectB: string;
+  connectionA: string;
+  jobA: string;
+  jobRetry: string;
+  jobRetryAttempt: number;
+} = {
   projectA: "",
   projectB: "",
   connectionA: "",
   jobA: "",
+  jobRetry: "",
+  jobRetryAttempt: 0,
 };
 
 void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", () => {
@@ -110,10 +123,13 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
       idempotencyKey: "2026-09-01:2026-09-30",
     });
     ctx.jobA = job.id;
+    const expectedAttempt = await claimJob(ORG_A, job.id, new Date().toISOString());
+    assert.equal(expectedAttempt, 1);
     await persistMetricWindow({
       organizationId: ORG_A,
       projectId: ctx.projectA,
       syncJobId: job.id,
+      expectedAttempt,
       window: { startDate: "2026-09-01", endDate: "2026-09-30" },
       rows: [
         {
@@ -139,6 +155,11 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
           position: 8,
         },
       ],
+    });
+    await updateJob(ORG_A, job.id, {
+      status: "COMPLETED",
+      expectedAttempt,
+      completedAt: new Date().toISOString(),
     });
   });
 
@@ -261,7 +282,7 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
     assert.equal(await consumeOauthState(ORG_A, `hash-${TAG}-expired`), null);
   });
 
-  void it("job creation is idempotent per (connection, window) on real constraints", async () => {
+  void it("reuses an in-flight job and creates a new attempt after a completed window", async () => {
     const again = await createOrReuseJob({
       organizationId: ORG_A,
       projectId: ctx.projectA,
@@ -270,7 +291,17 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
       windowEnd: "2026-09-30",
       idempotencyKey: "2026-09-01:2026-09-30",
     });
-    assert.equal(again.id, ctx.jobA, "the UNIQUE index re-arms the same job row");
+    assert.notEqual(again.id, ctx.jobA, "a completed attempt remains immutable history");
+    ctx.jobRetry = again.id;
+    const concurrentReplay = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-09-01",
+      windowEnd: "2026-09-30",
+      idempotencyKey: "2026-09-01:2026-09-30",
+    });
+    assert.equal(concurrentReplay.id, again.id, "retries reuse the active attempt");
     const jobs = await withTenant(ORG_A, async (c) => {
       const res = await c.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM gsc_sync_jobs WHERE project_id = $1`,
@@ -278,14 +309,442 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
       );
       return res.rows[0]?.n ?? -1;
     });
-    assert.equal(jobs, 1);
+    assert.equal(jobs, 2);
+  });
+
+  void it("serializes concurrent job claims and rejects stale fencing attempts", async () => {
+    const claims = await Promise.all([
+      claimJob(ORG_A, ctx.jobRetry, new Date().toISOString()),
+      claimJob(ORG_A, ctx.jobRetry, new Date().toISOString()),
+    ]);
+    const winner = claims.find((attempt): attempt is number => attempt !== null);
+    assert.ok(winner, "one request must acquire the pending job");
+    assert.equal(claims.filter((attempt) => attempt !== null).length, 1);
+    ctx.jobRetryAttempt = winner;
+
+    await assert.rejects(
+      persistMetricWindow({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        syncJobId: ctx.jobRetry,
+        expectedAttempt: winner - 1,
+        window: { startDate: "2026-09-01", endDate: "2026-09-30" },
+        rows: [],
+      }),
+      (error: unknown) => error instanceof GscSyncAttemptLostError,
+    );
+    assert.equal(
+      await updateJob(ORG_A, ctx.jobRetry, {
+        status: "FAILED",
+        expectedAttempt: winner - 1,
+        completedAt: new Date().toISOString(),
+      }),
+      false,
+      "a stale worker cannot demote the current attempt",
+    );
+    assert.equal((await getJob(ORG_A, ctx.jobRetry))?.status, "RUNNING");
+    assert.equal(
+      await updateJob(ORG_A, ctx.jobRetry, {
+        status: "FAILED",
+        expectedAttempt: winner,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+      "the winning worker can finish its current attempt after stale writes are rejected",
+    );
+  });
+
+  void it("reclaims an expired RUNNING job without exposing its partial rows", async () => {
+    const staleJob = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-09-01",
+      windowEnd: "2026-09-30",
+      idempotencyKey: "2026-09-01:2026-09-30",
+    });
+    const expiredStartedAt = new Date(Date.now() - 60 * 60_000).toISOString();
+    const staleAttempt = await claimJob(ORG_A, staleJob.id, expiredStartedAt);
+    assert.ok(staleAttempt);
+    await persistMetricWindow({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      syncJobId: staleJob.id,
+      expectedAttempt: staleAttempt,
+      window: { startDate: "2026-09-01", endDate: "2026-09-30" },
+      rows: [
+        {
+          date: "2026-09-15",
+          query: "abandoned-partial-query",
+          page: "https://alpha.example.com/partial",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 999,
+          impressions: 999,
+          ctr: 1,
+          position: 1,
+        },
+      ],
+    });
+
+    const beforeReclaim = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-09-01", endDate: "2026-09-30" },
+      { connectionId: ctx.connectionA },
+    );
+    assert.equal(beforeReclaim.length, 2, "the previous completed measurements remain readable");
+
+    const reclaimed = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-09-01",
+      windowEnd: "2026-09-30",
+      idempotencyKey: "2026-09-01:2026-09-30",
+    });
+    assert.equal(reclaimed.id, staleJob.id);
+    assert.equal(reclaimed.status, "PENDING");
+    const freshAttempt = await claimJob(ORG_A, reclaimed.id, new Date().toISOString());
+    if (freshAttempt === null) throw new Error("the expired job must be claimable");
+    assert.equal(freshAttempt, staleAttempt + 1, "reclaim increments the fencing attempt");
+
+    await assert.rejects(
+      persistMetricWindow({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        syncJobId: staleJob.id,
+        expectedAttempt: staleAttempt,
+        window: { startDate: "2026-09-01", endDate: "2026-09-30" },
+        rows: [],
+      }),
+      (error: unknown) => error instanceof GscSyncAttemptLostError,
+    );
+    assert.equal(
+      await updateJob(ORG_A, staleJob.id, {
+        status: "FAILED",
+        expectedAttempt: staleAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      false,
+      "an abandoned worker cannot fail the reclaimed job",
+    );
+
+    await persistMetricWindow({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      syncJobId: reclaimed.id,
+      expectedAttempt: freshAttempt,
+      window: { startDate: "2026-09-01", endDate: "2026-09-30" },
+      rows: [
+        {
+          date: "2026-09-15",
+          query: "fresh-query",
+          page: "https://alpha.example.com/fresh",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 2,
+          impressions: 20,
+          ctr: 0.1,
+          position: 2,
+        },
+      ],
+    });
+    assert.equal(
+      await updateJob(ORG_A, reclaimed.id, {
+        status: "COMPLETED",
+        expectedAttempt: freshAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
+    const finalRows = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-09-01", endDate: "2026-09-30" },
+      { connectionId: ctx.connectionA },
+    );
+    assert.equal(finalRows.length, 1);
+    assert.equal(finalRows[0]?.query, "fresh-query");
+  });
+
+  void it("preserves writes from distinct jobs with overlapping windows", async () => {
+    const longWindow = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-10-15",
+      windowEnd: "2026-11-15",
+      idempotencyKey: "2026-10-15:2026-11-15",
+    });
+    const longAttempt = await claimJob(ORG_A, longWindow.id, "2026-10-01T00:00:00.000Z");
+    assert.ok(longAttempt);
+    await persistMetricWindow({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      syncJobId: longWindow.id,
+      expectedAttempt: longAttempt,
+      window: { startDate: "2026-10-15", endDate: "2026-11-15" },
+      rows: [
+        {
+          date: "2026-10-20",
+          query: "long-window-overlap",
+          page: "https://alpha.example.com/long-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 12,
+          impressions: 120,
+          ctr: 0.1,
+          position: 3,
+        },
+        {
+          date: "2026-11-05",
+          query: "long-window-tail",
+          page: "https://alpha.example.com/long-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 5,
+          impressions: 50,
+          ctr: 0.1,
+          position: 4,
+        },
+      ],
+    });
+
+    const shortWindow = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-10-01",
+      windowEnd: "2026-10-31",
+      idempotencyKey: "2026-10-01:2026-10-31",
+    });
+    // Simulate a second API instance with a clock that is one day behind.
+    // PostgreSQL claim order, rather than the client timestamp, must win.
+    const shortAttempt = await claimJob(ORG_A, shortWindow.id, "2026-09-30T00:00:00.000Z");
+    assert.ok(shortAttempt);
+    await persistMetricWindow({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      syncJobId: shortWindow.id,
+      expectedAttempt: shortAttempt,
+      window: { startDate: "2026-10-01", endDate: "2026-10-31" },
+      rows: [
+        {
+          date: "2026-10-02",
+          query: "short-window-only",
+          page: "https://alpha.example.com/short-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 3,
+          impressions: 30,
+          ctr: 0.1,
+          position: 6,
+        },
+        {
+          date: "2026-10-20",
+          query: "short-window-overlap",
+          page: "https://alpha.example.com/short-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 4,
+          impressions: 40,
+          ctr: 0.1,
+          position: 5,
+        },
+      ],
+    });
+    assert.equal(
+      await updateJob(ORG_A, shortWindow.id, {
+        status: "COMPLETED",
+        expectedAttempt: shortAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
+
+    const beforeLongCompletion = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-10-01", endDate: "2026-11-15" },
+      { connectionId: ctx.connectionA },
+    );
+    assert.deepEqual(
+      beforeLongCompletion.map((row) => row.query).sort(),
+      ["short-window-only", "short-window-overlap"],
+      "the partial long-window job cannot leak into measured reads",
+    );
+
+    assert.equal(
+      await updateJob(ORG_A, longWindow.id, {
+        status: "COMPLETED",
+        expectedAttempt: longAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
+    const finalRows = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-10-01", endDate: "2026-11-15" },
+      { connectionId: ctx.connectionA },
+    );
+    assert.deepEqual(
+      finalRows.map((row) => row.query).sort(),
+      ["long-window-tail", "short-window-only", "short-window-overlap"],
+      "the latest-claimed fetch wins its overlap even when an older fetch completes later",
+    );
+
+    await withAdmin(async (client) => {
+      await client.query("DELETE FROM gsc_query_metrics WHERE sync_job_id = ANY($1::uuid[])", [
+        [longWindow.id, shortWindow.id],
+      ]);
+      await client.query("DELETE FROM gsc_sync_jobs WHERE id = ANY($1::uuid[])", [
+        [longWindow.id, shortWindow.id],
+      ]);
+    });
+  });
+
+  void it("lets the newest fetch replace an older completed overlap", async () => {
+    const olderWindow = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-12-15",
+      windowEnd: "2027-01-15",
+      idempotencyKey: "2026-12-15:2027-01-15",
+    });
+    const olderAttempt = await claimJob(ORG_A, olderWindow.id, "2026-11-01T00:00:00.000Z");
+    assert.ok(olderAttempt);
+    await persistMetricWindow({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      syncJobId: olderWindow.id,
+      expectedAttempt: olderAttempt,
+      window: { startDate: "2026-12-15", endDate: "2027-01-15" },
+      rows: [
+        {
+          date: "2026-12-20",
+          query: "older-window-overlap",
+          page: "https://alpha.example.com/older-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 12,
+          impressions: 120,
+          ctr: 0.1,
+          position: 3,
+        },
+        {
+          date: "2027-01-10",
+          query: "older-window-tail",
+          page: "https://alpha.example.com/older-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 5,
+          impressions: 50,
+          ctr: 0.1,
+          position: 4,
+        },
+      ],
+    });
+
+    const newerWindow = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-12-01",
+      windowEnd: "2026-12-31",
+      idempotencyKey: "2026-12-01:2026-12-31",
+    });
+    const newerAttempt = await claimJob(ORG_A, newerWindow.id, "2026-11-01T00:00:00.000Z");
+    assert.ok(newerAttempt);
+    await persistMetricWindow({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      syncJobId: newerWindow.id,
+      expectedAttempt: newerAttempt,
+      window: { startDate: "2026-12-01", endDate: "2026-12-31" },
+      rows: [
+        {
+          date: "2026-12-05",
+          query: "newer-window-only",
+          page: "https://alpha.example.com/newer-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 3,
+          impressions: 30,
+          ctr: 0.1,
+          position: 6,
+        },
+        {
+          date: "2026-12-20",
+          query: "newer-window-overlap",
+          page: "https://alpha.example.com/newer-window",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 4,
+          impressions: 40,
+          ctr: 0.1,
+          position: 5,
+        },
+      ],
+    });
+
+    assert.equal(
+      await updateJob(ORG_A, olderWindow.id, {
+        status: "COMPLETED",
+        expectedAttempt: olderAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
+    assert.equal(
+      await updateJob(ORG_A, newerWindow.id, {
+        status: "COMPLETED",
+        expectedAttempt: newerAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
+
+    const rows = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-12-01", endDate: "2027-01-15" },
+      { connectionId: ctx.connectionA },
+    );
+    assert.deepEqual(
+      rows.map((row) => row.query).sort(),
+      ["newer-window-only", "newer-window-overlap", "older-window-tail"],
+      "a later fetch replaces an older completed overlap and retains non-overlapping history",
+    );
+
+    await withAdmin(async (client) => {
+      await client.query("DELETE FROM gsc_query_metrics WHERE sync_job_id = ANY($1::uuid[])", [
+        [olderWindow.id, newerWindow.id],
+      ]);
+      await client.query("DELETE FROM gsc_sync_jobs WHERE id = ANY($1::uuid[])", [
+        [olderWindow.id, newerWindow.id],
+      ]);
+    });
   });
 
   void it("window replacement is atomic: revised rows overwrite, empty re-sync erases", async () => {
+    const replacement = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-09-01",
+      windowEnd: "2026-09-30",
+      idempotencyKey: "2026-09-01:2026-09-30",
+    });
+    const expectedAttempt = await claimJob(ORG_A, replacement.id, new Date().toISOString());
+    assert.ok(expectedAttempt);
     const replaced = await persistMetricWindow({
       organizationId: ORG_A,
       projectId: ctx.projectA,
-      syncJobId: ctx.jobA,
+      syncJobId: replacement.id,
+      expectedAttempt,
       window: { startDate: "2026-09-01", endDate: "2026-09-30" },
       rows: [
         {
@@ -302,6 +761,14 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
       ],
     });
     assert.equal(replaced, 1);
+    assert.equal(
+      await updateJob(ORG_A, replacement.id, {
+        status: "COMPLETED",
+        expectedAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
     let rows = await loadMetricRows(ORG_A, ctx.projectA, {
       startDate: "2026-09-01",
       endDate: "2026-09-30",
@@ -309,14 +776,33 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
     assert.equal(rows.length, 1, "the withdrawn row is gone, not doubled");
     assert.equal(rows[0]?.clicks, 7);
 
+    const emptyReplacement = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-09-01",
+      windowEnd: "2026-09-30",
+      idempotencyKey: "2026-09-01:2026-09-30",
+    });
+    const emptyAttempt = await claimJob(ORG_A, emptyReplacement.id, new Date().toISOString());
+    assert.ok(emptyAttempt);
     const erased = await persistMetricWindow({
       organizationId: ORG_A,
       projectId: ctx.projectA,
-      syncJobId: ctx.jobA,
+      syncJobId: emptyReplacement.id,
+      expectedAttempt: emptyAttempt,
       window: { startDate: "2026-09-01", endDate: "2026-09-30" },
       rows: [],
     });
     assert.equal(erased, 0);
+    assert.equal(
+      await updateJob(ORG_A, emptyReplacement.id, {
+        status: "COMPLETED",
+        expectedAttempt: emptyAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
     rows = await loadMetricRows(ORG_A, ctx.projectA, {
       startDate: "2026-09-01",
       endDate: "2026-09-30",
@@ -325,10 +811,21 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
   });
 
   void it("read paths filter dimensions and report honest freshness", async () => {
+    const completedAttempt = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-09-01",
+      windowEnd: "2026-09-30",
+      idempotencyKey: "2026-09-01:2026-09-30",
+    });
+    const expectedAttempt = await claimJob(ORG_A, completedAttempt.id, new Date().toISOString());
+    assert.ok(expectedAttempt);
     await persistMetricWindow({
       organizationId: ORG_A,
       projectId: ctx.projectA,
-      syncJobId: ctx.jobA,
+      syncJobId: completedAttempt.id,
+      expectedAttempt,
       window: { startDate: "2026-09-01", endDate: "2026-09-30" },
       rows: [
         {
@@ -355,6 +852,14 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
         },
       ],
     });
+    assert.equal(
+      await updateJob(ORG_A, completedAttempt.id, {
+        status: "COMPLETED",
+        expectedAttempt,
+        completedAt: new Date().toISOString(),
+      }),
+      true,
+    );
 
     const filtered = await loadMetricRows(
       ORG_A,
@@ -364,6 +869,18 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
     );
     assert.equal(filtered.length, 1);
     assert.equal(filtered[0]?.query, "alpha mobile");
+
+    await assert.rejects(
+      loadMetricRows(
+        ORG_A,
+        ctx.projectA,
+        { startDate: "2026-09-01", endDate: "2026-09-30" },
+        { connectionId: ctx.connectionA },
+        1,
+      ),
+      (error: unknown) => error instanceof GscMeasurementWindowTooLargeError,
+      "an over-limit window must fail explicitly instead of looking complete",
+    );
 
     const series = await metricSeries(ORG_A, ctx.projectA, {
       startDate: "2026-09-01",
@@ -381,6 +898,185 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
     // And a foreign tenant asking the same questions gets honest emptiness.
     const foreign = await metricFreshness(ORG_B, ctx.projectA);
     assert.deepEqual(foreign, { latestMetricDate: null, lastSyncAt: null, totalRows: 0 });
+  });
+
+  void it("keeps complete rows visible and excludes partial rows until the new job completes", async () => {
+    const partialJob = await createOrReuseJob({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      connectionId: ctx.connectionA,
+      windowStart: "2026-09-01",
+      windowEnd: "2026-09-30",
+      idempotencyKey: "2026-09-01:2026-09-30",
+    });
+    const expectedAttempt = await claimJob(ORG_A, partialJob.id, new Date().toISOString());
+    assert.ok(expectedAttempt);
+    await persistMetricWindow({
+      organizationId: ORG_A,
+      projectId: ctx.projectA,
+      syncJobId: partialJob.id,
+      expectedAttempt,
+      window: { startDate: "2026-09-01", endDate: "2026-09-30" },
+      rows: [
+        {
+          date: "2026-09-15",
+          query: "partial-only-query",
+          page: "https://alpha.example.com/new",
+          country: "fra",
+          device: "DESKTOP",
+          clicks: 99,
+          impressions: 100,
+          ctr: 0.99,
+          position: 1,
+        },
+      ],
+    });
+
+    const incompleteRows = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-09-01", endDate: "2026-09-30" },
+      { query: "partial-only-query", connectionId: ctx.connectionA },
+    );
+    assert.deepEqual(incompleteRows, [], "a running job cannot create measured rows");
+    const priorCompleteRows = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-09-01", endDate: "2026-09-30" },
+      { connectionId: ctx.connectionA },
+    );
+    assert.equal(priorCompleteRows.length, 2, "the last completed window remains available");
+
+    await updateJob(ORG_A, partialJob.id, {
+      status: "COMPLETED",
+      expectedAttempt,
+      completedAt: new Date().toISOString(),
+    });
+    const completedRows = await loadMetricRows(
+      ORG_A,
+      ctx.projectA,
+      { startDate: "2026-09-01", endDate: "2026-09-30" },
+      { connectionId: ctx.connectionA },
+    );
+    assert.equal(completedRows.length, 1, "completion atomically retires the old window");
+    assert.equal(completedRows[0]?.query, "partial-only-query");
+    assert.equal(completedRows[0].clicks, 99);
+  });
+
+  void it("excludes legacy completed jobs from coverage, freshness, and measured series", async () => {
+    const window = { startDate: "2025-10-05", endDate: "2025-10-05" };
+    const before = await metricFreshness(ORG_A, ctx.projectA, ctx.connectionA);
+    const createdIds: string[] = [];
+    const persistAndComplete = async (
+      jobId: string,
+      clicks: number,
+      ingestionVersion: number,
+    ): Promise<void> => {
+      const expectedAttempt = await claimJob(ORG_A, jobId, new Date().toISOString());
+      assert.ok(expectedAttempt);
+      await persistMetricWindow({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        syncJobId: jobId,
+        expectedAttempt,
+        window,
+        rows: [
+          {
+            date: window.startDate,
+            query: "versioned-ingestion-fixture",
+            page: "https://alpha.example.com/versioned-fixture",
+            country: "fra",
+            device: "DESKTOP",
+            clicks,
+            impressions: 10,
+            ctr: clicks / 10,
+            position: 4,
+          },
+        ],
+      });
+      await updateJob(ORG_A, jobId, {
+        status: "COMPLETED",
+        ingestionVersion,
+        expectedAttempt,
+        completedAt: new Date().toISOString(),
+      });
+    };
+
+    try {
+      const legacy = await createOrReuseJob({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        connectionId: ctx.connectionA,
+        windowStart: window.startDate,
+        windowEnd: window.endDate,
+        idempotencyKey: "legacy-ingestion-version-fixture",
+      });
+      createdIds.push(legacy.id);
+      assert.equal(legacy.ingestion_version, 0);
+      await persistAndComplete(legacy.id, 2, 0);
+
+      assert.deepEqual(
+        await loadMetricRows(ORG_A, ctx.projectA, window, {
+          query: "versioned-ingestion-fixture",
+          connectionId: ctx.connectionA,
+        }),
+        [],
+        "legacy rows are not exposed as measurements",
+      );
+      assert.deepEqual(
+        await metricSeries(ORG_A, ctx.projectA, window, {
+          query: "versioned-ingestion-fixture",
+          connectionId: ctx.connectionA,
+        }),
+        [],
+        "legacy rows do not enter the Search Performance series",
+      );
+      assert.equal(
+        (await metricFreshness(ORG_A, ctx.projectA, ctx.connectionA)).totalRows,
+        before.totalRows,
+        "legacy rows do not change measured-row freshness",
+      );
+
+      const current = await createOrReuseJob({
+        organizationId: ORG_A,
+        projectId: ctx.projectA,
+        connectionId: ctx.connectionA,
+        windowStart: window.startDate,
+        windowEnd: window.endDate,
+        idempotencyKey: "legacy-ingestion-version-fixture",
+      });
+      createdIds.push(current.id);
+      assert.equal(current.ingestion_version, 0, "a pending job is not yet trusted");
+      await persistAndComplete(current.id, 7, 1);
+      assert.equal((await getJob(ORG_A, current.id))?.ingestion_version, 1);
+
+      const rows = await loadMetricRows(ORG_A, ctx.projectA, window, {
+        query: "versioned-ingestion-fixture",
+        connectionId: ctx.connectionA,
+      });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]?.clicks, 7);
+      assert.deepEqual(
+        await metricSeries(ORG_A, ctx.projectA, window, {
+          query: "versioned-ingestion-fixture",
+          connectionId: ctx.connectionA,
+        }),
+        [{ date: window.startDate, clicks: 7, impressions: 10, ctr: 0.7, position: 4 }],
+      );
+      assert.equal(
+        (await metricFreshness(ORG_A, ctx.projectA, ctx.connectionA)).totalRows,
+        before.totalRows + 1,
+      );
+    } finally {
+      if (createdIds.length) {
+        await withAdmin(async (c) => {
+          await c.query(`DELETE FROM gsc_query_metrics WHERE sync_job_id = ANY($1::uuid[])`, [
+            createdIds,
+          ]);
+          await c.query(`DELETE FROM gsc_sync_jobs WHERE id = ANY($1::uuid[])`, [createdIds]);
+        });
+      }
+    }
   });
 
   void it("credential deletion is tenant-scoped (disconnect cannot hit a foreign grant)", async () => {
@@ -402,10 +1098,7 @@ void describe("GSC-003 tenant isolation on GSC tables (real PostgreSQL RLS)", ()
       // Anything that could hold a token VALUE must be envelope ciphertext.
       // (Timestamps and `token_type` are metadata and exempt.)
       if (/(^|_)access_token$|(^|_)refresh_token$/.test(name)) {
-        assert.ok(
-          name.startsWith("encrypted_"),
-          `token column ${name} must be envelope-encrypted`,
-        );
+        assert.ok(name.startsWith("encrypted_"), `token column ${name} must be envelope-encrypted`);
       }
     }
     assert.ok(columns.includes("encrypted_refresh_token"));

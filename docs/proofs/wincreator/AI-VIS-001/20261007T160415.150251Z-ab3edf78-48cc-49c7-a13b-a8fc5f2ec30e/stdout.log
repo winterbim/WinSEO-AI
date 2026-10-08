@@ -1,0 +1,20 @@
+GATE_START PostgreSQL identity and migration ledger
+   database   | role | port  
+--------------+------+-------
+ serpvera_dev | wina | 55432
+(1 row)
+
+DO
+                                                                                                                                                                                                     required_recent_migrations                                                                                                                                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0019_gsc_property_scoped_measurements, 0019w_gsc_effective_acl_fence, 0019x_gsc_parent_delete_fence, 0019y_gsc_sync_write_fence, 0019z_gsc_claim_order_preflight, 0019zz_gsc_sync_migration_guard, 0020_gsc_sync_claim_order, 0021_remove_gsc_sync_migration_guard, 0022_restore_gsc_runtime_writes, 0023_restore_gsc_parent_deletes, 0024_restore_gsc_acl_baseline, 0025_ai_visibility_imports, 0026_ai_visibility_capture_org_fk
+(1 row)
+
+GATE_PASS PostgreSQL identity and migration ledger
+GATE_START format:check
+
+> serpvera@0.1.0 format:check /tmp/winseo-publish
+> prettier --check .
+
+Checking formatting...
+ ELIFECYCLE  Command failed with exit code 1.

@@ -1,8 +1,8 @@
 // ─── GSC Search Analytics ingestion ───
 //
 // Responsibilities, in order:
-//   1. One idempotent job row per (connection, window) — a retry re-arms the
-//      same row instead of creating a twin that would double-count.
+//   1. One active job per (connection, window), atomically claimed; completed
+//      attempts remain immutable history and a fresh attempt replaces them.
 //   2. A valid access token (refreshing transparently; no credentials →
 //      CREDENTIALS_REQUIRED, never fabricated rows).
 //   3. Paginated fetch with deterministic de-duplication across pages.
@@ -11,11 +11,7 @@
 //   6. Classified retry with exponential backoff for transient failures only.
 
 import { validateGscRow } from "./sync.ts";
-import {
-  GscCredentialsRequiredError,
-  type GscMetricRow,
-  type GscSyncWindow,
-} from "./types.ts";
+import { GscCredentialsRequiredError, type GscMetricRow, type GscSyncWindow } from "./types.ts";
 import {
   GscApiError,
   type GoogleTransport,
@@ -23,15 +19,27 @@ import {
 } from "./google-transport.ts";
 import { getValidAccessToken } from "./oauth.ts";
 import type { GscStore, GscWindowRange } from "../../stores/types.ts";
+import { GSC_SYNC_JOB_LEASE_MS, GscSyncAttemptLostError } from "@serpvera/db";
 
 /** Dimensions persisted by 0006 — one row per day × query × page × country × device. */
 export const GSC_DIMENSIONS = ["date", "query", "page", "country", "device"] as const;
+/** Version 1 identifies jobs handled by the bounded, de-duplicating collector. */
+export const GSC_INGESTION_VERSION = 1;
 export const DEFAULT_ROW_LIMIT = 25_000; // Google's documented page maximum
 export const DEFAULT_MAX_ROWS = 250_000; // Hard cap so one job cannot exhaust memory
 export const DEFAULT_MAX_ATTEMPTS = 3;
 export const RETRY_BASE_DELAY_MS = 250;
 /** Quota exhaustion deserves a longer cool-down than a transient 5xx. */
 export const QUOTA_BACKOFF_MULTIPLIER = 8;
+
+class GscResultLimitExceededError extends Error {
+  constructor(maxRows: number) {
+    super(
+      `Search Console returned more than the configured ${maxRows.toLocaleString()} row limit; this window was not persisted.`,
+    );
+    this.name = "GscResultLimitExceededError";
+  }
+}
 
 export interface GscIngestDeps {
   store: GscStore;
@@ -52,10 +60,7 @@ export interface GscIngestDeps {
 }
 
 export type GscIngestStatus =
-  | "COMPLETED"
-  | "FAILED"
-  | "CREDENTIALS_REQUIRED"
-  | "RETRY_SCHEDULED";
+  "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CREDENTIALS_REQUIRED" | "RETRY_SCHEDULED";
 
 export interface GscIngestOutcome {
   jobId: string;
@@ -124,26 +129,36 @@ async function fetchAllPages(
 ): Promise<GscMetricRow[]> {
   const rowLimit = deps.rowLimit ?? DEFAULT_ROW_LIMIT;
   const maxRows = deps.maxRows ?? DEFAULT_MAX_ROWS;
+  if (!Number.isInteger(rowLimit) || rowLimit < 1 || rowLimit > DEFAULT_ROW_LIMIT) {
+    throw new Error(`rowLimit must be an integer from 1 to ${DEFAULT_ROW_LIMIT}.`);
+  }
+  if (!Number.isInteger(maxRows) || maxRows < 1) {
+    throw new Error("maxRows must be a positive integer.");
+  }
   const collected: GscMetricRow[] = [];
   let startRow = 0;
 
   for (;;) {
+    const remaining = maxRows - collected.length;
+    // Fetch at most one row over the remaining capacity. That extra row is a
+    // sentinel: it proves the local cap was exceeded without holding an
+    // unbounded response in memory.
+    const requestRowLimit = Math.min(rowLimit, remaining + 1);
     const request: SearchAnalyticsRequest = {
       startDate: window.startDate,
       endDate: window.endDate,
       dimensions: [...GSC_DIMENSIONS],
-      rowLimit,
+      rowLimit: requestRowLimit,
       startRow,
     };
     const page = await deps.transport.querySearchAnalytics(accessToken, deps.property, request);
     if (page.rows.length === 0) break;
+    if (page.rows.length > remaining) throw new GscResultLimitExceededError(maxRows);
     collected.push(...page.rows);
-    if (page.rows.length < rowLimit) break;
-    if (collected.length >= maxRows) break;
     startRow += page.rows.length;
   }
 
-  return collected.slice(0, maxRows);
+  return collected;
 }
 
 /**
@@ -183,6 +198,41 @@ export async function runGscIngest(
   };
   await readFreshness();
 
+  const currentOutcome = async (): Promise<GscIngestOutcome> => {
+    const current = await deps.store.getJob(deps.organizationId, job.id);
+    await readFreshness();
+    const status = current?.status;
+    const knownStatus: GscIngestStatus =
+      status === "COMPLETED" || status === "FAILED" || status === "CREDENTIALS_REQUIRED"
+        ? status
+        : status === "PENDING"
+          ? "PENDING"
+          : "RUNNING";
+    return {
+      jobId: job.id,
+      status: knownStatus,
+      rowCount: current?.rowCount ?? 0,
+      attempt: current?.attempt ?? job.attempt,
+      window: range,
+      error: current?.errorCode
+        ? {
+            code: current.errorCode,
+            message: current.errorMessage ?? "Search Console sync did not complete.",
+            retryable: current.nextRetryAt !== null,
+          }
+        : null,
+      nextRetryAt: current?.nextRetryAt ?? null,
+      freshness: { latestMetricDate, lastSyncAt, totalRows },
+    };
+  };
+
+  const claimAttempt = await deps.store.claimJob(
+    deps.organizationId,
+    job.id,
+    new Date(now()).toISOString(),
+  );
+  if (claimAttempt === null) return currentOutcome();
+
   const finish = async (
     status: GscIngestOutcome["status"],
     extra: {
@@ -191,18 +241,19 @@ export async function runGscIngest(
       nextRetryAt?: string | null;
     },
   ): Promise<GscIngestOutcome> => {
-    await deps.store.updateJob(deps.organizationId, job.id, {
+    const updated = await deps.store.updateJob(deps.organizationId, job.id, {
       status,
       attempt,
+      expectedAttempt: claimAttempt,
       rowCount: extra.rowCount,
       errorCode: extra.error?.code ?? null,
       errorMessage: extra.error?.message ?? null,
       nextRetryAt: extra.nextRetryAt ?? null,
+      ingestionVersion: status === "COMPLETED" ? GSC_INGESTION_VERSION : undefined,
       completedAt:
-        status === "COMPLETED" || status === "FAILED"
-          ? new Date(now()).toISOString()
-          : undefined,
+        status === "COMPLETED" || status === "FAILED" ? new Date(now()).toISOString() : undefined,
     });
+    if (!updated) return currentOutcome();
     if (status === "COMPLETED") {
       await deps.store.markConnectionSynced(
         deps.organizationId,
@@ -222,12 +273,6 @@ export async function runGscIngest(
       freshness: { latestMetricDate, lastSyncAt, totalRows },
     };
   };
-
-  await deps.store.updateJob(deps.organizationId, job.id, {
-    status: "RUNNING",
-    startedAt: new Date(now()).toISOString(),
-    attempt: attempt + 1,
-  });
 
   let lastError: GscApiError | undefined;
   let rows: GscMetricRow[] = [];
@@ -261,6 +306,16 @@ export async function runGscIngest(
       lastError = undefined;
       break;
     } catch (err) {
+      if (err instanceof GscResultLimitExceededError) {
+        return finish("FAILED", {
+          error: {
+            code: "RESULT_LIMIT_EXCEEDED",
+            message: err.message,
+            retryable: false,
+          },
+          nextRetryAt: null,
+        });
+      }
       if (err instanceof GscCredentialsRequiredError) {
         // No grant, no data. The job says so; nothing is invented.
         return finish("CREDENTIALS_REQUIRED", {
@@ -297,23 +352,34 @@ export async function runGscIngest(
   // value, and every input row was validated above — the aggregate is valid.
   const deduped = aggregateMetricRows(rows);
 
-  const written = await deps.store.persistMetricWindow({
-    organizationId: deps.organizationId,
-    projectId: deps.projectId,
-    syncJobId: job.id,
-    window: range,
-    rows: deduped,
-  });
+  let written: number;
+  try {
+    written = await deps.store.persistMetricWindow({
+      organizationId: deps.organizationId,
+      projectId: deps.projectId,
+      syncJobId: job.id,
+      expectedAttempt: claimAttempt,
+      window: range,
+      rows: deduped,
+    });
+  } catch (err) {
+    if (err instanceof GscSyncAttemptLostError) return currentOutcome();
+    throw err;
+  }
 
   return finish("COMPLETED", { rowCount: written, error: null, nextRetryAt: null });
 }
 
 /** Decide whether an operator/scheduler may run a stored job again. */
 export function canRetryJob(
-  job: { status: string; nextRetryAt: string | null },
+  job: { status: string; nextRetryAt: string | null; startedAt?: string | null },
   nowMs: number,
 ): boolean {
-  if (job.status === "RUNNING" || job.status === "COMPLETED") return false;
+  if (job.status === "RUNNING") {
+    const startedAt = job.startedAt ? Date.parse(job.startedAt) : Number.NaN;
+    return Number.isFinite(startedAt) && nowMs - startedAt >= GSC_SYNC_JOB_LEASE_MS;
+  }
+  if (job.status === "COMPLETED") return false;
   if (job.status === "CREDENTIALS_REQUIRED") return false;
   if (job.status === "PENDING") return true;
   return job.nextRetryAt === null || Date.parse(job.nextRetryAt) <= nowMs;

@@ -1,0 +1,391 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "Meso",
+      "text": "The current branch passes formatting, complete workspace verification, production build, and high-severity dependency audit using the disposable PostgreSQL database with the migration chain applied.",
+      "gate": "Run the captured final gate script; require correct database identity and migration ledger, format check, diff check, workspace verify, production build, and dependency audit to exit 0.",
+      "row_sha256": "57e37366a1e8f3fe0eed3782c58e544c3f4e4c451ca50d07bf9267c340b77757",
+      "ledger_sha256_before": "d9080a4022bdea7e6ab57526287ff904d37803a8a901a7b2df203b80af71a920",
+      "status_before": "CLAIMED"
+    },
+    "ledger": "winseo-gsc-proof-ledger.md",
+    "builder": "builder-01",
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGUSER=wina",
+      "PGDATABASE=serpvera_dev",
+      "bash",
+      "scripts/verify-disposable-db-gates.sh"
+    ],
+    "command_string": "env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh",
+    "capture": {
+      "status": "CAPTURED_PASS",
+      "exit_code": 0,
+      "error": null
+    },
+    "started_at": "2026-10-07T14:30:53.895842Z",
+    "finished_at": "2026-10-07T14:32:22.005487Z",
+    "duration_ms": 88109,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "067fe49de1a4e6c4dfdc2af8bdd9dd6cdd51893f2b2881c9daf118ea54635dfb",
+      "original_bytes": 285340,
+      "stored_bytes": 285340,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "ard/[projectId]/reports                             370 B         106 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance                1.44 kB         108 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/changes          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/opportunities    981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/pages            981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/[projectId]/search-performance/queries          981 B         107 kB\n@serpvera/web:build: ├ ƒ /dashboard/security                                      1.76 kB         104 kB\n@serpvera/web:build: ├ ○ /login                                                   1.98 kB         105 kB\n@serpvera/web:build: ├ ○ /methodology                                               147 B         103 kB\n@serpvera/web:build: ├ ○ /pricing                                                   147 B         103 kB\n@serpvera/web:build: ├ ƒ /projects/[projectId]/actions                              147 B         103 kB\n@serpvera/web:build: ├ ƒ /scan/[scanId]                                           2.16 kB         105 kB\n@serpvera/web:build: └ ƒ /signup                                                    147 B         103 kB\n@serpvera/web:build: + First Load JS shared by all                                 103 kB\n@serpvera/web:build:   ├ chunks/812-52aaa9f8a3640ba4.js                           46.5 kB\n@serpvera/web:build:   ├ chunks/9923a0e2-1a45aa5d099bff40.js                      54.2 kB\n@serpvera/web:build:   └ other shared chunks (total)                              1.92 kB\n@serpvera/web:build: \n@serpvera/web:build: \n@serpvera/web:build: ○  (Static)   prerendered as static content\n@serpvera/web:build: ƒ  (Dynamic)  server-rendered on demand\n@serpvera/web:build: \n\n Tasks:    7 successful, 7 total\nCached:    6 cached, 7 total\n  Time:    14.076s \n\nNo known vulnerabilities found\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "38b36456a47dd7e954647c9929025a6eb833cf0434d3188a030561c3d78969b2",
+      "original_bytes": 522,
+      "stored_bytes": 522,
+      "truncated": false,
+      "body_stored": true,
+      "tail": " WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`\n(node:864697) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    },
+    "files": [
+      {
+        "path": "scripts/verify-disposable-db-gates.sh",
+        "optional": false,
+        "missing": false,
+        "sha256": "8466a0506bd5d0395f6d3e3f539f87ff095f39bd274917860d0828efd70bc171",
+        "bytes": 1599
+      },
+      {
+        "path": "package.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "e3b53aa48ce0dd26dbbd23ca833cfdb21f7a58390dafe87cffae0f3cf4d31405",
+        "bytes": 986
+      },
+      {
+        "path": "pnpm-lock.yaml",
+        "optional": false,
+        "missing": false,
+        "sha256": "88a6875500185e01b159e3675f6ce20c222564247f3a403904ba6d6118c27ca5",
+        "bytes": 93520
+      },
+      {
+        "path": "pnpm-workspace.yaml",
+        "optional": false,
+        "missing": false,
+        "sha256": "546c8372af033724aad9e65de39453a80a8bbb9a9cc36492fd02199ce61a42db",
+        "bytes": 57
+      },
+      {
+        "path": "turbo.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "df4ce89dfcf164fb3abbf6a09b4d9d717fb6bdf73dff627d92933cefb1241f3f",
+        "bytes": 583
+      },
+      {
+        "path": ".prettierrc",
+        "optional": false,
+        "missing": false,
+        "sha256": "9788dc8ce5185c95a2bde721c91ba67d19a9afa8228d96fe209b3f9cd5439d20",
+        "bytes": 175
+      },
+      {
+        "path": "eslint.config.mjs",
+        "optional": false,
+        "missing": false,
+        "sha256": "a4c087429b0eee72da68b3a994e2258eb6ee7ba88b1fe83b6b3194e3a82c05ab",
+        "bytes": 1738
+      },
+      {
+        "path": ".github/workflows/ci.yml",
+        "optional": false,
+        "missing": false,
+        "sha256": "39093db4eebed5139c65aa1951b3ffc4ab2491c463813b9d4aec397ddaf4f58c",
+        "bytes": 2177
+      },
+      {
+        "path": "apps/api/src/server.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "5aa7c8f8ed7d5f98abf5c4a111d18c8b3ad2f7e223fcbc5695252da4d30f8b9b",
+        "bytes": 11005
+      },
+      {
+        "path": "apps/api/src/routes/auth.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "5aab771e88f6337bc4fb01164222342c6e1cfea393433ccaf14413e884ce237b",
+        "bytes": 7028
+      },
+      {
+        "path": "apps/api/src/routes/gsc.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "e4b544ee712d06d2ab7e771eed7bea31e24fc273475890ff6825201c11fa2b91",
+        "bytes": 21037
+      },
+      {
+        "path": "apps/api/src/routes/gsc-data.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "431674bdba443b560dbbfb1552bc39a628d63436fcaf79db634110f68859a94c",
+        "bytes": 29183
+      },
+      {
+        "path": "apps/api/src/routes/actions.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "7bbb7a363dfd3d67630abdd28b4853fbad5cf59200b6faf5a442a7febc9609d1",
+        "bytes": 5783
+      },
+      {
+        "path": "apps/api/src/stores/db.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "ae2cdcbc0a447a897b227370ba5b53f6464e7c14147f91cbe5c577c48b971dad",
+        "bytes": 35999
+      },
+      {
+        "path": "apps/api/src/stores/types.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "269713f1d22d5360dff313c9c901bba7feca4539635062c91d6fa6bed5732346",
+        "bytes": 15947
+      },
+      {
+        "path": "apps/web/src/app/dashboard/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "c9333710f5401a6d120fbbba89dd8ff3ce30894141138910e938be17d79410c1",
+        "bytes": 4087
+      },
+      {
+        "path": "apps/web/src/app/dashboard/layout.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "eeaaf85738cad59f529b748cdd2cb0056c1a2943a415647aa198c3deb437a832",
+        "bytes": 1642
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/decision-center/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "4688e0f508bb2ba59b43f88e97545593d6e179b3a46bd4a93daaf7d44e2b52ab",
+        "bytes": 7217
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/ai-visibility/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "a7fb2ee4fe65d68c05a1ef12c6358555d84815e4383d38cadb5b8a1d51c93df5",
+        "bytes": 3155
+      },
+      {
+        "path": "apps/web/src/app/dashboard/[projectId]/reports/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "384b8ba20447dca452eac81e300cf6ff3ca6e932ecc41eb896e0a7b406572422",
+        "bytes": 10452
+      },
+      {
+        "path": "apps/web/src/app/dashboard/create-project-form.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "d9b6bdd92217fe4eb20461ed64ef0d2f7c730a846582ca11bbb7300ce806236a",
+        "bytes": 14945
+      },
+      {
+        "path": "apps/web/src/app/signup/page.tsx",
+        "optional": false,
+        "missing": false,
+        "sha256": "93d282d8be0a0317295b57854429235a4567afbae7c2a3f7b45279bb985bc022",
+        "bytes": 318
+      },
+      {
+        "path": "packages/db/src/migrate.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "211a1ed07bcdef08b2d10f4b5dbb22899d2b814e2d625808acf2a7b1dffd3b11",
+        "bytes": 4650
+      },
+      {
+        "path": "packages/db/src/gsc-claim-order-migration.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "b93a42916f4b91a78cf83f2fbcc37f2d636ce94c55cdd0eaa633abdf253ae511",
+        "bytes": 21410
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "10ea1bf8042a05254f7bb7811e96af242195734b0e550814c4d53fdbe2283e4e",
+        "bytes": 23401
+      },
+      {
+        "path": "packages/db/migrations/0019w_gsc_effective_acl_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "5e3b31693f0cc52f3d5fb32b8d02101014448956a48c0ed5d9352649d9c62fab",
+        "bytes": 4715
+      },
+      {
+        "path": "packages/db/migrations/0019x_gsc_parent_delete_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "2fb140de2acb37f57682e2313bc1e21c637144bf035c9b8989c6222d2d4aa196",
+        "bytes": 1745
+      },
+      {
+        "path": "packages/db/migrations/0019y_gsc_sync_write_fence.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "1f3eb1d5d722caf4a1626ae597ea936ac0458e7b69cae16ee1b7fe846d9801c7",
+        "bytes": 1955
+      },
+      {
+        "path": "packages/db/migrations/0019z_gsc_claim_order_preflight.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "64ffc165dab69926f64acbf3a33507a1ee8bb6bf46457c98da6f9b642a2652fb",
+        "bytes": 2074
+      },
+      {
+        "path": "packages/db/migrations/0019zz_gsc_sync_migration_guard.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "47d2952ef32da520b9e71f5b48b280fe8d1c951c3bbb7ab127cb19932f456c6b",
+        "bytes": 3641
+      },
+      {
+        "path": "packages/db/migrations/0020_gsc_sync_claim_order.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "9f3406bb29e1b7ec18cdbf4674d86ab003d25b936b0fbdba0d4b3631c20f9139",
+        "bytes": 1965
+      },
+      {
+        "path": "packages/db/migrations/0021_remove_gsc_sync_migration_guard.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "45c69245e9b64e078eae4ffda36cbea4e0d3709ecc812be6eb68a4e3d714695e",
+        "bytes": 532
+      },
+      {
+        "path": "packages/db/migrations/0022_restore_gsc_runtime_writes.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "916acc784370a3f0f88920882876ac1314339126bccb56366e792cb868b850b6",
+        "bytes": 850
+      },
+      {
+        "path": "packages/db/migrations/0023_restore_gsc_parent_deletes.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "7ea3425832e60c8a1e7d10cf6320dd7055d8068b8ec172b6fb8d63c6a4dd2409",
+        "bytes": 912
+      },
+      {
+        "path": "packages/db/migrations/0024_restore_gsc_acl_baseline.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "dc8b495a68fdf8070f6a762018a4dd8e64ce403174d94cd47c4146607f8f6a54",
+        "bytes": 1186
+      },
+      {
+        "path": "services/crawler/src/crawl-orchestrator.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "e6267f16acec1491c38b9c89fe7e0793285c49b1bcabb0f017eb16e2bded5888",
+        "bytes": 4016
+      },
+      {
+        "path": "docs/PROOF_LEDGER_RPLUS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "f10f1fec7f362cbe529f100b5be83a7edb717dda8f7b022cd3f3f356fdccaca5",
+        "bytes": 11848
+      },
+      {
+        "path": "docs/CURRENT_STATE_2026-10-07.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "6f91ef66d14c8848d3157c869f899c5af3323d47913f48f8759b3d0c71310b6e",
+        "bytes": 7997
+      },
+      {
+        "path": "docs/autoreglage/PLAN.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "11aa2cec036271b89f3cd195b014b9e79fd9e397722e3c15b9be2dff5da4fb98",
+        "bytes": 81547
+      },
+      {
+        "path": "docs/autoreglage/DECISIONS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "15f4792ccf6aa7e3a38713261f050334f1afccee12c69e30f4f8e2a96c176d84",
+        "bytes": 31732
+      },
+      {
+        "path": "SKEPTIC_CATCHES.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "9ef6ebca7face87a63fb1f6e10e916a1f0c875090fca1ceac33ea436c5eaf7d5",
+        "bytes": 30967
+      },
+      {
+        "path": "/tmp/winseo-gsc-distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "bc615142e7f1c30e85dee0630e92f6115bd9c5b5bf99433c8abc040494b506bd",
+        "bytes": 4504
+      },
+      {
+        "path": "/tmp/winseo-gsc-distill-report.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "e019e477e05041ead2278614ce31e08f20bcee4a87911bccaf463db281e8116f",
+        "bytes": 1665
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "f05b7469ec741bbacd22e0bf2aae95801840ee53cf88e3672dd0fe73acf0865c",
+      "worktree_digest": "fb81124ee24137b8a2889fca3e4dec3de1b14327fcde35e8205dfd0c726ca0b3"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 500000,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "3934ea4b9421fbd05c92749013f4b4294537b0631e05dc8b8a21d467bcb80ad7"
+  }
+}

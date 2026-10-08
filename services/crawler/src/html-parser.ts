@@ -26,17 +26,24 @@ export interface StructuredDataItem {
 // For JS-rendered pages, the Playwright renderer handles extraction.
 
 const TITLE_RE = /<title[^>]*>([\s\S]*?)<\/title>/i;
-const META_DESC_RE = /<meta\s+[^>]*name\s*=\s*["']description["'][^>]*content\s*=\s*["']([^"']*)["'][^>]*>/i;
-const META_DESC_RE2 = /<meta\s+[^>]*content\s*=\s*["']([^"']*)["'][^>]*name\s*=\s*["']description["'][^>]*>/i;
-const CANONICAL_RE = /<link\s+[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']*)["'][^>]*>/i;
-const CANONICAL_RE2 = /<link\s+[^>]*href\s*=\s*["']([^"']*)["'][^>]*rel\s*=\s*["']canonical["'][^>]*>/i;
-const ROBOTS_META_RE = /<meta\s+[^>]*name\s*=\s*["']robots["'][^>]*content\s*=\s*["']([^"']*)["'][^>]*>/i;
-const ROBOTS_META_RE2 = /<meta\s+[^>]*content\s*=\s*["']([^"']*)["'][^>]*name\s*=\s*["']robots["'][^>]*>/i;
+const META_DESC_RE =
+  /<meta\s+[^>]*name\s*=\s*["']description["'][^>]*content\s*=\s*["']([^"']*)["'][^>]*>/i;
+const META_DESC_RE2 =
+  /<meta\s+[^>]*content\s*=\s*["']([^"']*)["'][^>]*name\s*=\s*["']description["'][^>]*>/i;
+const CANONICAL_RE =
+  /<link\s+[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']*)["'][^>]*>/i;
+const CANONICAL_RE2 =
+  /<link\s+[^>]*href\s*=\s*["']([^"']*)["'][^>]*rel\s*=\s*["']canonical["'][^>]*>/i;
+const ROBOTS_META_RE =
+  /<meta\s+[^>]*name\s*=\s*["']robots["'][^>]*content\s*=\s*["']([^"']*)["'][^>]*>/i;
+const ROBOTS_META_RE2 =
+  /<meta\s+[^>]*content\s*=\s*["']([^"']*)["'][^>]*name\s*=\s*["']robots["'][^>]*>/i;
 const H1_RE = /<h1[^>]*>([\s\S]*?)<\/h1>/gi;
 const HREF_RE = /<a\s+[^>]*href\s*=\s*["']([^"']*)["'][^>]*>/gi;
 const HTML_LANG_RE = /<html[^>]*lang\s*=\s*["']([^"']*)["'][^>]*>/i;
 const VIEWPORT_RE = /<meta\s+[^>]*name\s*=\s*["']viewport["'][^>]*>/i;
-const JSON_LD_RE = /<script\s+[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+const JSON_LD_RE =
+  /<script\s+[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 
 /**
  * Parse HTML content into structured page data.
@@ -89,7 +96,7 @@ export function parseHtmlPage(html: string, baseUrl: string): ParsedPage {
         const parsed = JSON.parse(raw) as unknown;
         const type =
           typeof parsed === "object" && parsed !== null && "@type" in parsed
-            ? (parsed as Record<string, unknown>)["@type"] as string
+            ? ((parsed as Record<string, unknown>)["@type"] as string)
             : null;
         structuredData.push({ type, json: parsed, isValid: true });
       } catch {
@@ -109,7 +116,12 @@ export function parseHtmlPage(html: string, baseUrl: string): ParsedPage {
   let linkMatch: RegExpExecArray | null;
   while ((linkMatch = HREF_RE.exec(html)) !== null) {
     const href = linkMatch[1]?.trim();
-    if (href && !href.startsWith("#") && !href.startsWith("javascript:") && !href.startsWith("mailto:")) {
+    if (
+      href &&
+      !href.startsWith("#") &&
+      !href.startsWith("javascript:") &&
+      !href.startsWith("mailto:")
+    ) {
       try {
         const resolved = new URL(href, baseUrl);
         if (resolved.hostname === base.hostname) {
@@ -153,5 +165,8 @@ function resolveUrl(href: string, baseUrl: string): string {
  * Strip HTML tags for text extraction (for content fingerprinting).
  */
 export function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

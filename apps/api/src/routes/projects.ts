@@ -1,8 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { logger, generateTraceId } from "@serpvera/telemetry";
-import { guardUrl, normalizeUrl, gateForRule } from "@serpvera/crawler";
+import { guardUrl, normalizeAuditTarget, gateForRule } from "@serpvera/crawler";
 import { requireAuth } from "../auth/session.ts";
+
+const PROJECT_CRAWL_RATE_LIMIT_PER_HOUR = Math.max(
+  1,
+  Number.parseInt(process.env.PROJECT_CRAWL_RATE_LIMIT_PER_HOUR ?? "10", 10) || 10,
+);
 
 export function projectRoutes(app: FastifyInstance) {
   // POST /v1/projects — tenant-scoped; withTenant() sets the org GUC so RLS
@@ -22,6 +27,24 @@ export function projectRoutes(app: FastifyInstance) {
 
     const body = schema.parse(request.body);
 
+    let primaryDomain: string;
+    try {
+      const target = normalizeAuditTarget(body.primaryDomain);
+      const parsed = new URL(target.normalized);
+      if (parsed.pathname !== "/" || parsed.search) {
+        throw new Error("Project sites must be an origin, not a page URL.");
+      }
+      guardUrl(parsed.origin);
+      primaryDomain = parsed.host;
+    } catch {
+      return reply.status(400).send({
+        error: {
+          code: "INVALID_DOMAIN",
+          message: "Enter a public HTTP(S) site domain without a page path or query string.",
+        },
+      });
+    }
+
     // Verify membership BEFORE attempting creation (application-layer authz in
     // front of DB-layer RLS — defense in depth).
     const org = await app.stores.orgs.getForRequester(request.session.userId, body.organizationId);
@@ -31,10 +54,43 @@ export function projectRoutes(app: FastifyInstance) {
       });
     }
 
+    const idempotencyHeader = request.headers["idempotency-key"];
+    if (idempotencyHeader !== undefined && typeof idempotencyHeader !== "string") {
+      return reply.status(400).send({
+        error: { code: "INVALID_IDEMPOTENCY_KEY", message: "Idempotency-Key must be a UUID." },
+      });
+    }
+    const parsedIdempotencyKey =
+      idempotencyHeader === undefined ? null : z.uuid().safeParse(idempotencyHeader);
+    if (parsedIdempotencyKey && !parsedIdempotencyKey.success) {
+      return reply.status(400).send({
+        error: { code: "INVALID_IDEMPOTENCY_KEY", message: "Idempotency-Key must be a UUID." },
+      });
+    }
+
+    const name = body.name ?? primaryDomain;
+    if (parsedIdempotencyKey?.success) {
+      const result = await app.stores.projects.createProjectWithIdempotencyKey(
+        body.organizationId,
+        name,
+        primaryDomain,
+        parsedIdempotencyKey.data.toLowerCase(),
+      );
+      if (result.kind === "conflict") {
+        return reply.status(409).send({
+          error: {
+            code: "IDEMPOTENCY_KEY_REUSED",
+            message: "This idempotency key was already used for a different project.",
+          },
+        });
+      }
+      return reply.status(result.kind === "created" ? 201 : 200).send({ project: result.project });
+    }
+
     const project = await app.stores.projects.createProject(
       body.organizationId,
-      body.name ?? body.primaryDomain,
-      body.primaryDomain,
+      name,
+      primaryDomain,
     );
 
     return reply.status(201).send({ project });
@@ -135,9 +191,10 @@ export function projectRoutes(app: FastifyInstance) {
     }
 
     // ─── SSRF pre-queue guard (same rule as the public scan) ───
+    let crawlTarget: string;
     try {
-      guardUrl(`https://${project.primaryDomain}/`);
-      normalizeUrl(`https://${project.primaryDomain}/`);
+      crawlTarget = normalizeAuditTarget(project.primaryDomain).normalized;
+      guardUrl(crawlTarget);
     } catch (ssrfErr) {
       logger.warn("Project crawl rejected by SSRF guard", {
         organizationId,
@@ -152,15 +209,71 @@ export function projectRoutes(app: FastifyInstance) {
       });
     }
 
-    const run = await app.stores.crawl.createCrawlRun(organizationId, project.id, "HTTP_FAST");
+    const quota = await app.stores.rateLimits.hit(
+      organizationId,
+      PROJECT_CRAWL_RATE_LIMIT_PER_HOUR,
+      "project-crawl-org",
+    );
+    if (!quota.allowed) {
+      reply.header("retry-after", String(quota.retryAfterSeconds));
+      return reply.status(429).send({
+        error: {
+          code: "CRAWL_RATE_LIMITED",
+          message: `This organization has reached its crawl limit of ${PROJECT_CRAWL_RATE_LIMIT_PER_HOUR} runs per hour.`,
+        },
+      });
+    }
+
+    let run: Awaited<ReturnType<typeof app.stores.crawl.createCrawlRun>>;
+    try {
+      run = await app.stores.crawl.createCrawlRun(organizationId, project.id, "HTTP_FAST");
+    } catch (error) {
+      await app.stores.rateLimits
+        .release(organizationId, PROJECT_CRAWL_RATE_LIMIT_PER_HOUR, "project-crawl-org")
+        .catch(() => {
+          logger.error("Failed to release quota after crawl admission error", {
+            organizationId,
+            projectId: project.id,
+            error: "quota_release_failed",
+          });
+        });
+      throw error;
+    }
+    if (!run) {
+      await app.stores.rateLimits
+        .release(organizationId, PROJECT_CRAWL_RATE_LIMIT_PER_HOUR, "project-crawl-org")
+        .catch(() => {
+          logger.error("Failed to release quota after rejected crawl admission", {
+            organizationId,
+            projectId: project.id,
+            error: "quota_release_failed",
+          });
+        });
+      return reply.status(409).send({
+        error: {
+          code: "CRAWL_ALREADY_RUNNING",
+          message: "A crawl is already running for this project.",
+        },
+      });
+    }
 
     // Fire-and-forget worker: audit the domain, then persist rows tenant-scoped.
     void (async () => {
       const traceId = generateTraceId();
+      let observedPagesCrawled = 0;
+      let observedPagesFailed = 0;
+      let observedPageLimit = 50;
+      let observedStopReason: string | null = null;
+      let observedTemplateGroups: Awaited<ReturnType<typeof app.auditSite>>["templateGroups"] = [];
       try {
-        const audit = await app.auditDomain(project.primaryDomain, traceId);
+        const audit = await app.auditSite(crawlTarget, traceId, { maxPages: 50 });
+        observedPagesCrawled = audit.pagesCrawled;
+        observedPagesFailed = audit.pagesFailed;
+        observedPageLimit = audit.pageLimit;
+        observedStopReason = audit.stopReason ?? null;
+        observedTemplateGroups = audit.templateGroups;
 
-        const findingIds: string[] = [];
+        const findingIdsByUrl = new Map<string, string[]>();
         for (const f of audit.findings) {
           const created = await app.stores.crawl.addFinding(organizationId, project.id, {
             ruleId: f.ruleId,
@@ -175,7 +288,11 @@ export function projectRoutes(app: FastifyInstance) {
             verificationGate: gateForRule(f.ruleId),
             crawlRunId: run.id,
           });
-          findingIds.push(created.id);
+          for (const url of f.affectedUrls) {
+            const findingIds = findingIdsByUrl.get(url) ?? [];
+            findingIds.push(created.id);
+            findingIdsByUrl.set(url, findingIds);
+          }
           // Workflow entry (Blueprint §17.1): first state is DETECTED.
           await app.stores.crawl.createDetectedAction(organizationId, project.id, created.id);
         }
@@ -196,8 +313,12 @@ export function projectRoutes(app: FastifyInstance) {
             },
             crawlRunId: run.id,
           });
-          // Link this evidence to every finding of the run (supports).
-          for (const findingId of findingIds) {
+          // Keep evidence attached to findings from the same requested/final URL.
+          const relatedIds = new Set([
+            ...(findingIdsByUrl.get(e.sourceRef) ?? []),
+            ...(findingIdsByUrl.get(e.finalUrl) ?? []),
+          ]);
+          for (const findingId of relatedIds) {
             await app.stores.crawl.linkFindingEvidence(organizationId, findingId, created.id);
           }
         }
@@ -205,8 +326,11 @@ export function projectRoutes(app: FastifyInstance) {
           organizationId,
           run.id,
           audit.status,
-          audit.status === "completed" ? 1 : 0,
-          audit.status === "failed" ? 1 : 0,
+          audit.pagesCrawled,
+          audit.pagesFailed,
+          audit.pageLimit,
+          audit.stopReason,
+          audit.templateGroups,
         );
         logger.info("Project crawl completed", {
           jobType: "project-crawl",
@@ -214,6 +338,10 @@ export function projectRoutes(app: FastifyInstance) {
           organizationId,
           projectId: project.id,
           status: audit.status,
+          pagesCrawled: audit.pagesCrawled,
+          pagesFailed: audit.pagesFailed,
+          pageLimit: audit.pageLimit,
+          stopReason: audit.stopReason,
           findingCount: audit.findings.length,
         });
       } catch (err) {
@@ -224,7 +352,16 @@ export function projectRoutes(app: FastifyInstance) {
           error: (err as Error).message,
         });
         await app.stores.crawl
-          .finishCrawlRun(organizationId, run.id, "failed", 0, 1)
+          .finishCrawlRun(
+            organizationId,
+            run.id,
+            "failed",
+            observedPagesCrawled,
+            observedPagesFailed,
+            observedPageLimit,
+            observedStopReason,
+            observedTemplateGroups,
+          )
           .catch(() => undefined);
       }
     })();

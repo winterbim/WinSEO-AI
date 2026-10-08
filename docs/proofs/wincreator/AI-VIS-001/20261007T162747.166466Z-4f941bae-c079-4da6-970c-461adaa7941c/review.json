@@ -1,0 +1,32 @@
+{
+  "schema": "wincreator.review/v3",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "AI-VIS-001",
+      "level": "Meso",
+      "text": "AI Visibility CSV imports persist user-supplied captures per project, verify the submitted-text SHA-256 and strict CSV limits, compute Wilson statistics/history, enforce tenant RLS and current evidence.write authorization under a membership-row lock through commit, and never claim provider verification",
+      "gate": "`env PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGUSER=wina PGDATABASE=serpvera_dev bash scripts/verify-disposable-db-gates.sh`",
+      "row_sha256": "64dbca85d75b8af1c14064ac3d5512712254fc7ac15a8a6a0bb94bb630b140f4",
+      "ledger_sha256_before": "7f204cdc6182088d240b39bdfec8eac946481d7a26429968b76c86223c82ee20",
+      "status_before": "PENDING"
+    },
+    "capture_digest": "e1bb6a31c0ae19a7932353ed1628f2fc7033a7816c791b0494a24a969e268510",
+    "capture_path": "attestation.json",
+    "capture_status": "CAPTURED_PASS",
+    "verdict": "EVIDENCED",
+    "reviewer": "skeptic-ai-vis-r2",
+    "challenge": "Independently verified all 27 attached source hashes and raw log digests; checked strict CSV calendar validation, role downgrade denial, transaction row lock, RLS/FK tests, and actual uncached contract/API/DB suite output. Browser E2E is expressly outside this backend claim.",
+    "challenge_packet": {
+      "path": "challenge-packet.json",
+      "digest": "80550e3bb881ff447896f4d4f13616fcb4836aa13e6fafbe5492ee0199ac4193"
+    },
+    "reviewed_at": "2026-10-07T16:32:22.461850Z",
+    "automatic": false
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "25153a3416c11a5fadb3cbad5aab8fd9474fb3a7cfccd669da2ebbf5392f87ff"
+  }
+}

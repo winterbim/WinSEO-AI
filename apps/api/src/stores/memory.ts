@@ -6,7 +6,7 @@
 // Production wiring selects the DB store — see createStores.ts and server.ts.
 
 import { randomUUID } from "node:crypto";
-import type { OrgRole } from "@serpvera/contracts";
+import { computeAiVisibilityStats, type OrgRole } from "@serpvera/contracts";
 import type {
   ApiStores,
   EvidenceInput,
@@ -17,11 +17,53 @@ import type {
   StoredSession,
   StoredUser,
   MfaRecord,
+  StoredAiVisibilityCapture,
+  StoredAiVisibilityImport,
+  StoredTemplateGroup,
 } from "./types.ts";
 import { DuplicateEmailError, DuplicateSlugError } from "./types.ts";
-import { ActionMutationError } from "@serpvera/db";
-import { createRateLimiter } from "../rate-limit.ts";
+import {
+  ActionMutationError,
+  AiVisibilityDuplicateImportError,
+  AiVisibilityProjectScopeError,
+  GscMeasurementWorkflowAdvancedError,
+  publicEvidenceMetadata,
+} from "@serpvera/db";
+import { createRateLimiter, type RateLimitScope } from "../rate-limit.ts";
 import type { PatchProposal } from "../autofix/workflow.ts";
+import { parseStoredTemplateGroups } from "./template-groups.ts";
+
+function toPublicAiVisibilityImport(
+  row: StoredAiVisibilityImport & { organizationId: string },
+): StoredAiVisibilityImport {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    uploadedBy: row.uploadedBy,
+    csvSha256: row.csvSha256,
+    rowCount: row.rowCount,
+    provenance: row.provenance,
+    epistemicClass: row.epistemicClass,
+    unverifiedByProvider: row.unverifiedByProvider,
+    createdAt: row.createdAt,
+  };
+}
+
+function toPublicAiVisibilityCapture(
+  row: StoredAiVisibilityCapture & { organizationId: string; projectId: string },
+): StoredAiVisibilityCapture {
+  return {
+    id: row.id,
+    importId: row.importId,
+    rowNumber: row.rowNumber,
+    engine: row.engine,
+    promptId: row.promptId,
+    brandMentioned: row.brandMentioned,
+    clientCited: row.clientCited,
+    citationDomains: [...row.citationDomains],
+    sampledAt: row.sampledAt,
+  };
+}
 
 export function createMemoryStores(): ApiStores {
   const users = new Map<string, StoredUser>();
@@ -29,10 +71,14 @@ export function createMemoryStores(): ApiStores {
   // `${userId}:${orgId}` -> role
   const memberships = new Map<string, OrgRole>();
   const projects = new Map<string, StoredProject>();
+  const projectIdempotency = new Map<
+    string,
+    { name: string; primaryDomain: string; project: StoredProject }
+  >();
   const scans = new Map<string, StoredPublicScan>();
   const sessionRecords = new Map<string, StoredSession & { revokedAt: Date | null }>();
   const mfaRecords = new Map<string, MfaRecord>();
-  const rateLimiters = new Map<number, ReturnType<typeof createRateLimiter>>();
+  const rateLimiters = new Map<string, ReturnType<typeof createRateLimiter>>();
   // P-GAP-04: tenant-scoped crawl state (memory adapter = test driver only)
   const crawlRuns = new Map<
     string,
@@ -42,6 +88,9 @@ export function createMemoryStores(): ApiStores {
       status: string;
       pagesCrawled: number;
       pagesFailed: number;
+      pageLimit: number | null;
+      stopReason: string | null;
+      templateGroups: StoredTemplateGroup[] | null;
       mode: string;
       startedAt: string;
       completedAt: string | null;
@@ -69,6 +118,11 @@ export function createMemoryStores(): ApiStores {
       eventCount: number;
     }
   >();
+  const aiVisibilityImports: (StoredAiVisibilityImport & { organizationId: string })[] = [];
+  const aiVisibilityCaptures: (StoredAiVisibilityCapture & {
+    organizationId: string;
+    projectId: string;
+  })[] = [];
 
   // The in-memory driver is a SYNCHRONOUS test double behind the async
   // ApiStores contract: methods return explicitly resolved promises instead of
@@ -133,6 +187,26 @@ export function createMemoryStores(): ApiStores {
         projects.set(project.id, project);
         return Promise.resolve(project);
       },
+      createProjectWithIdempotencyKey(organizationId, name, primaryDomain, idempotencyKey) {
+        const idempotencyScope = `${organizationId}:${idempotencyKey}`;
+        const existing = projectIdempotency.get(idempotencyScope);
+        if (existing) {
+          if (existing.name !== name || existing.primaryDomain !== primaryDomain) {
+            return Promise.resolve({ kind: "conflict" as const });
+          }
+          return Promise.resolve({ kind: "replayed" as const, project: existing.project });
+        }
+
+        const project: StoredProject = {
+          id: randomUUID(),
+          organizationId,
+          name,
+          primaryDomain,
+        };
+        projects.set(project.id, project);
+        projectIdempotency.set(idempotencyScope, { name, primaryDomain, project });
+        return Promise.resolve({ kind: "created" as const, project });
+      },
       getProject(organizationId, projectId) {
         const p = projects.get(projectId);
         // Emulate RLS: foreign-tenant read yields null (no existence leak).
@@ -182,13 +256,20 @@ export function createMemoryStores(): ApiStores {
     },
 
     rateLimits: {
-      hit(ip, limitPerWindow) {
-        let limiter = rateLimiters.get(limitPerWindow);
+      hit(ip, limitPerWindow, scope: RateLimitScope = "public-scan-ip") {
+        const key = `${scope}:${limitPerWindow}`;
+        let limiter = rateLimiters.get(key);
         if (!limiter) {
           limiter = createRateLimiter(limitPerWindow);
-          rateLimiters.set(limitPerWindow, limiter);
+          rateLimiters.set(key, limiter);
         }
-        return Promise.resolve(limiter.hit(ip));
+        return Promise.resolve(limiter.hit(ip, scope));
+      },
+      release(ip, limitPerWindow, scope: RateLimitScope = "public-scan-ip") {
+        const key = `${scope}:${limitPerWindow}`;
+        const limiter = rateLimiters.get(key);
+        limiter?.release(ip, scope);
+        return Promise.resolve();
       },
     },
 
@@ -292,6 +373,16 @@ export function createMemoryStores(): ApiStores {
 
     crawl: {
       createCrawlRun(organizationId, projectId, mode) {
+        if (
+          [...crawlRuns.values()].some(
+            (run) =>
+              run.organizationId === organizationId &&
+              run.projectId === projectId &&
+              run.status === "running",
+          )
+        ) {
+          return Promise.resolve(null);
+        }
         const id = randomUUID();
         crawlRuns.set(id, {
           organizationId,
@@ -299,19 +390,34 @@ export function createMemoryStores(): ApiStores {
           status: "running",
           pagesCrawled: 0,
           pagesFailed: 0,
+          pageLimit: null,
+          stopReason: null,
+          templateGroups: null,
           mode,
           startedAt: new Date().toISOString(),
           completedAt: null,
         });
         return Promise.resolve({ id });
       },
-      finishCrawlRun(organizationId, runId, status, pagesCrawled, pagesFailed) {
+      finishCrawlRun(
+        organizationId,
+        runId,
+        status,
+        pagesCrawled,
+        pagesFailed,
+        pageLimit,
+        stopReason,
+        templateGroups,
+      ) {
         const run = crawlRuns.get(runId);
         // Emulate RLS: a foreign tenant cannot update (or even see) the run.
         if (run?.organizationId === organizationId) {
           run.status = status;
           run.pagesCrawled = pagesCrawled;
           run.pagesFailed = pagesFailed;
+          run.pageLimit = pageLimit ?? null;
+          run.stopReason = stopReason ?? null;
+          run.templateGroups = parseStoredTemplateGroups(templateGroups ?? null);
           run.completedAt = new Date().toISOString();
         }
         return Promise.resolve();
@@ -329,6 +435,9 @@ export function createMemoryStores(): ApiStores {
               completedAt: r.completedAt,
               pagesCrawled: r.pagesCrawled,
               pagesFailed: r.pagesFailed,
+              pageLimit: r.pageLimit,
+              stopReason: r.stopReason,
+              templateGroups: parseStoredTemplateGroups(r.templateGroups),
             })),
         );
       },
@@ -364,6 +473,96 @@ export function createMemoryStores(): ApiStores {
         });
         return Promise.resolve({ id });
       },
+      createMeasuredGscWorkflow(organizationId, projectId, finding, evidence) {
+        let storedFinding = crawlFindings.find(
+          (row) =>
+            row.organizationId === organizationId &&
+            row.projectId === projectId &&
+            row.ruleId === finding.ruleId &&
+            row.status !== "resolved",
+        );
+        const created = !storedFinding;
+        if (!storedFinding) {
+          storedFinding = {
+            id: randomUUID(),
+            organizationId,
+            projectId,
+            ruleId: finding.ruleId,
+            ruleVersion: finding.ruleVersion,
+            title: finding.title,
+            epistemicClass: finding.epistemicClass,
+            severity: finding.severity,
+            status: "open",
+            confidence: 1,
+            explanation: finding.explanation,
+            recommendation: finding.recommendation,
+            firstSeenAt: new Date().toISOString(),
+            affectedUrls: finding.affectedUrls,
+            verificationGate: finding.verificationGate,
+          };
+          crawlFindings.push(storedFinding);
+        }
+
+        let action = [...actionRecords.values()].find(
+          (row) =>
+            row.organizationId === organizationId &&
+            row.projectId === projectId &&
+            row.findingId === storedFinding.id,
+        );
+        let storedEvidence = findingEvidenceLinks
+          .filter((link) => link.findingId === storedFinding.id)
+          .map((link) => crawlEvidence.find((row) => row.id === link.evidenceId))
+          .find((row) => row?.kind === "gsc_data");
+        const updated = Boolean(
+          storedEvidence && storedEvidence.contentHash !== evidence.contentHash,
+        );
+        if (updated && action && action.state !== "DETECTED" && action.state !== "EVIDENCED") {
+          throw new GscMeasurementWorkflowAdvancedError();
+        }
+        if (!storedEvidence || updated) {
+          const id = randomUUID();
+          storedEvidence = {
+            id,
+            organizationId,
+            projectId,
+            createdAt: new Date().toISOString(),
+            ...evidence,
+          };
+          crawlEvidence.push(storedEvidence);
+          findingEvidenceLinks.push({ findingId: storedFinding.id, evidenceId: id });
+          if (updated) {
+            Object.assign(storedFinding, {
+              ruleVersion: finding.ruleVersion,
+              title: finding.title,
+              epistemicClass: finding.epistemicClass,
+              severity: finding.severity,
+              explanation: finding.explanation,
+              recommendation: finding.recommendation,
+              affectedUrls: finding.affectedUrls,
+              verificationGate: finding.verificationGate,
+            });
+          }
+        }
+
+        if (!action) {
+          const id = randomUUID();
+          action = {
+            id,
+            organizationId,
+            projectId,
+            findingId: storedFinding.id,
+            state: "DETECTED",
+          };
+          actionRecords.set(id, action);
+        }
+        return Promise.resolve({
+          created,
+          updated,
+          findingId: storedFinding.id,
+          evidenceId: storedEvidence.id,
+          actionId: action.id,
+        });
+      },
       listFindings(organizationId, projectId) {
         return Promise.resolve(
           crawlFindings
@@ -398,7 +597,7 @@ export function createMemoryStores(): ApiStores {
               contentHash: e.contentHash,
               objectKey: e.objectKey,
               capturedAt: e.createdAt,
-              metadata: e.metadata ?? {},
+              metadata: publicEvidenceMetadata(e.metadata),
             })),
         });
       },
@@ -423,7 +622,7 @@ export function createMemoryStores(): ApiStores {
               contentHash: e.contentHash,
               objectKey: e.objectKey,
               capturedAt: e.createdAt,
-              metadata: e.metadata ?? {},
+              metadata: publicEvidenceMetadata(e.metadata),
             })),
         );
       },
@@ -497,6 +696,92 @@ export function createMemoryStores(): ApiStores {
         row.fixtureHtml = input.fixtureHtml;
         row.eventCount = input.proposal.events.length;
         return Promise.resolve(true);
+      },
+    },
+
+    aiVisibility: {
+      createImport(input) {
+        const project = projects.get(input.projectId);
+        if (project?.organizationId !== input.organizationId) {
+          throw new AiVisibilityProjectScopeError();
+        }
+        if (
+          aiVisibilityImports.some(
+            (row) =>
+              row.organizationId === input.organizationId &&
+              row.projectId === input.projectId &&
+              row.csvSha256 === input.csvSha256,
+          )
+        ) {
+          throw new AiVisibilityDuplicateImportError();
+        }
+        const createdAt = new Date().toISOString();
+        const stored: StoredAiVisibilityImport & { organizationId: string } = {
+          id: randomUUID(),
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          uploadedBy: input.uploadedBy,
+          csvSha256: input.csvSha256,
+          rowCount: input.captures.length,
+          provenance: "USER_SUPPLIED",
+          epistemicClass: "DOCUMENTED",
+          unverifiedByProvider: true,
+          createdAt,
+        };
+        aiVisibilityImports.push(stored);
+        input.captures.forEach((capture, index) => {
+          aiVisibilityCaptures.push({
+            ...structuredClone(capture),
+            id: randomUUID(),
+            importId: stored.id,
+            rowNumber: index + 1,
+            sampledAt: capture.sampledAt ?? createdAt,
+            organizationId: input.organizationId,
+            projectId: input.projectId,
+          });
+        });
+        return Promise.resolve(toPublicAiVisibilityImport(stored));
+      },
+      listImports(organizationId, projectId, limit, offset) {
+        return Promise.resolve(
+          aiVisibilityImports
+            .filter((row) => row.organizationId === organizationId && row.projectId === projectId)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+            .slice(offset, offset + limit)
+            .map(toPublicAiVisibilityImport),
+        );
+      },
+      getImport(organizationId, projectId, importId) {
+        const row = aiVisibilityImports.find(
+          (candidate) =>
+            candidate.organizationId === organizationId &&
+            candidate.projectId === projectId &&
+            candidate.id === importId,
+        );
+        if (!row) return Promise.resolve(null);
+        return Promise.resolve(toPublicAiVisibilityImport(row));
+      },
+      listCaptures(organizationId, projectId, importId) {
+        return Promise.resolve(
+          aiVisibilityCaptures
+            .filter(
+              (row) =>
+                row.organizationId === organizationId &&
+                row.projectId === projectId &&
+                row.importId === importId,
+            )
+            .sort((a, b) => a.rowNumber - b.rowNumber)
+            .map(toPublicAiVisibilityCapture),
+        );
+      },
+      listStats(organizationId, projectId, importId) {
+        const captures = aiVisibilityCaptures.filter(
+          (row) =>
+            row.organizationId === organizationId &&
+            row.projectId === projectId &&
+            row.importId === importId,
+        );
+        return Promise.resolve(computeAiVisibilityStats(captures));
       },
     },
   };

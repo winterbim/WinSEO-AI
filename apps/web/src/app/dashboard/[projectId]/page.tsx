@@ -21,10 +21,17 @@ function fmt(iso: string | null | undefined): string {
 
 export default async function ProjectOverviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ crawlRunId?: string | string[] }>;
 }) {
   const { projectId } = await params;
+  const query = await searchParams;
+  const crawlRunId =
+    typeof query.crawlRunId === "string" && /^[0-9a-f-]{36}$/i.test(query.crawlRunId)
+      ? query.crawlRunId
+      : null;
 
   let overview: Overview;
   let findings: FindingSummary[] = [];
@@ -80,6 +87,12 @@ export default async function ProjectOverviewPage({
               Actions
             </Link>
             <Link
+              href={`/dashboard/${projectId}/decision-center`}
+              className="text-slate-700 hover:text-ink-950"
+            >
+              Decision Center
+            </Link>
+            <Link
               href={`/dashboard/${projectId}/autofix`}
               className="text-slate-700 hover:text-ink-950"
             >
@@ -92,14 +105,30 @@ export default async function ProjectOverviewPage({
               Search Performance
             </Link>
             <Link
+              href={`/dashboard/${projectId}/ai-visibility`}
+              className="text-slate-700 hover:text-ink-950"
+            >
+              AI Visibility
+            </Link>
+            <Link
               href={`/dashboard/${projectId}/crawls`}
               className="text-slate-700 hover:text-ink-950"
             >
               Crawl history
             </Link>
+            <Link
+              href={`/dashboard/${projectId}/reports`}
+              className="text-slate-700 hover:text-ink-950"
+            >
+              Reports
+            </Link>
           </nav>
         </div>
-        <StartCrawlButton projectId={projectId} />
+        <StartCrawlButton
+          projectId={projectId}
+          initialRun={overview.crawls.latest}
+          trackingRunId={crawlRunId}
+        />
       </div>
 
       {/* ── Q1: What changed? ── */}

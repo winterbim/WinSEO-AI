@@ -52,6 +52,7 @@ export interface VerificationGateSpec {
     page?: string;
     device?: string;
     country?: string;
+    connectionId?: string;
     minImpressions: number;
     windowDays: number;
   };
@@ -62,6 +63,8 @@ export interface RecommendationSubject {
   page?: string;
   device?: string;
   country?: string;
+  /** Google property identity used for provenance and duplicate prevention. */
+  property?: string;
 }
 
 /** A measured, reproducible recommendation. `evidenceClass` is MEASURED by type. */
@@ -151,8 +154,7 @@ function aggregate(
 }
 
 const round = (value: number, digits = 6): number => Number(value.toFixed(digits));
-const pct = (from: number, to: number): number =>
-  from === 0 ? 0 : round((to - from) / from, 6);
+const pct = (from: number, to: number): number => (from === 0 ? 0 : round((to - from) / from, 6));
 
 function severityForImpressions(impressions: number): MeasuredRecommendation["severity"] {
   if (impressions >= 10_000) return "critical";
@@ -761,8 +763,7 @@ export function prePostComparison(
   const impressionDelta = pct(prior.impressions, current.impressions);
   const positionDelta = round(current.position - prior.position, 6);
   const moved =
-    Math.abs(clickDelta) >= opts.materialChange ||
-    Math.abs(impressionDelta) >= opts.materialChange;
+    Math.abs(clickDelta) >= opts.materialChange || Math.abs(impressionDelta) >= opts.materialChange;
 
   const target =
     prior.clicks > 0
@@ -822,7 +823,11 @@ export function prePostComparison(
 
 /** Stable identifier for a recommendation (used to avoid duplicate findings). */
 export function recommendationRuleId(rec: MeasuredRecommendation): string {
-  const scope = [rec.subject.query, rec.subject.page].filter(Boolean).join("::");
+  const scope = Object.entries(rec.subject)
+    .filter((entry): entry is [string, string] => Boolean(entry[1]))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join("::");
   return `GSC.${rec.module}${scope ? `::${scope}` : ""}`;
 }
 

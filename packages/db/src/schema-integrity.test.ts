@@ -16,6 +16,7 @@ const EXPECTED_TABLES = [
   "crawl_runs",
   "findings",
   "evidence_items",
+  "finding_evidence",
   "actions",
   "action_transitions",
   "gsc_connections",
@@ -25,6 +26,8 @@ const EXPECTED_TABLES = [
   "gsc_oauth_states",
   "patch_proposals",
   "patch_events",
+  "ai_visibility_imports",
+  "ai_visibility_captures",
   "schema_migrations",
 ];
 
@@ -33,6 +36,7 @@ const TENANT_OWNED = [
   "crawl_runs",
   "findings",
   "evidence_items",
+  "finding_evidence",
   "actions",
   "action_transitions",
   "gsc_connections",
@@ -42,12 +46,16 @@ const TENANT_OWNED = [
   "gsc_oauth_states",
   "patch_proposals",
   "patch_events",
+  "ai_visibility_imports",
+  "ai_visibility_captures",
 ];
 
 void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
   before(async () => {
     configurePool({
       host: process.env.PG_SOCKET_DIR ?? "/var/run/postgresql",
+      port: process.env.PGPORT ? Number(process.env.PGPORT) : undefined,
+      user: process.env.PGUSER,
       database: process.env.PGDATABASE ?? "serpvera_dev",
       runtimeRole: "serpvera_app",
       maxPool: 2,
@@ -59,7 +67,23 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
     await closePool();
   });
 
-  void it("catalog contains gsc_connections, gsc_sync_jobs, and gsc_query_metrics", async () => {
+  void it("connects to the exact database endpoint selected for this test run", async () => {
+    const result = await withAdmin(async (client) => {
+      const row = await client.query<{
+        database: string;
+        port: number;
+        user: string;
+      }>(`SELECT current_database() AS database, current_setting('port')::integer AS port,
+                 current_user AS user`);
+      return row.rows[0];
+    });
+    assert.ok(result, "endpoint query must return one row");
+    assert.equal(result.database, process.env.PGDATABASE ?? "serpvera_dev");
+    assert.equal(result.port, Number(process.env.PGPORT ?? 5432));
+    if (process.env.PGUSER) assert.equal(result.user, process.env.PGUSER);
+  });
+
+  void it("catalog contains all expected tables, including finding_evidence", async () => {
     const rows = await withAdmin(async (c) => {
       const res = await c.query<{ tablename: string }>(
         `SELECT tablename FROM pg_tables WHERE schemaname='public'`,
@@ -89,6 +113,350 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
       rows.includes("0014_proven_patch_lifecycle"),
       "0014_proven_patch_lifecycle must be in ledger",
     );
+    assert.ok(
+      rows.includes("0015_finding_evidence_tenant_rls"),
+      "0015_finding_evidence_tenant_rls must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0019w_gsc_effective_acl_fence"),
+      "0019w_gsc_effective_acl_fence must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0019x_gsc_parent_delete_fence"),
+      "0019x_gsc_parent_delete_fence must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0019y_gsc_sync_write_fence"),
+      "0019y_gsc_sync_write_fence must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0019z_gsc_claim_order_preflight"),
+      "0019z_gsc_claim_order_preflight must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0019zz_gsc_sync_migration_guard"),
+      "0019zz_gsc_sync_migration_guard must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0016_runtime_schema_readiness_view"),
+      "0016_runtime_schema_readiness_view must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0017_project_create_idempotency"),
+      "0017_project_create_idempotency must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0018_runtime_readiness_and_legacy_evidence_compat"),
+      "0018_runtime_readiness_and_legacy_evidence_compat must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0019_gsc_property_scoped_measurements"),
+      "0019_gsc_property_scoped_measurements must be in ledger",
+    );
+    assert.ok(rows.includes("0020_gsc_sync_claim_order"), "0020 GSC claim order must be in ledger");
+    assert.ok(
+      rows.includes("0021_remove_gsc_sync_migration_guard"),
+      "0021_remove_gsc_sync_migration_guard must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0022_restore_gsc_runtime_writes"),
+      "0022_restore_gsc_runtime_writes must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0023_restore_gsc_parent_deletes"),
+      "0023_restore_gsc_parent_deletes must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0024_restore_gsc_acl_baseline"),
+      "0024_restore_gsc_acl_baseline must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0025_ai_visibility_imports"),
+      "0025_ai_visibility_imports must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0026_ai_visibility_capture_org_fk"),
+      "0026_ai_visibility_capture_org_fk must be in ledger",
+    );
+    assert.ok(
+      rows.includes("0027_crawl_run_coverage"),
+      "crawl coverage migration must be recorded",
+    );
+    assert.ok(
+      rows.includes("0028_crawl_template_groups"),
+      "crawl template grouping migration must be recorded",
+    );
+    assert.ok(
+      rows.includes("0029_crawl_template_groups_comment"),
+      "accurate crawl group column comment migration must be recorded",
+    );
+    assert.ok(
+      rows.includes("0030_gsc_sync_ingestion_version"),
+      "legacy GSC ingestion version migration must be recorded",
+    );
+    assert.ok(rows.includes("0031_gsc_unverified_default"), "GSC verification default migration");
+    assert.ok(rows.includes("0032_gsc_trust_reset"), "GSC trust reset migration");
+  });
+
+  void it("GSC jobs mark historical rows unverified and current rows versioned", async () => {
+    const result = await withAdmin(async (c) => {
+      const column = await c.query<{
+        column_default: string | null;
+        is_nullable: string;
+      }>(
+        `SELECT column_default, is_nullable FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='gsc_sync_jobs'
+            AND column_name='ingestion_version'`,
+      );
+      const constraint = await c.query<{ conname: string }>(
+        `SELECT conname FROM pg_constraint
+          WHERE conrelid='public.gsc_sync_jobs'::regclass
+            AND conname='gsc_sync_jobs_ingestion_version_nonnegative'`,
+      );
+      return { column: column.rows[0], constraint: constraint.rows[0] };
+    });
+    assert.ok(result.column);
+    assert.equal(result.column.is_nullable, "NO");
+    assert.match(result.column.column_default ?? "", /0/);
+    assert.ok(result.constraint);
+    assert.equal(result.constraint.conname, "gsc_sync_jobs_ingestion_version_nonnegative");
+  });
+
+  void it("crawl runs persist bounded coverage with database constraints", async () => {
+    const result = await withAdmin(async (c) => {
+      const columns = await c.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='crawl_runs'`,
+      );
+      const constraints = await c.query<{ conname: string }>(
+        `SELECT conname FROM pg_constraint
+          WHERE conrelid='public.crawl_runs'::regclass
+            AND conname IN ('crawl_runs_page_limit_range', 'crawl_runs_stop_reason_allowed',
+                            'crawl_runs_template_groups_array')`,
+      );
+      const description = await c.query<{ description: string | null }>(
+        `SELECT col_description('public.crawl_runs'::regclass,
+                 (SELECT ordinal_position FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name='crawl_runs'
+                     AND column_name='template_groups')) AS description`,
+      );
+      return {
+        columns: columns.rows.map((row) => row.column_name),
+        constraints: constraints.rows.map((row) => row.conname),
+        description: description.rows[0]?.description ?? null,
+      };
+    });
+    assert.ok(result.columns.includes("page_limit"));
+    assert.ok(result.columns.includes("stop_reason"));
+    assert.ok(result.columns.includes("template_groups"));
+    assert.ok(result.constraints.includes("crawl_runs_page_limit_range"));
+    assert.ok(result.constraints.includes("crawl_runs_stop_reason_allowed"));
+    assert.ok(result.constraints.includes("crawl_runs_template_groups_array"));
+    assert.equal(
+      result.description,
+      "Observed structure groups only: redacted sample URLs, counts, URL patterns, and content-free DOM hashes. Page bodies are not stored here.",
+    );
+  });
+
+  void it("removes the temporary GSC migration guard after the migration chain", async () => {
+    const result = await withAdmin(async (client) => {
+      const guard = await client.query<{ guardTable: string | null; triggerCount: number }>(`
+        SELECT to_regclass('public.gsc_migration_guard')::text AS "guardTable",
+               (SELECT count(*)::int FROM pg_trigger
+                 WHERE tgrelid IN ('public.gsc_sync_jobs'::regclass,
+                                   'public.gsc_query_metrics'::regclass)
+                   AND tgname IN ('gsc_sync_jobs_migration_guard',
+                                  'gsc_query_metrics_migration_guard')) AS "triggerCount"
+      `);
+      return guard.rows[0];
+    });
+    assert.deepEqual(result, { guardTable: null, triggerCount: 0 });
+  });
+
+  void it("restores runtime GSC writes only after the migration guard is removed", async () => {
+    const result = await withAdmin(async (client) => {
+      const privileges = await client.query<{
+        jobsInsert: boolean;
+        jobsUpdate: boolean;
+        metricsInsert: boolean;
+        metricsDelete: boolean;
+        guardTable: string | null;
+      }>(`
+        SELECT has_table_privilege('serpvera_app', 'public.gsc_sync_jobs', 'INSERT') AS "jobsInsert",
+               has_table_privilege('serpvera_app', 'public.gsc_sync_jobs', 'UPDATE') AS "jobsUpdate",
+               has_table_privilege('serpvera_app', 'public.gsc_query_metrics', 'INSERT') AS "metricsInsert",
+               has_table_privilege('serpvera_app', 'public.gsc_query_metrics', 'DELETE') AS "metricsDelete",
+               to_regclass('public.gsc_migration_guard')::text AS "guardTable"
+      `);
+      return privileges.rows[0];
+    });
+    assert.deepEqual(result, {
+      jobsInsert: true,
+      jobsUpdate: true,
+      metricsInsert: true,
+      metricsDelete: true,
+      guardTable: null,
+    });
+  });
+
+  void it("restores scoped parent deletes after the GSC cascade fence is removed", async () => {
+    const result = await withAdmin(async (client) => {
+      const privileges = await client.query<{
+        connectionsDelete: boolean;
+        projectsDelete: boolean;
+        organizationsDelete: boolean;
+        connectionsTruncate: boolean;
+        projectsTruncate: boolean;
+        organizationsTruncate: boolean;
+      }>(`
+        SELECT has_table_privilege('serpvera_app', 'public.gsc_connections', 'DELETE') AS "connectionsDelete",
+               has_table_privilege('serpvera_app', 'public.projects', 'DELETE') AS "projectsDelete",
+               has_table_privilege('serpvera_app', 'public.organizations', 'DELETE') AS "organizationsDelete",
+               has_table_privilege('serpvera_app', 'public.gsc_connections', 'TRUNCATE') AS "connectionsTruncate",
+               has_table_privilege('serpvera_app', 'public.projects', 'TRUNCATE') AS "projectsTruncate",
+               has_table_privilege('serpvera_app', 'public.organizations', 'TRUNCATE') AS "organizationsTruncate"
+      `);
+      return privileges.rows[0];
+    });
+    assert.deepEqual(result, {
+      connectionsDelete: true,
+      projectsDelete: true,
+      organizationsDelete: true,
+      connectionsTruncate: false,
+      projectsTruncate: false,
+      organizationsTruncate: false,
+    });
+  });
+
+  void it("restores app DML without leaving PUBLIC table or column write grants", async () => {
+    const result = await withAdmin(async (client) => {
+      const privileges = await client.query<{
+        appOrgInsert: boolean;
+        appProjectUpdate: boolean;
+        appConnectionDelete: boolean;
+        appJobsInsert: boolean;
+        appMetricsUpdate: boolean;
+        publicTableWrites: number;
+        publicColumnWrites: number;
+      }>(`
+        WITH target_tables AS (
+          SELECT unnest(ARRAY[
+            'public.organizations'::regclass,
+            'public.projects'::regclass,
+            'public.gsc_connections'::regclass,
+            'public.gsc_sync_jobs'::regclass,
+            'public.gsc_query_metrics'::regclass
+          ]) AS oid
+        )
+        SELECT has_table_privilege('serpvera_app', 'public.organizations', 'INSERT') AS "appOrgInsert",
+               has_table_privilege('serpvera_app', 'public.projects', 'UPDATE') AS "appProjectUpdate",
+               has_table_privilege('serpvera_app', 'public.gsc_connections', 'DELETE') AS "appConnectionDelete",
+               has_table_privilege('serpvera_app', 'public.gsc_sync_jobs', 'INSERT') AS "appJobsInsert",
+               has_table_privilege('serpvera_app', 'public.gsc_query_metrics', 'UPDATE') AS "appMetricsUpdate",
+               (SELECT count(*)::int
+                  FROM target_tables t
+                  JOIN pg_class c ON c.oid = t.oid
+                  CROSS JOIN LATERAL aclexplode(c.relacl) acl
+                 WHERE acl.grantee = 0
+                   AND acl.privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')) AS "publicTableWrites",
+               (SELECT count(*)::int
+                  FROM pg_attribute attr
+                  CROSS JOIN LATERAL aclexplode(attr.attacl) acl
+                 WHERE attr.attrelid IN (SELECT oid FROM target_tables)
+                   AND attr.attnum > 0
+                   AND NOT attr.attisdropped
+                   AND acl.grantee = 0
+                   AND acl.privilege_type IN ('INSERT', 'UPDATE')) AS "publicColumnWrites"
+      `);
+      return privileges.rows[0];
+    });
+    assert.deepEqual(result, {
+      appOrgInsert: true,
+      appProjectUpdate: true,
+      appConnectionDelete: true,
+      appJobsInsert: true,
+      appMetricsUpdate: true,
+      publicTableWrites: 0,
+      publicColumnWrites: 0,
+    });
+  });
+
+  void it("uses a monotonic per-property GSC claim order", async () => {
+    const result = await withAdmin(async (client) => {
+      const column = await client.query<{
+        data_type: string;
+        is_nullable: string;
+        column_default: string | null;
+      }>(`
+        SELECT data_type, is_nullable, column_default
+          FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'gsc_sync_jobs'
+           AND column_name = 'claim_order'
+      `);
+      const index = await client.query<{ definition: string }>(`
+        SELECT pg_get_indexdef(indexrelid) AS definition
+          FROM pg_index
+         WHERE indexrelid = 'public.gsc_sync_jobs_claim_order_uq'::regclass
+      `);
+      return { column: column.rows[0], index: index.rows[0]?.definition ?? "" };
+    });
+    assert.deepEqual(result.column, {
+      data_type: "bigint",
+      is_nullable: "NO",
+      column_default: "0",
+    });
+    assert.match(result.index, /UNIQUE INDEX/);
+    assert.match(result.index, /organization_id, project_id, connection_id, claim_order/);
+    assert.match(result.index, /WHERE \(claim_order > 0\)/);
+  });
+
+  void it("allows at most one connected Search Console property per project", async () => {
+    const indexes = await withAdmin(async (client) => {
+      const result = await client.query<{ definition: string }>(`
+        SELECT pg_get_indexdef(indexrelid) AS definition
+          FROM pg_index
+         WHERE indexrelid = 'public.gsc_connections_one_connected_per_project_uq'::regclass
+      `);
+      return result.rows[0]?.definition ?? "";
+    });
+    assert.match(indexes, /UNIQUE INDEX/);
+    assert.match(indexes, /organization_id, project_id/);
+    assert.match(indexes, /status = 'CONNECTED'/);
+  });
+
+  void it("legacy evidence-link tenant trigger is installed and least-privileged", async () => {
+    const row = await withAdmin(async (client) => {
+      const result = await client.query<{
+        triggerExists: boolean;
+        functionSecurityDefiner: boolean;
+        publicCanExecute: boolean;
+        runtimeCanExecute: boolean;
+      }>(`
+        SELECT
+          EXISTS (
+            SELECT 1 FROM pg_trigger
+             WHERE tgrelid = 'public.finding_evidence'::regclass
+               AND tgname = 'finding_evidence_fill_organization'
+               AND NOT tgisinternal
+          ) AS "triggerExists",
+          p.prosecdef AS "functionSecurityDefiner",
+          EXISTS (
+            SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) AS acl
+             WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+          ) AS "publicCanExecute",
+          has_function_privilege('serpvera_app', p.oid, 'EXECUTE') AS "runtimeCanExecute"
+        FROM pg_proc p
+        WHERE p.oid = 'public.populate_finding_evidence_organization()'::regprocedure
+      `);
+      return result.rows[0];
+    });
+    assert.deepEqual(row, {
+      triggerExists: true,
+      functionSecurityDefiner: false,
+      publicCanExecute: false,
+      runtimeCanExecute: true,
+    });
   });
 
   void it("patch storage accepts the complete lifecycle vocabulary", async () => {
@@ -154,9 +522,9 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
     );
   });
 
-  void it("every tenant-owned table has organization_id NOT NULL + its Blueprint timestamp", async () => {
-    // Blueprint §11 assigns each tenant table a semantic timestamp column.
-    const TIMESTAMP_COL: Record<string, string> = {
+  void it("every tenant-owned table has organization_id NOT NULL and its declared timestamp", async () => {
+    // Blueprint §11 assigns semantic timestamps where the table contract defines one.
+    const TIMESTAMP_COL: Partial<Record<(typeof TENANT_OWNED)[number], string>> = {
       projects: "created_at",
       crawl_runs: "created_at",
       findings: "first_seen_at",
@@ -184,10 +552,13 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
       const orgCol = cols.find((x) => x.column_name === "organization_id");
       assert.ok(orgCol, `${t}.organization_id must exist`);
       assert.equal(orgCol.is_nullable, "NO", `${t}.organization_id must be NOT NULL`);
-      assert.ok(
-        cols.some((x) => x.column_name === TIMESTAMP_COL[t]),
-        `${t} must have its Blueprint timestamp column ${TIMESTAMP_COL[t]}`,
-      );
+      const timestampColumn = TIMESTAMP_COL[t];
+      if (timestampColumn) {
+        assert.ok(
+          cols.some((x) => x.column_name === timestampColumn),
+          `${t} must have its Blueprint timestamp column ${timestampColumn}`,
+        );
+      }
     }
   });
 
@@ -261,7 +632,7 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
     }
   });
 
-  void it("gsc_connections, gsc_sync_jobs, and gsc_query_metrics have ENABLED and FORCED RLS", async () => {
+  void it("every tenant-owned table has ENABLED and FORCED RLS", async () => {
     const rows = await withAdmin(async (c) => {
       const res = await c.query<{
         relname: string;
@@ -282,7 +653,7 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
     }
   });
 
-  void it("gsc_connections, gsc_sync_jobs, and gsc_query_metrics have tenant_isolation policies", async () => {
+  void it("every tenant-owned table has a tenant_isolation policy", async () => {
     const rows = await withAdmin(async (c) => {
       const res = await c.query<{ tablename: string }>(
         `SELECT tablename FROM pg_policies WHERE policyname='tenant_isolation'`,
@@ -292,6 +663,33 @@ void describe("DB-02 schema integrity (real PostgreSQL catalogs)", () => {
     for (const t of TENANT_OWNED) {
       assert.ok(rows.includes(t), `${t} must have tenant_isolation policy`);
     }
+  });
+
+  void it("finding_evidence has composite tenant foreign keys to both endpoints", async () => {
+    const definitions = await withAdmin(async (c) => {
+      const res = await c.query<{ definition: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definition
+           FROM pg_constraint
+          WHERE conrelid = 'finding_evidence'::regclass AND contype = 'f'`,
+      );
+      return res.rows.map((row) => row.definition);
+    });
+    assert.ok(
+      definitions.some((definition) =>
+        definition.includes(
+          "FOREIGN KEY (organization_id, finding_id) REFERENCES findings(organization_id, id)",
+        ),
+      ),
+      "finding_evidence must reference a finding in the same organization",
+    );
+    assert.ok(
+      definitions.some((definition) =>
+        definition.includes(
+          "FOREIGN KEY (organization_id, evidence_id) REFERENCES evidence_items(organization_id, id)",
+        ),
+      ),
+      "finding_evidence must reference evidence in the same organization",
+    );
   });
 
   void it("runtime role is non-superuser and non-bypassrls", async () => {

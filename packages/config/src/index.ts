@@ -156,10 +156,7 @@ export function loadConfig(): AppConfig {
     throw new Error(`Missing required environment variable: ${name}`);
   };
 
-  // Cast LAST: process.env.NODE_ENV is string | undefined, so the default must
-  // be applied before the assertion — casting first made `?? "development"`
-  // look dead while the runtime value really could be undefined.
-  const nodeEnv = (process.env.NODE_ENV ?? "development") as AppConfig["nodeEnv"];
+  const nodeEnv = parseNodeEnv(process.env.NODE_ENV);
   const databaseUrl = process.env.DATABASE_URL;
   const redisUrl = process.env.REDIS_URL;
 
@@ -212,4 +209,16 @@ export function loadConfig(): AppConfig {
       apiUrl: process.env.API_URL ?? "http://localhost:3001",
     },
   };
+}
+
+export function parseNodeEnv(value: string | undefined): AppConfig["nodeEnv"] {
+  const normalized = value ?? "development";
+  if (!isNodeEnv(normalized)) {
+    throw new Error("NODE_ENV must be one of: development, test, production.");
+  }
+  return normalized;
+}
+
+function isNodeEnv(value: string): value is AppConfig["nodeEnv"] {
+  return value === "development" || value === "test" || value === "production";
 }

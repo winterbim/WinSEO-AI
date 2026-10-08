@@ -214,9 +214,7 @@ export async function disconnectGoogle(deps: {
   await deps.store.deleteCredential(deps.organizationId, deps.projectId);
   if (failures.length > 0) {
     const first = failures[0];
-    throw first instanceof Error
-      ? first
-      : new Error("Google token revocation failed.");
+    throw first instanceof Error ? first : new Error("Google token revocation failed.");
   }
 }
 

@@ -95,8 +95,11 @@ void describe("repository CRUD (real PostgreSQL)", () => {
     assert.ok(scan.id);
     assert.equal(scan.status, "pending");
     // UUID v4 must not be sequential/predictable
-    assert.match(scan.id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-      "scan id must be a random UUIDv4 (anti-enumeration)");
+    assert.match(
+      scan.id,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      "scan id must be a random UUIDv4 (anti-enumeration)",
+    );
 
     await updatePublicScanResult(
       scan.id,

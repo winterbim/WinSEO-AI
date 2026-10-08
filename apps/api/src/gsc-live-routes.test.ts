@@ -86,7 +86,8 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       slug: `gsc-${TAG}-${tag}-${suffix}`,
     });
     assert.equal(org.statusCode, 201, org.body);
-    const organizationId = (JSON.parse(org.body) as { organization: { id: string } }).organization.id;
+    const organizationId = (JSON.parse(org.body) as { organization: { id: string } }).organization
+      .id;
     const selected = await inject("POST", "/v1/auth/select-organization", baseCookie, {
       organizationId,
     });
@@ -111,12 +112,9 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
 
   async function connect(property = "sc-domain:example.com"): Promise<string> {
     assert.ok(ctx.cookieA && ctx.projectA);
-    const res = await inject(
-      "POST",
-      `/v1/projects/${ctx.projectA}/gsc/connections`,
-      ctx.cookieA,
-      { externalProperty: property },
-    );
+    const res = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/connections`, ctx.cookieA, {
+      externalProperty: property,
+    });
     assert.equal(res.statusCode, 201, res.body);
     assertNoLeak(res.body);
     return (JSON.parse(res.body) as { connection: { id: string } }).connection.id;
@@ -126,7 +124,11 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     process.env.GSC_CLIENT_ID = CLIENT_ID;
     process.env.GSC_CLIENT_SECRET = CLIENT_CS;
     process.env.GSC_REDIRECT_URI = REDIRECT;
-    transport.script.tokenResponse = { accessToken: ACCESS_TOKEN, refreshToken: REFRESH_TOKEN, tokenId: ID_TOKEN };
+    transport.script.tokenResponse = {
+      accessToken: ACCESS_TOKEN,
+      refreshToken: REFRESH_TOKEN,
+      tokenId: ID_TOKEN,
+    };
     transport.script.sites = [
       { siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" },
       { siteUrl: "https://example.com/blog/", permissionLevel: "siteFullUser" },
@@ -220,7 +222,10 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
 
     const replay = await inject("GET", `/v1/gsc/oauth/callback?code=c2&state=${state}`);
     assert.equal(replay.statusCode, 400);
-    assert.equal((JSON.parse(replay.body) as { error: { code: string } }).error.code, "INVALID_STATE");
+    assert.equal(
+      (JSON.parse(replay.body) as { error: { code: string } }).error.code,
+      "INVALID_STATE",
+    );
 
     const tampered = await inject(
       "GET",
@@ -331,19 +336,106 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
 
   void it("ingests measured rows end-to-end and serves them with freshness", async () => {
     assert.ok(ctx.connectionId && ctx.projectA && ctx.cookieA);
-    transport.script.analyticsRows = [
-      metricRow({ date: "2026-09-15", query: "evidence seo", page: "https://example.com/evidence", clicks: 4, impressions: 40, position: 4 }),
-      metricRow({ date: "2026-09-16", query: "second q", page: "https://example.com/second", clicks: 1, impressions: 9, position: 8 }),
-    ];
-    const sync = await inject(
-      "POST",
-      `/v1/projects/${ctx.projectA}/gsc/sync`,
+    const unsynced = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
       ctx.cookieA,
-      { connectionId: ctx.connectionId, ...WINDOW },
     );
+    assert.equal(unsynced.statusCode, 200, unsynced.body);
+    const unsyncedData = JSON.parse(unsynced.body) as {
+      syncCoverage: string;
+      totals: unknown;
+      series: unknown[];
+    };
+    assert.equal(unsyncedData.syncCoverage, "INCOMPLETE");
+    assert.equal(unsyncedData.totals, null, "incomplete windows have no measured totals");
+    assert.deepEqual(unsyncedData.series, [], "incomplete windows expose no partial series");
+
+    const unsyncedBreakdown = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/breakdown?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}&dimension=query`,
+      ctx.cookieA,
+    );
+    assert.equal(unsyncedBreakdown.statusCode, 200, unsyncedBreakdown.body);
+    const incompleteBreakdown = JSON.parse(unsyncedBreakdown.body) as {
+      syncCoverage: string;
+      rows: unknown[];
+      sourceRows: number;
+    };
+    assert.equal(incompleteBreakdown.syncCoverage, "INCOMPLETE");
+    assert.deepEqual(incompleteBreakdown.rows, [], "incomplete windows expose no query rows");
+    assert.equal(incompleteBreakdown.sourceRows, 0);
+
+    transport.script.analyticsRows = [
+      metricRow({
+        date: "2026-09-15",
+        query: "evidence seo",
+        page: "https://example.com/evidence",
+        clicks: 4,
+        impressions: 40,
+        position: 4,
+      }),
+      metricRow({
+        date: "2026-09-16",
+        query: "second q",
+        page: "https://example.com/second",
+        clicks: 1,
+        impressions: 9,
+        position: 8,
+      }),
+    ];
+    const partialWindow = { startDate: "2026-09-15", endDate: "2026-09-16" };
+    const partialSync = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, {
+      connectionId: ctx.connectionId,
+      ...partialWindow,
+    });
+    assert.equal(partialSync.statusCode, 200, partialSync.body);
+    const partialSummary = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
+      ctx.cookieA,
+    );
+    const partialData = JSON.parse(partialSummary.body) as {
+      syncCoverage: string;
+      totals: unknown;
+      series: unknown[];
+    };
+    assert.equal(partialData.syncCoverage, "INCOMPLETE");
+    assert.equal(partialData.totals, null, "a verified subset cannot become full-window totals");
+    assert.deepEqual(
+      partialData.series,
+      [],
+      "a verified subset cannot become a full-window series",
+    );
+
+    const partialBreakdown = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/breakdown?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}&dimension=query`,
+      ctx.cookieA,
+    );
+    const partialGroups = JSON.parse(partialBreakdown.body) as {
+      syncCoverage: string;
+      rows: unknown[];
+    };
+    assert.equal(partialGroups.syncCoverage, "INCOMPLETE");
+    assert.deepEqual(partialGroups.rows, [], "partial query groups are not exposed");
+
+    const sync = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, {
+      connectionId: ctx.connectionId,
+      ...WINDOW,
+    });
     assert.equal(sync.statusCode, 200, sync.body);
     assertNoLeak(sync.body);
-    const outcome = (JSON.parse(sync.body) as { outcome: { status: string; rowCount: number; jobId: string; freshness: { totalRows: number } } }).outcome;
+    const outcome = (
+      JSON.parse(sync.body) as {
+        outcome: {
+          status: string;
+          rowCount: number;
+          jobId: string;
+          freshness: { totalRows: number };
+        };
+      }
+    ).outcome;
     assert.equal(outcome.status, "COMPLETED");
     ctx.jobId = outcome.jobId;
     assert.equal(outcome.rowCount, 2);
@@ -356,12 +448,21 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     );
     assert.equal(summary.statusCode, 200, summary.body);
     const data = JSON.parse(summary.body) as {
-      totals: { clicks: number; impressions: number; ctr: number; days: number };
+      totals: { clicks: number; impressions: number; ctr: number; days: number } | null;
       series: { date: string }[];
       freshness: { latestMetricDate: string | null; totalRows: number };
+      syncCoverage: string;
     };
-    assert.deepEqual(data.totals, { clicks: 5, impressions: 49, ctr: 5 / 49, position: (4 * 40 + 8 * 9) / 49, days: 2 });
+    assert.ok(data.totals);
+    assert.deepEqual(data.totals, {
+      clicks: 5,
+      impressions: 49,
+      ctr: 5 / 49,
+      position: (4 * 40 + 8 * 9) / 49,
+      days: 2,
+    });
     assert.equal(data.freshness.latestMetricDate, "2026-09-16");
+    assert.equal(data.syncCoverage, "SYNCED");
 
     const breakdown = await inject(
       "GET",
@@ -369,38 +470,107 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       ctx.cookieA,
     );
     assert.equal(breakdown.statusCode, 200, breakdown.body);
-    const groups = (JSON.parse(breakdown.body) as { rows: { key: string; impressions: number }[] }).rows;
-    assert.deepEqual(
-      groups.map((g) => g.key).sort(),
-      ["evidence seo", "second q"],
-    );
+    const breakdownData = JSON.parse(breakdown.body) as {
+      syncCoverage: string;
+      rows: { key: string; impressions: number }[];
+    };
+    assert.equal(breakdownData.syncCoverage, "SYNCED");
+    const groups = breakdownData.rows;
+    assert.deepEqual(groups.map((g) => g.key).sort(), ["evidence seo", "second q"]);
   });
 
-  void it("re-sync of the same window re-arms the same job and replaces, never doubles", async () => {
+  void it("does not present a legacy completed job as current coverage or measurement", async () => {
+    assert.ok(ctx.jobId && ctx.projectA && ctx.cookieA);
+    const rawConnection = await withAdmin(async (c) => {
+      await c.query(`UPDATE gsc_sync_jobs SET ingestion_version = 0 WHERE id = $1`, [ctx.jobId]);
+      const result = await c.query<{ rawLastSyncAt: Date | null; trustedLastSyncAt: Date | null }>(
+        `SELECT c.last_sync_at AS "rawLastSyncAt",
+                (SELECT max(j.completed_at)
+                   FROM gsc_sync_jobs j
+                  WHERE j.connection_id = c.id
+                    AND j.status = 'COMPLETED'
+                    AND j.ingestion_version >= 1) AS "trustedLastSyncAt"
+           FROM gsc_connections c
+          WHERE c.id = $1`,
+        [ctx.connectionId],
+      );
+      return result.rows[0] ?? null;
+    });
+    assert.ok(rawConnection?.rawLastSyncAt, "connection retains its raw historical timestamp");
+    assert.ok(rawConnection.trustedLastSyncAt, "the preceding partial window remains trusted");
+    assert.notEqual(
+      rawConnection.rawLastSyncAt.toISOString(),
+      rawConnection.trustedLastSyncAt.toISOString(),
+      "the latest raw timestamp belongs to the legacy attempt, not the trusted partial one",
+    );
+
+    const summary = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
+      ctx.cookieA,
+    );
+    assert.equal(summary.statusCode, 200, summary.body);
+    const data = JSON.parse(summary.body) as {
+      totals: { clicks: number } | null;
+      series: unknown[];
+      freshness: { totalRows: number; lastSyncAt: string | null };
+      syncCoverage: string;
+    };
+    assert.equal(data.totals, null, "an unverified window does not return partial totals");
+    assert.deepEqual(data.series, [], "unverified historical rows are withheld");
+    assert.equal(data.freshness.totalRows, 0, "legacy rows do not contribute to freshness");
+    assert.equal(
+      data.freshness.lastSyncAt,
+      rawConnection.trustedLastSyncAt.toISOString(),
+      "only the preceding trusted partial-window attempt contributes to freshness",
+    );
+    assert.equal(data.syncCoverage, "INCOMPLETE", "a fresh current-version sync is required");
+
+    const jobs = await inject("GET", `/v1/projects/${ctx.projectA}/gsc/jobs`, ctx.cookieA);
+    const connections = (JSON.parse(jobs.body) as { connections: { lastSyncAt: string | null }[] })
+      .connections;
+    assert.equal(connections[0]?.lastSyncAt, rawConnection.trustedLastSyncAt.toISOString());
+  });
+
+  void it("re-sync creates a new completed attempt and replaces, never doubles", async () => {
     assert.ok(ctx.connectionId && ctx.projectA && ctx.cookieA);
     transport.script.analyticsRows = [
-      metricRow({ date: "2026-09-15", query: "evidence seo", page: "https://example.com/evidence", clicks: 7, impressions: 40 }),
+      metricRow({
+        date: "2026-09-15",
+        query: "evidence seo",
+        page: "https://example.com/evidence",
+        clicks: 7,
+        impressions: 40,
+      }),
     ];
-    const sync = await inject(
-      "POST",
-      `/v1/projects/${ctx.projectA}/gsc/sync`,
-      ctx.cookieA,
-      { connectionId: ctx.connectionId, ...WINDOW },
-    );
+    const sync = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, {
+      connectionId: ctx.connectionId,
+      ...WINDOW,
+    });
     assert.equal(sync.statusCode, 200, sync.body);
-    const outcome = (JSON.parse(sync.body) as { outcome: { jobId: string; rowCount: number } }).outcome;
+    const outcome = (JSON.parse(sync.body) as { outcome: { jobId: string; rowCount: number } })
+      .outcome;
     assert.equal(outcome.rowCount, 1);
 
     const jobs = await inject("GET", `/v1/projects/${ctx.projectA}/gsc/jobs`, ctx.cookieA);
-    const jobList = (JSON.parse(jobs.body) as {
+    const jobList = JSON.parse(jobs.body) as {
       jobs: { id: string; status: string; rowCount: number }[];
       connections: { externalProperty: string; lastSyncAt: string | null }[];
-    });
-    assert.equal(jobList.jobs.length, 1, "one job row per (connection, window), ever");
+    };
+    assert.equal(
+      jobList.jobs.length,
+      3,
+      "partial, legacy, and replacement attempts stay in history",
+    );
     const firstJob = jobList.jobs[0];
     assert.ok(firstJob);
     assert.equal(firstJob.id, outcome.jobId);
     assert.equal(firstJob.status, "COMPLETED");
+    assert.equal(
+      jobList.jobs.filter((job) => job.status === "COMPLETED").length,
+      3,
+      "partial, legacy, and replacement attempts remain auditable",
+    );
     const firstConnection = jobList.connections[0];
     assert.ok(firstConnection?.lastSyncAt, "freshness metadata is exposed");
 
@@ -409,21 +579,42 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
       ctx.cookieA,
     );
-    const data = (JSON.parse(summary.body) as { totals: { clicks: number }; freshness: { totalRows: number } });
-    assert.equal(data.totals.clicks, 7, "revised values replace stale ones");
+    const data = JSON.parse(summary.body) as {
+      totals: { clicks: number } | null;
+      freshness: { totalRows: number };
+    };
+    assert.equal(data.totals?.clicks, 7, "revised values replace stale ones");
     assert.equal(data.freshness.totalRows, 1, "the withdrawn row is gone");
   });
 
   void it("incremental sync (no dates) derives its window from the last sync", async () => {
     assert.ok(ctx.connectionId && ctx.projectA && ctx.cookieA);
+    await withAdmin(async (c) => {
+      await c.query(`UPDATE gsc_sync_jobs SET ingestion_version = 0 WHERE connection_id = $1`, [
+        ctx.connectionId,
+      ]);
+    });
+
+    const unverifiedConnections = await inject(
+      "GET",
+      `/v1/projects/${ctx.projectA}/gsc/jobs`,
+      ctx.cookieA,
+    );
+    const unverifiedLastSync = (
+      JSON.parse(unverifiedConnections.body) as { connections: { lastSyncAt: string | null }[] }
+    ).connections[0]?.lastSyncAt;
+    assert.equal(unverifiedLastSync, null, "legacy jobs cannot set the next incremental window");
+
     transport.script.analyticsRows = [];
     const sync = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, {
       connectionId: ctx.connectionId,
     });
     assert.equal(sync.statusCode, 200, sync.body);
-    const outcome = (JSON.parse(sync.body) as {
-      outcome: { status: string; window: { startDate: string; endDate: string } };
-    }).outcome;
+    const outcome = (
+      JSON.parse(sync.body) as {
+        outcome: { status: string; window: { startDate: string; endDate: string } };
+      }
+    ).outcome;
     assert.equal(outcome.status, "COMPLETED");
 
     const jobs = await inject("GET", `/v1/projects/${ctx.projectA}/gsc/jobs`, ctx.cookieA);
@@ -431,7 +622,8 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       .connections;
     const lastSync = connections[0]?.lastSyncAt?.slice(0, 10) ?? null;
     const today = new Date().toISOString().slice(0, 10);
-    assert.deepEqual(outcome.window, deriveIncrementalWindow(lastSync, today));
+    assert.deepEqual(outcome.window, deriveIncrementalWindow(null, today));
+    assert.ok(lastSync, "a new verified collection restores the trusted sync date");
     assert.equal(outcome.window.endDate < today, true, "today's incomplete data is never claimed");
   });
 
@@ -444,7 +636,10 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       { connectionId: ctx.connectionId, startDate: "2026-09-01" },
     ]) {
       const res = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/sync`, ctx.cookieA, body);
-      assert.ok(res.statusCode === 400, `expected 400 for ${JSON.stringify(body)}, got ${res.statusCode}`);
+      assert.ok(
+        res.statusCode === 400,
+        `expected 400 for ${JSON.stringify(body)}, got ${res.statusCode}`,
+      );
     }
   });
 
@@ -468,10 +663,17 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     });
     assert.equal(sync.statusCode, 200, sync.body);
     assertNoLeak(sync.body);
-    assert.deepEqual(transport.refreshTokensUsed, [REFRESH_TOKEN], "the refresh used the decrypted grant");
+    assert.deepEqual(
+      transport.refreshTokensUsed,
+      [REFRESH_TOKEN],
+      "the refresh used the decrypted grant",
+    );
 
     const row = await withAdmin(async (c) => {
-      const res = await c.query<{ encrypted_access_token: string; encrypted_refresh_token: string }>(
+      const res = await c.query<{
+        encrypted_access_token: string;
+        encrypted_refresh_token: string;
+      }>(
         `SELECT encrypted_access_token, encrypted_refresh_token FROM gsc_project_credentials WHERE project_id = $1`,
         [ctx.projectA],
       );
@@ -518,26 +720,53 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     const attempts: Attempt[] = [
       ["GET", `/v1/projects/${ctx.projectA}/gsc/sites`],
       ["GET", `/v1/projects/${ctx.projectA}/gsc/jobs`],
-      ["GET", `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`],
-      ["GET", `/v1/projects/${ctx.projectA}/gsc/breakdown?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}&dimension=query`],
-      ["GET", `/v1/projects/${ctx.projectA}/gsc/intelligence?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`],
-      ["POST", `/v1/projects/${ctx.projectA}/gsc/connections`, { externalProperty: "sc-domain:example.com" }],
-      ["POST", `/v1/projects/${ctx.projectA}/gsc/sync`, { connectionId: ctx.connectionId, ...WINDOW }],
-      ["POST", `/v1/projects/${ctx.projectA}/gsc/findings`, {
-        module: "high_impressions_low_ctr",
-        subject: { query: "q", page: "https://example.com/p" },
-        title: "Cross-tenant probe",
-        rationale: "probe",
-        datasetWindow: { startDate: WINDOW.startDate, endDate: WINDOW.endDate },
-        filters: { minImpressions: 500, maxCtr: 0.02 },
-        observed: { impressions: 600, clicks: 6, ctr: 0.01, position: 4, days: 1 },
-        evidenceClass: "MEASURED",
-        verificationGate: {
-          type: "gsc_window",
-          spec: { metric: "ctr", operator: "gte", threshold: 0.02, minImpressions: 500, windowDays: 30 },
+      [
+        "GET",
+        `/v1/projects/${ctx.projectA}/gsc/summary?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
+      ],
+      [
+        "GET",
+        `/v1/projects/${ctx.projectA}/gsc/breakdown?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}&dimension=query`,
+      ],
+      [
+        "GET",
+        `/v1/projects/${ctx.projectA}/gsc/intelligence?startDate=${WINDOW.startDate}&endDate=${WINDOW.endDate}`,
+      ],
+      [
+        "POST",
+        `/v1/projects/${ctx.projectA}/gsc/connections`,
+        { externalProperty: "sc-domain:example.com" },
+      ],
+      [
+        "POST",
+        `/v1/projects/${ctx.projectA}/gsc/sync`,
+        { connectionId: ctx.connectionId, ...WINDOW },
+      ],
+      [
+        "POST",
+        `/v1/projects/${ctx.projectA}/gsc/findings`,
+        {
+          module: "high_impressions_low_ctr",
+          subject: { query: "q", page: "https://example.com/p" },
+          title: "Cross-tenant probe",
+          rationale: "probe",
+          datasetWindow: { startDate: WINDOW.startDate, endDate: WINDOW.endDate },
+          filters: { minImpressions: 500, maxCtr: 0.02 },
+          observed: { impressions: 600, clicks: 6, ctr: 0.01, position: 4, days: 1 },
+          evidenceClass: "MEASURED",
+          verificationGate: {
+            type: "gsc_window",
+            spec: {
+              metric: "ctr",
+              operator: "gte",
+              threshold: 0.02,
+              minImpressions: 500,
+              windowDays: 30,
+            },
+          },
+          severity: "low",
         },
-        severity: "low",
-      }],
+      ],
       ["DELETE", `/v1/gsc/connections/${ctx.connectionId}`],
       ["POST", `/v1/gsc/oauth/authorize`, { projectId: ctx.projectA }],
     ];
@@ -566,7 +795,10 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     );
 
     // And the data tenant B CAN see is exactly its own (empty) footprint.
-    const foreignSummary = await app.stores.gsc?.metricFreshness(ctx.orgB ?? "", ctx.projectA ?? "");
+    const foreignSummary = await app.stores.gsc?.metricFreshness(
+      ctx.orgB ?? "",
+      ctx.projectA ?? "",
+    );
     assert.deepEqual(foreignSummary, { latestMetricDate: null, lastSyncAt: null, totalRows: 0 });
   });
 
@@ -575,11 +807,7 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
   void it("disconnect revokes both tokens at Google and erases local material", async () => {
     assert.ok(ctx.connectionId && ctx.cookieA && ctx.projectA);
     transport.revokedTokens.length = 0;
-    const res = await inject(
-      "DELETE",
-      `/v1/gsc/connections/${ctx.connectionId}`,
-      ctx.cookieA,
-    );
+    const res = await inject("DELETE", `/v1/gsc/connections/${ctx.connectionId}`, ctx.cookieA);
     assert.equal(res.statusCode, 200, res.body);
     assertNoLeak(res.body);
     assert.deepEqual(
@@ -627,9 +855,8 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
       { externalProperty: "sc-domain:example.com" },
     );
     assert.equal(reconnect.statusCode, 201, reconnect.body);
-    const revived = (
-      JSON.parse(reconnect.body) as { connection: { id: string; status: string } }
-    ).connection;
+    const revived = (JSON.parse(reconnect.body) as { connection: { id: string; status: string } })
+      .connection;
     assert.equal(revived.status, "CONNECTED");
     assert.equal(revived.id, ctx.connectionId, "the same row is revived, not shadowed");
 
@@ -646,7 +873,7 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     );
   });
 
-  void it("checks a property against the CURRENT grant's listing only", async () => {
+  void it("checks the current grant and fails closed on an additional active property", async () => {
     assert.ok(ctx.cookieA && ctx.projectA && ctx.orgA);
     // Two disjoint listings, answered per presented token: a property listed
     // for another grant must not attach, and the current grant's must.
@@ -681,7 +908,12 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
         ctx.cookieA,
         { externalProperty: "sc-domain:grant-b.example" },
       );
-      assert.equal(own.statusCode, 201, own.body);
+      assert.equal(own.statusCode, 409, own.body);
+      assert.equal(
+        (JSON.parse(own.body) as { error: { code: string } }).error.code,
+        "GSC_PROPERTY_CONFLICT",
+        "an authorized property cannot replace the already active project property silently",
+      );
     } finally {
       delete transport.script.sitesByToken;
       await app.stores.gsc?.updateCredentialTokens({
@@ -697,12 +929,9 @@ void describe("GSC live routes (real PostgreSQL, scripted Google wire)", () => {
     assert.ok(ctx.projectA && ctx.cookieA && ctx.orgA);
     const removed = await app.stores.gsc?.deleteCredential(ctx.orgA, ctx.projectA);
     assert.equal(removed, true);
-    const res = await inject(
-      "POST",
-      `/v1/projects/${ctx.projectA}/gsc/connections`,
-      ctx.cookieA,
-      { externalProperty: "https://example.com/blog/" },
-    );
+    const res = await inject("POST", `/v1/projects/${ctx.projectA}/gsc/connections`, ctx.cookieA, {
+      externalProperty: "https://example.com/blog/",
+    });
     assert.equal(res.statusCode, 409, res.body);
     assert.equal(
       (JSON.parse(res.body) as { error: { code: string } }).error.code,
@@ -719,7 +948,11 @@ void describe("GSC BLOCKED surfaces — explicit, never fabricated", () => {
     delete process.env.GSC_CLIENT_ID;
     delete process.env.GSC_CLIENT_SECRET;
     delete process.env.GSC_REDIRECT_URI;
-    const app = await buildApp({ driver: "postgres", maxPool: 2, gscTransport: new FakeGoogleTransport() });
+    const app = await buildApp({
+      driver: "postgres",
+      maxPool: 2,
+      gscTransport: new FakeGoogleTransport(),
+    });
     try {
       await app.ready();
       const res = await app.inject({

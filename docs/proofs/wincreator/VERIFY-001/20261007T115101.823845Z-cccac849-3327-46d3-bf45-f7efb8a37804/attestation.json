@@ -1,0 +1,160 @@
+{
+  "schema": "wincreator.attestation/v1",
+  "payload": {
+    "tool_version": "3.1.0",
+    "claim": {
+      "id": "VERIFY-001",
+      "level": "",
+      "text": "",
+      "gate": "",
+      "row_sha256": null,
+      "ledger_sha256_before": null,
+      "status_before": null
+    },
+    "ledger": null,
+    "builder": "builder-01",
+    "command": [
+      "env",
+      "-u",
+      "DATABASE_URL",
+      "PG_SOCKET_DIR=/tmp/winseo-pgsocket",
+      "PGPORT=55432",
+      "PGDATABASE=serpvera_dev",
+      "/bin/bash",
+      "-lc",
+      "pnpm format:check && git diff --check && pnpm verify && pnpm build && pnpm audit --audit-level=high"
+    ],
+    "command_string": "env -u DATABASE_URL PG_SOCKET_DIR=/tmp/winseo-pgsocket PGPORT=55432 PGDATABASE=serpvera_dev /bin/bash -lc 'pnpm format:check && git diff --check && pnpm verify && pnpm build && pnpm audit --audit-level=high'",
+    "capture": {
+      "status": "CAPTURED_FAIL",
+      "exit_code": 1,
+      "error": null
+    },
+    "started_at": "2026-10-07T11:51:01.824295Z",
+    "finished_at": "2026-10-07T11:51:05.999429Z",
+    "duration_ms": 4175,
+    "stdout": {
+      "path": "stdout.log",
+      "sha256": "bd3ce3d1c1dd25bb8a228930a09541abd6b9018336bb29ddee71c12ebc7eff30",
+      "original_bytes": 146,
+      "stored_bytes": 146,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "\n> serpvera@0.1.0 format:check /tmp/winseo-publish\n> prettier --check .\n\nChecking formatting...\n ELIFECYCLE  Command failed with exit code 1.\n"
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "sha256": "c203e8cbdac0754ff9c3c0efcc613ddf52d7550518da457b46e74764a748af8f",
+      "original_bytes": 138,
+      "stored_bytes": 138,
+      "truncated": false,
+      "body_stored": true,
+      "tail": "[warn] docs/proofs/wincreator/gsc-distill-before.json\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.\n"
+    },
+    "files": [
+      {
+        "path": "package.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "e3b53aa48ce0dd26dbbd23ca833cfdb21f7a58390dafe87cffae0f3cf4d31405",
+        "bytes": 986
+      },
+      {
+        "path": "pnpm-lock.yaml",
+        "optional": false,
+        "missing": false,
+        "sha256": "88a6875500185e01b159e3675f6ce20c222564247f3a403904ba6d6118c27ca5",
+        "bytes": 93520
+      },
+      {
+        "path": "packages/db/src/gsc.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "07040687757c2aa905e363b6ded0389eb3b50efbab97dac162bc08ad5d6fa8e0",
+        "bytes": 33650
+      },
+      {
+        "path": "packages/db/src/gsc-rls.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "463d0425f69a6d36d776f2851f184c49e7cad89bd4ff4ed6735118e4037a0539",
+        "bytes": 33077
+      },
+      {
+        "path": "packages/db/src/schema-integrity.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "edf1f80ef03957c8d5ae7786aa3d90011ff839d72552fb938ef44edff6ca57ed",
+        "bytes": 16536
+      },
+      {
+        "path": "packages/db/migrations/0020_gsc_sync_claim_order.sql",
+        "optional": false,
+        "missing": false,
+        "sha256": "9f3406bb29e1b7ec18cdbf4674d86ab003d25b936b0fbdba0d4b3631c20f9139",
+        "bytes": 1965
+      },
+      {
+        "path": "apps/api/src/gsc-action-verification.test.ts",
+        "optional": false,
+        "missing": false,
+        "sha256": "4b2183e58190b7a7062bb8d0a0392a7deecf59b1fe5c466277c1e4233c8c205f",
+        "bytes": 44616
+      },
+      {
+        "path": "docs/PROOF_LEDGER_RPLUS.md",
+        "optional": false,
+        "missing": false,
+        "sha256": "c4b71acd91ff3ee0435c25ce6d0ba6a95e8e7f99d02a4d53a5b4f05f92f78b42",
+        "bytes": 10407
+      },
+      {
+        "path": "docs/proofs/wincreator/gsc-distill-before.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "8d294ff502aaab13939222bdbe451b6967e1833e93c7245f026b4da56e4c606b",
+        "bytes": 7768
+      },
+      {
+        "path": "docs/proofs/wincreator/gsc-distill-report.json",
+        "optional": false,
+        "missing": false,
+        "sha256": "b04e35725c0077e614444a8bbcee309b433d8b731df15947b32175ea6e9a8bd0",
+        "bytes": 1569
+      }
+    ],
+    "git": {
+      "available": true,
+      "commit": "937f9fb2f78df2b0cadc325e62e3943b767f9d10",
+      "tree": "4743af9ebbe072139627f4dccc60d2d706d69ff8",
+      "branch": "feat/product-finish-2026",
+      "dirty": true,
+      "remote": "https://github.com/winterbim/WinSEO-AI.git",
+      "submodules": "",
+      "untracked_digest": "b8bfaf8b58d2f4cea8fab2393eb8ac6664efcffa72c92f0ceccce6d4e789de93",
+      "worktree_digest": "37ebff74a2c01e9b99bc09d69a82f8e9f24b2b215eae26caebcc6777e467006c"
+    },
+    "environment": {
+      "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "hostname": "wina-LOQ-16IRH8",
+      "cwd": "/tmp/winseo-publish",
+      "ci": "",
+      "user": "wina"
+    },
+    "policy": {
+      "tier": "standard",
+      "dirty_override": true,
+      "private": false,
+      "redaction_literals": 0,
+      "redaction_regexes": 0,
+      "max_output_bytes": 200000,
+      "no_output_body": false
+    }
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "canonicalization": "json/sorted-compact/utf-8",
+    "value": "4f7bdba119a9ef91d285cdf8ab756792bfd88906b18bcfa623d35b0d5e929b99"
+  }
+}

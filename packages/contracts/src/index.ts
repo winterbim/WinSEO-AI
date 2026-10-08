@@ -1,11 +1,6 @@
 // ─── Epistemic classification ───
 export type EpistemicClass =
-  | "OBSERVED"
-  | "MEASURED"
-  | "DOCUMENTED"
-  | "INFERRED"
-  | "HYPOTHESIS"
-  | "UNKNOWN";
+  "OBSERVED" | "MEASURED" | "DOCUMENTED" | "INFERRED" | "HYPOTHESIS" | "UNKNOWN";
 
 // ─── Severity ───
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
@@ -59,6 +54,15 @@ export type EvidenceKind =
   | "screenshot"
   | "structured_data";
 
+export {
+  AI_VISIBILITY_MAX_CSV_BYTES,
+  AI_VISIBILITY_MAX_ROWS,
+  computeAiVisibilityStats,
+  parseAiVisibilityCsv,
+  wilsonInterval95,
+} from "./ai-visibility.ts";
+export type { AiVisibilityCapture, AiVisibilityStat } from "./ai-visibility.ts";
+
 // ─── Gate ───
 export interface Gate {
   gateType: GateType;
@@ -67,11 +71,7 @@ export interface Gate {
 }
 
 export type GateType =
-  | "recrawl_rule_absent"
-  | "gsc_window"
-  | "ai_search_rerun"
-  | "indexation_check"
-  | "custom";
+  "recrawl_rule_absent" | "gsc_window" | "ai_search_rerun" | "indexation_check" | "custom";
 
 export type GateVerdict = "PASS" | "FAIL" | "INCONCLUSIVE" | "BLOCKED";
 
@@ -167,6 +167,8 @@ export interface CrawlRun {
   completedAt?: string;
   pagesCrawled: number;
   pagesFailed: number;
+  pageLimit?: number | null;
+  stopReason?: string | null;
 }
 
 // ─── GSC ───
@@ -224,12 +226,7 @@ export interface Citation {
 }
 
 export type SourceClass =
-  | "owned"
-  | "competitor"
-  | "earned_media"
-  | "forum"
-  | "institution"
-  | "other";
+  "owned" | "competitor" | "earned_media" | "forum" | "institution" | "other";
 
 // ─── Organization roles ───
 export type OrgRole = "OWNER" | "ADMIN" | "ANALYST" | "EDITOR" | "VIEWER" | "BILLING";
@@ -237,6 +234,7 @@ export type OrgRole = "OWNER" | "ADMIN" | "ANALYST" | "EDITOR" | "VIEWER" | "BIL
 export type Permission =
   | "project.read"
   | "evidence.read"
+  | "evidence.write"
   | "integration.manage"
   | "action.approve"
   | "production.write"

@@ -1,0 +1,26 @@
+ WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/api#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/authz#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/config#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/contracts#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/crawler#build. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @serpvera/telemetry#build. Please check your `outputs` key in `turbo.json`
+(node:946334) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
